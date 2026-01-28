@@ -6,5 +6,6 @@
 # git config --global user.name  husain
 git add .
 git commit -m "Initial commit"
+git push -f origin master
 # git remote add origin git@github.com:Husain644/ReactNativeThree.git
 git push -u origin master
