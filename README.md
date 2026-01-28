@@ -1,0 +1,150 @@
+Learning Resource -https://www.youtube.com/watch?v=vTfMjI4rVSI&t=305sdeveloping a small project i ran through 
+
+if error occure go to =>>node mudule /three/build/three.cjs =>> go to line No 20111
+and chsnge to "if ( renderer.debug.checkShaderErrors )" i added the "program" property.
+Now it is "if ( renderer.debug.checkShaderErrors && program )".
+
+free glb download resources=[https://www.cgtrader.com/ ]
+change glb to jsx=[https://gltf.pmnd.rs/]
+
+
+
+    audioListener: AudioListenerProps;
+    positionalAudio: PositionalAudioProps;
+    mesh: MeshProps;
+    instancedMesh: InstancedMeshProps;
+    scene: SceneProps;
+    sprite: SpriteProps;
+    lOD: LODProps;
+    skinnedMesh: SkinnedMeshProps;
+    skeleton: SkeletonProps;
+    bone: BoneProps;
+    lineSegments: LineSegmentsProps;
+    lineLoop: LineLoopProps;
+    points: PointsProps;
+    group: GroupProps;
+    camera: CameraProps;
+    perspectiveCamera: PerspectiveCameraProps;
+    orthographicCamera: OrthographicCameraProps;
+    cubeCamera: CubeCameraProps;
+    arrayCamera: ArrayCameraProps;
+    instancedBufferGeometry: InstancedBufferGeometryProps;
+    bufferGeometry: BufferGeometryProps;
+    boxBufferGeometry: BoxBufferGeometryProps;
+    circleBufferGeometry: CircleBufferGeometryProps;
+    coneBufferGeometry: ConeBufferGeometryProps;
+    cylinderBufferGeometry: CylinderBufferGeometryProps;
+    dodecahedronBufferGeometry: DodecahedronBufferGeometryProps;
+    extrudeBufferGeometry: ExtrudeBufferGeometryProps;
+    icosahedronBufferGeometry: IcosahedronBufferGeometryProps;
+    latheBufferGeometry: LatheBufferGeometryProps;
+    octahedronBufferGeometry: OctahedronBufferGeometryProps;
+    planeBufferGeometry: PlaneBufferGeometryProps;
+    polyhedronBufferGeometry: PolyhedronBufferGeometryProps;
+    ringBufferGeometry: RingBufferGeometryProps;
+    shapeBufferGeometry: ShapeBufferGeometryProps;
+    sphereBufferGeometry: SphereBufferGeometryProps;
+    tetrahedronBufferGeometry: TetrahedronBufferGeometryProps;
+    torusBufferGeometry: TorusBufferGeometryProps;
+    torusKnotBufferGeometry: TorusKnotBufferGeometryProps;
+    tubeBufferGeometry: TubeBufferGeometryProps;
+    wireframeGeometry: WireframeGeometryProps;
+    tetrahedronGeometry: TetrahedronGeometryProps;
+    octahedronGeometry: OctahedronGeometryProps;
+    icosahedronGeometry: IcosahedronGeometryProps;
+    dodecahedronGeometry: DodecahedronGeometryProps;
+    polyhedronGeometry: PolyhedronGeometryProps;
+    tubeGeometry: TubeGeometryProps;
+    torusKnotGeometry: TorusKnotGeometryProps;
+    torusGeometry: TorusGeometryProps;
+    sphereGeometry: SphereGeometryProps;
+    ringGeometry: RingGeometryProps;
+    planeGeometry: PlaneGeometryProps;
+    latheGeometry: LatheGeometryProps;
+    shapeGeometry: ShapeGeometryProps;
+    extrudeGeometry: ExtrudeGeometryProps;
+    edgesGeometry: EdgesGeometryProps;
+    coneGeometry: ConeGeometryProps;
+    cylinderGeometry: CylinderGeometryProps;
+    circleGeometry: CircleGeometryProps;
+    boxGeometry: BoxGeometryProps;
+    capsuleGeometry: CapsuleGeometryProps;
+    material: MaterialProps;
+
+    shadowMaterial: ShadowMaterialProps;
+    spriteMaterial: SpriteMaterialProps;
+    rawShaderMaterial: RawShaderMaterialProps;
+    shaderMaterial: ShaderMaterialProps;
+    pointsMaterial: PointsMaterialProps;
+    
+    meshPhysicalMaterial: MeshPhysicalMaterialProps;
+    meshStandardMaterial: MeshStandardMaterialProps;
+    meshPhongMaterial: MeshPhongMaterialProps;
+    meshToonMaterial: MeshToonMaterialProps;
+    meshNormalMaterial: MeshNormalMaterialProps;
+    meshLambertMaterial: MeshLambertMaterialProps;
+    meshDepthMaterial: MeshDepthMaterialProps;
+    meshDistanceMaterial: MeshDistanceMaterialProps;
+    meshBasicMaterial: MeshBasicMaterialProps;
+    meshMatcapMaterial: MeshMatcapMaterialProps;
+    lineDashedMaterial: LineDashedMaterialProps;
+    lineBasicMaterial: LineBasicMaterialProps;
+
+    primitive: PrimitiveProps;
+    light: LightProps;
+    spotLightShadow: SpotLightShadowProps;
+    spotLight: SpotLightProps;
+    pointLight: PointLightProps;
+    rectAreaLight: RectAreaLightProps;
+    hemisphereLight: HemisphereLightProps;
+    directionalLightShadow: DirectionalLightShadowProps;
+    directionalLight: DirectionalLightProps;
+    ambientLight: AmbientLightProps;
+    lightShadow: LightShadowProps;
+    ambientLightProbe: AmbientLightProbeProps;
+    hemisphereLightProbe: HemisphereLightProbeProps;
+    lightProbe: LightProbeProps;
+    spotLightHelper: SpotLightHelperProps;
+    skeletonHelper: SkeletonHelperProps;
+    pointLightHelper: PointLightHelperProps;
+    hemisphereLightHelper: HemisphereLightHelperProps;
+    gridHelper: GridHelperProps;
+    polarGridHelper: PolarGridHelperProps;
+    directionalLightHelper: DirectionalLightHelperProps;
+    cameraHelper: CameraHelperProps;
+    boxHelper: BoxHelperProps;
+    box3Helper: Box3HelperProps;
+    planeHelper: PlaneHelperProps;
+    arrowHelper: ArrowHelperProps;
+    axesHelper: AxesHelperProps;
+    texture: TextureProps;
+    videoTexture: VideoTextureProps;
+    dataTexture: DataTextureProps;
+    dataTexture3D: DataTexture3DProps;
+    compressedTexture: CompressedTextureProps;
+    cubeTexture: CubeTextureProps;
+    canvasTexture: CanvasTextureProps;
+    depthTexture: DepthTextureProps;
+    raycaster: RaycasterProps;
+    vector2: Vector2Props;
+    vector3: Vector3Props;
+    vector4: Vector4Props;
+    euler: EulerProps;
+    matrix3: Matrix3Props;
+    matrix4: Matrix4Props;
+    quaternion: QuaternionProps;
+    bufferAttribute: BufferAttributeProps;
+    float16BufferAttribute: Float16BufferAttributeProps;
+    float32BufferAttribute: Float32BufferAttributeProps;
+    float64BufferAttribute: Float64BufferAttributeProps;
+    int8BufferAttribute: Int8BufferAttributeProps;
+    int16BufferAttribute: Int16BufferAttributeProps;
+    int32BufferAttribute: Int32BufferAttributeProps;
+    uint8BufferAttribute: Uint8BufferAttributeProps;
+    uint16BufferAttribute: Uint16BufferAttributeProps;
+    uint32BufferAttribute: Uint32BufferAttributeProps;
+    instancedBufferAttribute: InstancedBufferAttributeProps;
+    color: ColorProps;
+    fog: FogProps;
+    fogExp2: FogExp2Props;
+    shape: ShapeProps;
