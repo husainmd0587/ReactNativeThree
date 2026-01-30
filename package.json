@@ -31,7 +31,9 @@
     "react-native-track-player": "^4.1.1",
     "react-native-webview": "^13.13.2",
     "react-redux": "^9.2.0",
-    "three": "^0.164.1"
+    "three": "^0.164.1",
+    "three-bvh-csg": "^0.0.17",
+    "three-mesh-bvh": "^0.6.6"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
