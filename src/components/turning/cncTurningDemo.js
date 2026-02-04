@@ -28,11 +28,11 @@ export default function CncRouterBetweenSpindles() {
        {/* <StepTurning/>  */}
        {/* <FaceTurning/> */}
        {/* <TurningWorkpiece/> */}
-       {/* <OuterThreading/> */}
+       <OuterThreading/>
        {/* <DrillingOperation/> */}
        {/* <KnurlingOperation/> */}
        {/* <PartingOperations/> */}
-       <FreehandTurning/>
+       {/* <FreehandTurning/> */}
     </group>
   )
 }
