@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-
+import React from 'react';
 // Square
 export const createSquare = (size = 0.2) => {
     const shape = new THREE.Shape();
@@ -79,7 +79,7 @@ export const createHexagon = (size = 0.2) => {
 };
 
 // Star
-export const createStar = (outerRadius = 0.2, innerRadius = 0.1, points = 5) => {
+export const createStar = ({outerRadius = 2, innerRadius = 1.5, points = 5}) => {
     const shape = new THREE.Shape();
     for (let i = 0; i <= points * 2; i++) {
         const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
@@ -91,3 +91,37 @@ export const createStar = (outerRadius = 0.2, innerRadius = 0.1, points = 5) => 
     }
     return shape;
 };
+
+//Show 2D Shape by given shape
+export function Show2DShape({
+  shape=createStar({outerRadius:3, innerRadius : 1, points : 5}),
+  segments = 32
+}) {
+  const geometry = React.useMemo(
+    () => new THREE.ShapeGeometry(shape, segments),
+    [shape, segments]
+  )
+
+  return (
+    <mesh geometry={geometry} position={[0,5,0]}>
+      <meshBasicMaterial color="#ccc" side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+// show 2d shape by given points
+export function Show2DShapeByPoints({
+  shapePoints=[],
+  segments = 32
+}) {
+  const shape = new THREE.Shape(shapePoints);
+  const geometry = React.useMemo(
+    () => new THREE.ShapeGeometry(shape, segments),
+    [shape, segments]
+  )
+
+  return (
+    <mesh geometry={geometry} position={[0,5,0]}>
+      <meshBasicMaterial color="#ccc" side={THREE.DoubleSide} />
+    </mesh>
+  )
+}

@@ -14,7 +14,19 @@ export function useTextureLoader() {
 
   return texture
 }
+//knurl texture 
+export function useKnurlTextureLoader() {
+  const texture = useLoader(
+    THREE.TextureLoader,
+     require('./knurl.png')
+  )
 
+  texture.flipY = true
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(2, 1) /// mean how many time texture repeat in U and V axis
+  texture.needsUpdate = true 
+  return texture
+}
 
 //shaders 
 

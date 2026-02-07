@@ -66,7 +66,7 @@ export function buildSweepGeometry({
   return geo;
 }
 
-
+ 
 export function createSpringPath({
   radius = 2,
   turns = 5,
@@ -116,6 +116,62 @@ export const createReverceTriangle = (size = 0.2) =>{
     new THREE.Vector2(-size, -h / 2) // outer edge
   ];
 }
+//Tringle forKnurling
+export const createKnurlingTriangle = ({
+  size = 0.5,        // pitch (vertical spacing)
+  depth = 0.25,      // tooth width
+  flatRatio = 0.3,   // flat top size (0–1)
+  turns = 10
+}) => {
+  const points = []
+  const w = depth
+  const flat = size * flatRatio
+
+  for (let i = 0; i < turns; i++) {
+    const y0 = i * size
+    const y1 = y0 + (size - flat) / 2
+    const y2 = y1 + flat
+    const y3 = y0 + size
+
+    points.push(
+      new THREE.Vector2(w, y0),   // root
+      new THREE.Vector2(0, y1),   // slope up
+      new THREE.Vector2(0, y2),   // flat crest
+      new THREE.Vector2(w, y3)    // slope down
+    )
+  }
+
+  return points
+}
+
+export const createReverceKnurlingTriangle = ({
+  size = 0.5,
+  depth = 0.25,
+  flatRatio = 0.3,
+  turns = 10
+}) => {
+  const points = []
+  const w = depth
+  const flat = size * flatRatio
+
+  for (let i = 0; i < turns; i++) {
+    const y0 = i * size
+    const y1 = y0 + (size - flat) / 2
+    const y2 = y1 + flat
+    const y3 = y0 + size
+
+    points.push(
+      new THREE.Vector2(-w, y0),  // root
+      new THREE.Vector2(0, y1),   // slope up
+      new THREE.Vector2(0, y2),   // flat crest
+      new THREE.Vector2(-w, y3)   // slope down
+    )
+  }
+
+  return points
+}
+
+ 
 
 export const createCircle = (radius = 0.2, segments = 16) =>
   Array.from({ length: segments }, (_, i) => {

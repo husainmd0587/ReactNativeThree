@@ -48,16 +48,17 @@ export function OuterThreading({
 const threadGeometry = useMemo(() => {
   if (!pitch || height <= pitch) return null
 
-  const shape = createTriangle(pitch * 0.8)
+  // const shape = createTriangle(pitch * 0.8)
+  const shape = createSquare(pitch * 0.2)
   if (!shape || shape.length < 2) return null
 
   const turns = height / pitch
   if (!isFinite(turns)) return null
 
   const path = createSpringPath({
-    radius,
-    turns,
-    height: height - pitch,
+    radius: radius - 0.2,
+    turns: turns + 1,
+    height: height - .2,
     segments: 300,
   })
 
@@ -93,6 +94,7 @@ useLayoutEffect(() => {
   const toolZ = useRef(-0.01)
 
   useFrame((_, delta) => {
+      groupRef.current.rotation.z -= rpm * delta
      if (!cutting) return
      if (!toolRef.current || !groupRef.current) return
 
@@ -111,8 +113,6 @@ useLayoutEffect(() => {
     // Clip behind tool
     clipPlane.constant = -toolZ.current
 
-    // Rotate workpiece
-    groupRef.current.rotation.z -= rpm * delta
   })
 
   /* ---------------- RENDER ---------------- */

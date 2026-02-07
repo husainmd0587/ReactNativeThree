@@ -12,7 +12,7 @@ import  TurningWorkpiece from './operations/stepTurningNew'
 import { FaceTurning } from './operations/faceTurning'
 import { OuterThreading } from './operations/threads'
 import DrillingOperation from './operations/drilling'
-import KnurlingOperation from './operations/knurling'
+import KnurlingOperation,{KnurlByTexture} from './operations/knurling'
 import PartingOperations from './operations/parting'
 import FreehandTurning from './operations/freeHandTurning'
 
@@ -28,9 +28,10 @@ export default function CncRouterBetweenSpindles() {
        {/* <StepTurning/>  */}
        {/* <FaceTurning/> */}
        {/* <TurningWorkpiece/> */}
-       <OuterThreading/>
+       {/* <OuterThreading/> */}
        {/* <DrillingOperation/> */}
        {/* <KnurlingOperation/> */}
+       <KnurlByTexture/>
        {/* <PartingOperations/> */}
        {/* <FreehandTurning/> */}
     </group>
