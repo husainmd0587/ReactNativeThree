@@ -88,7 +88,7 @@ export function StepTurning({
     [profile, rawRadius, maxDepthPerPass]
   )
   const passes = allProfiles.length - 1
-
+  // console.log(allProfiles)
   /* ---------------- CLIPPING ---------------- */
   const clipPlane = useMemo(
     () => new THREE.Plane(new THREE.Vector3(0, 1, 0), length / 2),

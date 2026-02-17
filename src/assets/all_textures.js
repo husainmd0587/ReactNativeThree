@@ -1,13 +1,33 @@
 import { useLoader } from '@react-three/fiber/native'
 import * as THREE from 'three'
 
-export function useTextureLoader() {
+export function useTextureLoader(type='steel') {
+    let texturePath;
+    switch (type) {
+        case 'steel':
+            texturePath = require('./textures2.jpg');
+            break;
+        case 'knurl':
+            texturePath = require('./knurl.png');
+            break;
+        case 'wood':
+            texturePath = require('./woodTextures.jpg');
+            break;
+        case 'marble':
+            texturePath = require('./marbels.jpg');
+            break;
+        case 'wall':
+            texturePath = require('./wall.jpg');
+            break;
+        default:
+            texturePath = require('./textures2.jpg');
+    }
   const texture = useLoader(
     THREE.TextureLoader,
-    require('./textures2.jpg')
+    texturePath
   )
 
-  texture.flipY = false
+  texture.flipY = true
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
   texture.repeat.set(2, 1)
   texture.needsUpdate = true

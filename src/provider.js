@@ -16,7 +16,7 @@ const AppProvider = ({children}) => {
   const [sound,setSound]=useState(true)
   const camera = useMemo(() => {
     const cam = new PerspectiveCamera(75, width / height, 0.1, 1000);
-    cam.position.set(0, 0, 10);
+    cam.position.set(0, 0, 40);
     cam.lookAt(0, 0, 0);
     return cam;
   }, [width, height]);

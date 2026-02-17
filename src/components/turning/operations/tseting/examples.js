@@ -19,7 +19,7 @@ export function Example1_BasicCylindricalTurning() {
     outerDiameter: 50,
     innerDiameter: 0,
     length: 100,
-    segments: 32,
+    segments: 64,
     material: {
       color: 0x999999,
       roughness: 0.5,

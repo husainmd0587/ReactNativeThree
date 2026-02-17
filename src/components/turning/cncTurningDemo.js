@@ -15,6 +15,7 @@ import DrillingOperation from './operations/drilling'
 import KnurlingOperation,{KnurlByTexture} from './operations/knurling'
 import PartingOperations from './operations/parting'
 import FreehandTurning from './operations/freeHandTurning'
+import StepWithCsg from './operations/stepWithCSGTurning/stepCsg'
 
 /* ---------------- MAIN EXPORT ---------------- */
 export default function CncRouterBetweenSpindles() {
@@ -26,12 +27,13 @@ export default function CncRouterBetweenSpindles() {
       {/* <SegmentedBar/> */}
        {/* <CustomLatheGeometry position={[-2,0,0]} rotation={degToRad([0,0,-90])}/>  */}
        {/* <StepTurning/>  */}
+        <StepWithCsg/>
        {/* <FaceTurning/> */}
        {/* <TurningWorkpiece/> */}
        {/* <OuterThreading/> */}
        {/* <DrillingOperation/> */}
        {/* <KnurlingOperation/> */}
-       <KnurlByTexture/>
+       {/* <KnurlByTexture/> */}
        {/* <PartingOperations/> */}
        {/* <FreehandTurning/> */}
     </group>
