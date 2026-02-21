@@ -1,7 +1,7 @@
 import React, { useRef,useEffect } from 'react'
 import { useFrame, useLoader } from '@react-three/fiber/native'
 import * as THREE from 'three'
-import textures from '../../assets/textures2.jpg'
+import textures from '../../assets/sheet.jpg'
 import { CuttingTool } from './tools/tools'
 import { degToRad } from '../../utils/common'
 import { SegmentedBar,SegmentedRoundBar } from './MachinesParts/raw_materials/raw'

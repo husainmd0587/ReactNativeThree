@@ -5,7 +5,16 @@ export function useTextureLoader(type='steel') {
     let texturePath;
     switch (type) {
         case 'steel':
-            texturePath = require('./textures2.jpg');
+            texturePath = require('./steel.jpg');
+            break;
+        case 'aluminium':
+            texturePath = require('./aluminium.jpg');
+            break;
+        case 'copper':
+            texturePath = require('./copper.jpg');
+            break;
+        case 'brass':
+            texturePath = require('./brass.jpg');
             break;
         case 'knurl':
             texturePath = require('./knurl.png');
@@ -19,8 +28,11 @@ export function useTextureLoader(type='steel') {
         case 'wall':
             texturePath = require('./wall.jpg');
             break;
+        case 'plastic':
+            texturePath = require('./plastic.jpg');
+            break;
         default:
-            texturePath = require('./textures2.jpg');
+            texturePath = require('./sheet.jpg');
     }
   const texture = useLoader(
     THREE.TextureLoader,

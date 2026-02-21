@@ -1,102 +1,146 @@
-export function generateStressCutList({
-  totalLength = 60,
-  stockRadius = 12,
-  outerRadius,
-  stepCount = 20,
-  taperCount = 5,
-  boreCount = 5,
-  segments = 64,
-  boreSegments = 64,
-} = {}) {
+// COPY & PASTE CUT LIST EXAMPLES
+// Replace the cutList in StepWithCsg-WORKING.jsx with any of these
 
-  if (!outerRadius) {
-    throw new Error('outerRadius (TOOL_OUTER_R) is required')
-  }
+// ════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE 1: SIMPLE BOX POCKET
+// ════════════════════════════════════════════════════════════════════════════
 
-  const cutList = [{ isStock: true }]
+const cutList = [
+  {
+    type: 'shape',
+    shapeType: 1,        // 1 = box
+    p0: 18,               // width
+    p1: 15,              // height
+    p2: 18,               // depth
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+]
 
-  const stepLength = totalLength / stepCount
+// ════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE 2: CYLINDER HOLE (VERTICAL)
+// ════════════════════════════════════════════════════════════════════════════
 
-  let currentZ = 0
-  let currentR = stockRadius
+/*
+const cutList = [
+  {
+    type: 'shape',
+    shapeType: 0,        // 0 = cylinder
+    p0: 3,               // radius
+    p1: 40,              // height
+    p2: 64,              // segments
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+]
+*/
 
-  // ─────────────────────────────────────────────
-  // 1️⃣ External Step Turning
-  // ─────────────────────────────────────────────
-  for (let i = 0; i < stepCount; i++) {
-    const nextZ = currentZ + stepLength
-    const nextR = Math.max(2, currentR - (stockRadius / stepCount))
+// ════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE 3: SPHERE POCKET
+// ════════════════════════════════════════════════════════════════════════════
 
-    cutList.push({
-      type: 'lathe',
-      args: {
-        points: [
-          { z: currentZ, r: nextR },
-          { z: currentZ, r: outerRadius },
-          { z: nextZ,    r: outerRadius },
-          { z: nextZ,    r: nextR },
-        ],
-        segments,
-      },
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      cut: true,
-      subtract: true,
-    })
+/*
+const cutList = [
+  {
+    type: 'shape',
+    shapeType: 2,        // 2 = sphere
+    p0: 5,               // radius
+    p1: 32,              // segments
+    p2: 0,               // unused
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+]
+*/
 
-    currentZ = nextZ
-    currentR = nextR
-  }
+// ════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE 4: MULTIPLE CUTS
+// ════════════════════════════════════════════════════════════════════════════
 
-  // ─────────────────────────────────────────────
-  // 2️⃣ Taper Finishing Passes
-  // ─────────────────────────────────────────────
-  for (let i = 0; i < taperCount; i++) {
-    const zStart = i * (totalLength / taperCount)
-    const zEnd   = zStart + (totalLength / taperCount)
+/*
+const cutList = [
+  // Main box pocket
+  {
+    type: 'shape',
+    shapeType: 1,
+    p0: 8, p1: 15, p2: 8,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+  // Cylinder hole through middle
+  {
+    type: 'shape',
+    shapeType: 0,
+    p0: 2, p1: 40, p2: 32,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+  // Sphere pocket at top
+  {
+    type: 'shape',
+    shapeType: 2,
+    p0: 4, p1: 32, p2: 0,
+    position: { x: 0, y: 15, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  },
+]
+*/
 
-    cutList.push({
-      type: 'lathe',
-      args: {
-        points: [
-          { z: zStart, r: 4 - i * 0.4 },
-          { z: zStart, r: outerRadius },
-          { z: zEnd,   r: outerRadius },
-          { z: zEnd,   r: 3 - i * 0.4 },
-        ],
-        segments,
-      },
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      cut: true,
-      subtract: true,
-    })
-  }
+// ════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE 5: ARRAY OF HOLES
+// ════════════════════════════════════════════════════════════════════════════
 
-  // ─────────────────────────────────────────────
-  // 3️⃣ Internal Boring Passes
-  // ─────────────────────────────────────────────
-  for (let i = 0; i < boreCount; i++) {
-    const boreDepth  = totalLength * 0.5 + i * 3
-    const boreRadius = 2 + i * 0.5
+/*
+const cutList = [
+  ...Array.from({ length: 6 }, (_, i) => ({
+    type: 'shape',
+    shapeType: 0,        // cylinder
+    p0: 1.5,             // radius
+    p1: 30,              // height
+    p2: 16,              // segments
+    position: {
+      x: Math.cos((i / 6) * Math.PI * 2) * 8,
+      y: 0,
+      z: Math.sin((i / 6) * Math.PI * 2) * 8,
+    },
+    rotation: { x: 0, y: 0, z: 0 },
+    cut: true,
+    subtract: true
+  }))
+]
+*/
 
-    cutList.push({
-      type: 'lathe',
-      args: {
-        points: [
-          { z: 0,          r: 0 },
-          { z: 0,          r: boreRadius },
-          { z: boreDepth,  r: boreRadius },
-          { z: boreDepth,  r: 0 },
-        ],
-        segments: boreSegments,
-      },
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 90, y: 0, z: 0 }, // boring axis
-      cut: true,
-      subtract: true,
-    })
-  }
+// ════════════════════════════════════════════════════════════════════════════
+//  SHAPE TYPE REFERENCE
+// ════════════════════════════════════════════════════════════════════════════
 
-  return cutList
-}
+/*
+shapeType: 0 = Cylinder
+  p0: radius
+  p1: height
+  p2: segments (0 = auto 64)
+
+shapeType: 1 = Box
+  p0: width
+  p1: height
+  p2: depth
+
+shapeType: 2 = Sphere
+  p0: radius
+  p1: segments (0 = auto 64)
+  p2: unused
+*/
+
+export { cutList }

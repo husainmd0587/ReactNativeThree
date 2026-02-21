@@ -18,7 +18,9 @@ import {
   Example7_PartingOperation,
   Example8_DynamicControl 
 } from './components/turning/operations/tseting/examples.js'
-
+import { DrilledCylinder,PocketedBlock,TurnedRook,GearBlank,ConfigurablePart,
+BoltAssembly
+ } from './components/turning/operations/stepWithCSGTurning/stepTurningCSGExamples.js'
 
 
 const Home = () => {
@@ -35,8 +37,13 @@ const Home = () => {
       {/* <Example7_PartingOperation/> */}
       {/* <Example8_DynamicControl/> */}
       {/* <StepWithCsg/> */}
-      <StepTurningCSG/>
       {/* <CreateLatheMeshFromC/> */}
+      {/* <DrilledCylinder/> */}
+      {/* <PocketedBlock/> */}
+      {/* <TurnedRook/> */}
+      <GearBlank/>
+      {/* <ConfigurablePart/> */}
+        {/* <BoltAssembly/> */}
     </AppProvider>
   )
 }

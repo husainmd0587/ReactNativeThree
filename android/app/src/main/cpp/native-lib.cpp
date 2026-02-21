@@ -1,622 +1,387 @@
 #include <jni.h>
 #include <vector>
 #include <cmath>
-#include <string>
 #include <android/log.h>
+#include <manifold/manifold.h>
 
-// ── Manifold ──────────────────────────────────────────────────────────────
-#include "manifold/manifold.h"
 using namespace manifold;
 
-#define LOG_TAG "NativeLib"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
+#define LOG_TAG "NativeCSG"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+static Manifold g_stock;
+static bool     g_stockValid = false;
 
-
-// ════════════════════════════════════════════════════════════════════════════
-//  SECTION 1 — LATHE GENERATION
-// ════════════════════════════════════════════════════════════════════════════
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeTestModule_generateLathe(
-        JNIEnv *env,
-        jobject,
-        jfloatArray profileArray,
-        jint profileCount,
-        jint segments
-) {
-    if (!profileArray || profileCount < 2 || segments < 3) return nullptr;
-
-    jfloat* profile = env->GetFloatArrayElements(profileArray, nullptr);
-    if (!profile) return nullptr;
-
-    std::vector<float> vertices;
-    std::vector<float> uvs;
-    std::vector<jint>  indices;
-
-    vertices.reserve(profileCount * segments * 3);
-    uvs.reserve(profileCount * segments * 2);
-    indices.reserve((profileCount - 1) * segments * 6);
-
-    for (int i = 0; i < profileCount; i++) {
-        float y = profile[i * 2];
-        float r = profile[i * 2 + 1];
-        float v = (float)i / (profileCount - 1);
-
-        for (int j = 0; j < segments; j++) {
-            float u     = (float)j / segments;
-            float theta = (2.0f * (float)M_PI * j) / segments;
-            float x     = r * cosf(theta);
-            float z     = r * sinf(theta);
-
-            vertices.push_back(x);
-            vertices.push_back(y);
-            vertices.push_back(z);
-            uvs.push_back(u);
-            uvs.push_back(v);
-        }
-    }
-
-    for (int i = 0; i < profileCount - 1; i++) {
-        for (int j = 0; j < segments; j++) {
-            int next = (j + 1) % segments;
-            int a = i       * segments + j;
-            int b = i       * segments + next;
-            int c = (i + 1) * segments + j;
-            int d = (i + 1) * segments + next;
-
-            indices.push_back(a); indices.push_back(b); indices.push_back(d);
-            indices.push_back(a); indices.push_back(d); indices.push_back(c);
-        }
-    }
-
-    env->ReleaseFloatArrayElements(profileArray, profile, JNI_ABORT);
-
-    jfloatArray  vertexArray = env->NewFloatArray((jsize)vertices.size());
-    env->SetFloatArrayRegion(vertexArray, 0, (jsize)vertices.size(), vertices.data());
-
-    jfloatArray  uvArray = env->NewFloatArray((jsize)uvs.size());
-    env->SetFloatArrayRegion(uvArray, 0, (jsize)uvs.size(), uvs.data());
-
-    jintArray    indexArray = env->NewIntArray((jsize)indices.size());
-    env->SetIntArrayRegion(indexArray, 0, (jsize)indices.size(), indices.data());
-
-    jclass       objectClass = env->FindClass("java/lang/Object");
-    jobjectArray result      = env->NewObjectArray(3, objectClass, nullptr);
-    env->SetObjectArrayElement(result, 0, vertexArray);
-    env->SetObjectArrayElement(result, 1, indexArray);
-    env->SetObjectArrayElement(result, 2, uvArray);
-    return result;
-}
-
+// Each cut that specifies a material gets an originalID slot here.
+// slot 0 = stock faces (always)
+// slot N = cut N's exposed faces
+static std::vector<uint32_t> g_cutOriginalIDs;   // originalID for each cut slot (index = slot)
 
 // ════════════════════════════════════════════════════════════════════════════
-//  SECTION 2 — MANIFOLD CSG
+// BUILD MANIFOLD FROM VERTS + INDICES  —  with an assigned originalID
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── Internal helpers ──────────────────────────────────────────────────────
-
-/**
- * Flat float[]/int[] arrays from JNI → Manifold object.
- */
-static Manifold buildManifold(
-    JNIEnv* env,
-    jfloatArray jVerts,
-    jintArray   jInds)
+static Manifold buildManifoldSafe(JNIEnv* env, jfloatArray jVerts, jintArray jInds,
+                                   uint32_t originalID = 0)
 {
+    if (!jVerts || !jInds) { LOGE("buildManifoldSafe: null"); return Manifold(); }
+
     jsize vLen = env->GetArrayLength(jVerts);
     jsize iLen = env->GetArrayLength(jInds);
 
+    if (vLen < 9 || iLen < 3 || vLen % 3 != 0 || iLen % 3 != 0) {
+        LOGE("buildManifoldSafe: bad stride v=%d i=%d", (int)vLen, (int)iLen);
+        return Manifold();
+    }
+
     jfloat* vData = env->GetFloatArrayElements(jVerts, nullptr);
-    jint*   iData = env->GetIntArrayElements  (jInds,  nullptr);
+    jint*   iData = env->GetIntArrayElements(jInds,   nullptr);
 
-    MeshGL mesh;
-    mesh.numProp = 3;                                          // x, y, z only
-    mesh.vertProperties.assign(vData, vData + vLen);
-
-    mesh.triVerts.resize(iLen);
-    for (jsize k = 0; k < iLen; k++)
-        mesh.triVerts[k] = (uint32_t)iData[k];
+    std::vector<float>    verts(vData, vData + vLen);
+    std::vector<uint32_t> indices(iLen);
+    for (jsize i = 0; i < iLen; i++)
+        indices[i] = static_cast<uint32_t>(iData[i] < 0 ? 0 : iData[i]);
 
     env->ReleaseFloatArrayElements(jVerts, vData, JNI_ABORT);
-    env->ReleaseIntArrayElements  (jInds,  iData, JNI_ABORT);
+    env->ReleaseIntArrayElements(jInds,   iData, JNI_ABORT);
+
+    MeshGL mesh;
+    mesh.numProp        = 3;
+    mesh.vertProperties = verts;
+    mesh.triVerts       = indices;
+
+    // Tag every face of this mesh with the given originalID
+    uint32_t numTris = (uint32_t)(iLen / 3);
+    mesh.faceID.resize(numTris, originalID);
 
     Manifold m(mesh);
     if (m.Status() != Manifold::Error::NoError) {
-        LOGE("buildManifold: mesh is not manifold — check for holes/non-watertight geometry");
+        LOGE("buildManifoldSafe: status=%d", (int)m.Status());
+        return Manifold();
     }
+    LOGI("Mesh OK: %d verts %d tris originalID=%u", (int)m.NumVert(), (int)m.NumTri(), originalID);
     return m;
 }
 
-/**
- * Manifold → jobjectArray { float[] vertices, int[] indices }.
- */
-static jobject manifoldToJava(JNIEnv* env, Manifold& m)
+// ════════════════════════════════════════════════════════════════════════════
+// CONVERT MANIFOLD → JAVA  Object[]{ float[] verts, int[] indices, int[] faceIDs }
+// faceIDs[i] = originalID of triangle i  → used in JS to build draw groups
+// ════════════════════════════════════════════════════════════════════════════
+
+static jobject manifoldToJavaSafe(JNIEnv* env, const Manifold& m)
 {
     jclass       cls    = env->FindClass("java/lang/Object");
-    jobjectArray result = env->NewObjectArray(2, cls, nullptr);
+    jobjectArray result = env->NewObjectArray(3, cls, nullptr);  // now 3 elements
 
-    if (m.Status() != Manifold::Error::NoError) {
-        LOGE("manifoldToJava: mesh has errors, status=%d", (int)m.Status());
+    if (m.Status() != Manifold::Error::NoError || m.NumVert() == 0 || m.NumTri() == 0) {
+        LOGE("manifoldToJavaSafe: bad manifold status=%d v=%d t=%d",
+             (int)m.Status(), (int)m.NumVert(), (int)m.NumTri());
         return result;
     }
 
     MeshGL mesh = m.GetMeshGL();
 
-    if (mesh.vertProperties.empty() || mesh.triVerts.empty()) {
-        LOGE("manifoldToJava: empty mesh after CSG operation");
-        return result;
-    }
-
-    LOGI("manifoldToJava: %zu verts %zu tris",
-        mesh.vertProperties.size() / 3, mesh.triVerts.size() / 3);
-
-    // vertices
+    // verts
     jfloatArray vOut = env->NewFloatArray((jsize)mesh.vertProperties.size());
-    env->SetFloatArrayRegion(vOut, 0,
-        (jsize)mesh.vertProperties.size(),
-        mesh.vertProperties.data());
+    env->SetFloatArrayRegion(vOut, 0, (jsize)mesh.vertProperties.size(),
+                             mesh.vertProperties.data());
 
     // indices
-    jintArray iOut = env->NewIntArray((jsize)mesh.triVerts.size());
     std::vector<jint> iTemp(mesh.triVerts.size());
-    for (size_t k = 0; k < mesh.triVerts.size(); k++)
-        iTemp[k] = (jint)mesh.triVerts[k];
+    for (size_t i = 0; i < mesh.triVerts.size(); i++) iTemp[i] = (jint)mesh.triVerts[i];
+    jintArray iOut = env->NewIntArray((jsize)iTemp.size());
     env->SetIntArrayRegion(iOut, 0, (jsize)iTemp.size(), iTemp.data());
+
+    // faceIDs — one per triangle
+    std::vector<jint> fTemp(mesh.faceID.size());
+    for (size_t i = 0; i < mesh.faceID.size(); i++) fTemp[i] = (jint)mesh.faceID[i];
+    jintArray fOut = env->NewIntArray((jsize)fTemp.size());
+    env->SetIntArrayRegion(fOut, 0, (jsize)fTemp.size(), fTemp.data());
 
     env->SetObjectArrayElement(result, 0, vOut);
     env->SetObjectArrayElement(result, 1, iOut);
+    env->SetObjectArrayElement(result, 2, fOut);   // ← new
     return result;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// REVOLVE PROFILE → MANIFOLD
+// ════════════════════════════════════════════════════════════════════════════
 
-// ── 1. subtractMesh: ANY stock geometry + ANY tool geometry ──────────────
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeCSG_subtractMesh(
-    JNIEnv* env, jobject,
-    jfloatArray stockVerts, jintArray stockInds,
-    jfloatArray toolVerts,  jintArray toolInds,
-    jint op)
+static Manifold buildRevolveManifold(const float* profile, int pts, int segments,
+                                      uint32_t originalID = 0)
 {
-    if (!stockVerts || !stockInds || !toolVerts || !toolInds) return nullptr;
+    if (pts < 3) return Manifold();
+    if (segments < 32) segments = 32;
 
-    LOGI("subtractMesh: building stock...");
-    Manifold stock = buildManifold(env, stockVerts, stockInds);
-
-    LOGI("subtractMesh: building tool...");
-    Manifold tool  = buildManifold(env, toolVerts,  toolInds);
-
-    Manifold result;
-    switch (op) {
-        case 0:  result = stock - tool;  LOGI("subtractMesh: op=SUBTRACT"); break;
-        case 1:  result = stock + tool;  LOGI("subtractMesh: op=UNION");    break;
-        case 2:  result = stock ^ tool;  LOGI("subtractMesh: op=INTERSECT");break;
-        default: result = stock - tool;  break;
-    }
-
-    LOGI("subtractMesh: done, returning %d verts, %d tris",
-        (int)result.NumVert(), (int)result.NumTri());
-
-    return manifoldToJava(env, result);
-}
-
-
-// ── 2. subtractShape: stock from JS + built-in tool primitive ────────────
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeCSG_subtractShape(
-    JNIEnv* env, jobject,
-    jfloatArray stockVerts, jintArray stockInds,
-    jint   shapeType,
-    jfloat p0, jfloat p1, jfloat p2,
-    jfloat tx, jfloat ty, jfloat tz)
-{
-    if (!stockVerts || !stockInds) return nullptr;
-
-    Manifold stock = buildManifold(env, stockVerts, stockInds);
-    Manifold tool;
-
-    switch (shapeType) {
-        case 0: {
-            int segs = (p2 > 0) ? (int)p2 : 64;
-            tool = Manifold::Cylinder(p1, p0, p0, segs);
-            LOGI("subtractShape: cylinder r=%.2f h=%.2f segs=%d", p0, p1, segs);
-            break;
-        }
-        case 1: {
-            tool = Manifold::Cube({p0, p1, p2}, /*centre=*/true);
-            LOGI("subtractShape: box w=%.2f h=%.2f d=%.2f", p0, p1, p2);
-            break;
-        }
-        case 2: {
-            int segs = (p1 > 0) ? (int)p1 : 64;
-            tool = Manifold::Sphere(p0, segs);
-            LOGI("subtractShape: sphere r=%.2f segs=%d", p0, segs);
-            break;
-        }
-        default:
-            LOGE("subtractShape: unknown shapeType %d", shapeType);
-            return nullptr;
-    }
-
-    tool = tool.Translate({tx, ty, tz});
-
-    Manifold result = stock - tool;
-
-    LOGI("subtractShape: done → %d verts %d tris",
-        (int)result.NumVert(), (int)result.NumTri());
-
-    return manifoldToJava(env, result);
-}
-
-
-// ── 3. Persistent stock ───────────────────────────────────────────────────
-
-static Manifold gStock;
-static bool     gHasStock = false;
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_threeapp_NativeCSG_initStock(
-    JNIEnv* env, jobject,
-    jfloatArray stockVerts, jintArray stockInds)
-{
-    LOGI("initStock: uploading stock to C++...");
-    gStock    = buildManifold(env, stockVerts, stockInds);
-    gHasStock = true;
-    LOGI("initStock: done — %d verts %d tris",
-        (int)gStock.NumVert(), (int)gStock.NumTri());
-}
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeCSG_applyToolMesh(
-    JNIEnv* env, jobject,
-    jfloatArray toolVerts, jintArray toolInds)
-{
-    if (!gHasStock) { LOGE("applyToolMesh: no stock — call initStock first"); return nullptr; }
-
-    Manifold tool = buildManifold(env, toolVerts, toolInds);
-    gStock = gStock - tool;
-
-    LOGI("applyToolMesh: %d verts %d tris remaining",
-        (int)gStock.NumVert(), (int)gStock.NumTri());
-
-    return manifoldToJava(env, gStock);
-}
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeCSG_applyShape(
-    JNIEnv* env, jobject,
-    jint shapeType,
-    jfloat p0, jfloat p1, jfloat p2,
-    jfloat tx, jfloat ty, jfloat tz)
-{
-    if (!gHasStock) { LOGE("applyShape: no stock — call initStock first"); return nullptr; }
-
-    Manifold tool;
-    switch (shapeType) {
-        case 0: { int s=(p2>0)?(int)p2:64; tool=Manifold::Cylinder(p1,p0,p0,s).Translate({tx,ty,tz}); break; }
-        case 1: { tool=Manifold::Cube({p0,p1,p2},true).Translate({tx,ty,tz}); break; }
-        case 2: { int s=(p1>0)?(int)p1:64; tool=Manifold::Sphere(p0,s).Translate({tx,ty,tz}); break; }
-        default: LOGE("applyShape: unknown shapeType %d", shapeType); return nullptr;
-    }
-
-    gStock = gStock - tool;
-
-    LOGI("applyShape: %d verts %d tris remaining",
-        (int)gStock.NumVert(), (int)gStock.NumTri());
-
-    return manifoldToJava(env, gStock);
-}
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_com_threeapp_NativeCSG_getStock(JNIEnv* env, jobject)
-{
-    if (!gHasStock) { LOGE("getStock: no stock set"); return nullptr; }
-    return manifoldToJava(env, gStock);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_threeapp_NativeCSG_resetStock(JNIEnv* env, jobject)
-{
-    gStock    = Manifold();
-    gHasStock = false;
-    LOGI("resetStock: cleared");
-}
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_threeapp_NativeCSG_initStockCylinder(
-    JNIEnv*, jobject,
-    jfloat radius,
-    jfloat height,
-    jint   segments)
-{
-    LOGI("initStockCylinder: r=%.2f h=%.2f segs=%d", radius, height, (int)segments);
-
-    if (radius <= 0.0f || height <= 0.0f || segments < 3) {
-        LOGE("initStockCylinder: invalid params");
-        return JNI_FALSE;
-    }
-
-    float halfH = height * 0.5f;
-
-    gStock = Manifold::Cylinder(height, radius, radius, (int)segments)
-                 .Translate({0.0f, 0.0f, -halfH})
-                 .Rotate(-90.0f, 0.0f, 0.0f);
-
-    gHasStock = true;
-
-    auto bb = gStock.BoundingBox();
-    LOGI("initStockCylinder: done — %d verts %d tris",
-        (int)gStock.NumVert(), (int)gStock.NumTri());
-    LOGI("initStockCylinder: bounds X[%.1f..%.1f] Y[%.1f..%.1f] Z[%.1f..%.1f]",
-        bb.min.x, bb.max.x, bb.min.y, bb.max.y, bb.min.z, bb.max.z);
-
-    return (gStock.Status() == Manifold::Error::NoError) ? JNI_TRUE : JNI_FALSE;
-}
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_threeapp_NativeCSG_initStockFromProfile(
-    JNIEnv* env, jobject,
-    jfloatArray jProfile,
-    jint segments)
-{
-    LOGI("initStockFromProfile: segments=%d", (int)segments);
-
-    jsize profileLen = env->GetArrayLength(jProfile);
-    if (profileLen < 6 || profileLen % 2 != 0) {
-        LOGE("initStockFromProfile: bad profile length %d — need >= 3 points (6 floats)", (int)profileLen);
-        return JNI_FALSE;
-    }
-    if (segments < 3) {
-        LOGE("initStockFromProfile: segments=%d too small", (int)segments);
-        return JNI_FALSE;
-    }
-
-    jfloat* data = env->GetFloatArrayElements(jProfile, nullptr);
-    if (!data) { LOGE("initStockFromProfile: JNI array access failed"); return JNI_FALSE; }
-
-    int pointCount = profileLen / 2;
     SimplePolygon poly;
-    poly.reserve(pointCount);
+    poly.reserve((size_t)pts);
+    for (int i = 0; i < pts; i++)
+        poly.push_back({ profile[i*2] < 0.f ? 0.f : profile[i*2], profile[i*2+1] });
 
-    for (int i = 0; i < pointCount; i++) {
-        double r = (double)data[i * 2 + 0];
-        double y = (double)data[i * 2 + 1];
-        LOGI("  stock pt[%d] r=%.4f y=%.4f", i, r, y);
-        if (r < 0.0) { r = 0.0; }
-        poly.push_back({ r, y });
-    }
-    env->ReleaseFloatArrayElements(jProfile, data, JNI_ABORT);
+    Polygons polygons;
+    polygons.push_back(poly);
 
-    if (poly.size() > 1) {
-        const double eps = 1e-5;
-        if (std::abs(poly.front().x - poly.back().x) < eps &&
-            std::abs(poly.front().y - poly.back().y) < eps) {
-            poly.pop_back();
-            LOGI("initStockFromProfile: stripped duplicate closing vertex");
-        }
+    Manifold m = Manifold::Revolve(polygons, segments);
+    if (m.Status() != Manifold::Error::NoError) {
+        LOGE("buildRevolveManifold: failed status=%d", (int)m.Status());
+        return Manifold();
     }
 
-    if (poly.size() < 3) {
-        LOGE("initStockFromProfile: only %zu unique points after dedup — need >= 3", poly.size());
-        return JNI_FALSE;
-    }
+    // Tag faces
+    MeshGL mesh = m.GetMeshGL();
+    mesh.faceID.assign(mesh.triVerts.size() / 3, originalID);
+    m = Manifold(mesh);
 
-    Polygons crossSection = { poly };
-    Manifold newStock;
-    try {
-        newStock = Manifold::Revolve(crossSection, (int)segments);
-    } catch (const std::exception& e) {
-        LOGE("initStockFromProfile: Revolve exception: %s", e.what());
-        return JNI_FALSE;
-    } catch (...) {
-        LOGE("initStockFromProfile: Revolve threw unknown exception");
-        return JNI_FALSE;
-    }
-
-    if (newStock.Status() != Manifold::Error::NoError || newStock.NumVert() == 0) {
-        LOGE("initStockFromProfile: Revolve produced invalid mesh (status=%d verts=%d)",
-             (int)newStock.Status(), (int)newStock.NumVert());
-        return JNI_FALSE;
-    }
-
-    gStock    = newStock;
-    gHasStock = true;
-
-    auto bb = gStock.BoundingBox();
-    LOGI("initStockFromProfile: done — %d verts %d tris",
-         (int)gStock.NumVert(), (int)gStock.NumTri());
-    LOGI("initStockFromProfile: bounds X[%.2f..%.2f] Y[%.2f..%.2f] Z[%.2f..%.2f]",
-         bb.min.x, bb.max.x, bb.min.y, bb.max.y, bb.min.z, bb.max.z);
-
-    return JNI_TRUE;
+    LOGI("Revolve OK: %d verts %d tris originalID=%u", (int)m.NumVert(), (int)m.NumTri(), originalID);
+    return m;
 }
 
-/**
- * applyLatheProfile — WITH FULL TRANSFORM SUPPORT
- *
- * Profile format: [r0,y0, r1,y1, ...]
- * Transform order: Revolve → Rotate(rx,ry,rz) → Translate(tx,ty,tz)
- *
- * All transforms are optional (pass 0 to skip).
- * Rotation angles in DEGREES.
- */
-extern "C"
-JNIEXPORT jobject JNICALL
+// ════════════════════════════════════════════════════════════════════════════
+// TRANSFORM HELPER
+// ════════════════════════════════════════════════════════════════════════════
+
+static Manifold applyTransform(
+    Manifold m,
+    float tx, float ty, float tz,
+    float rx, float ry, float rz,
+    float sx = 1.f, float sy = 1.f, float sz = 1.f)
+{
+    if (sx != 1.f || sy != 1.f || sz != 1.f) m = m.Scale({sx, sy, sz});
+    if (rx != 0.f) m = m.Rotate(rx, 0.f, 0.f);
+    if (ry != 0.f) m = m.Rotate(0.f, ry, 0.f);
+    if (rz != 0.f) m = m.Rotate(0.f, 0.f, rz);
+    if (tx != 0.f || ty != 0.f || tz != 0.f) m = m.Translate({tx, ty, tz});
+    return m;
+}
+
+// Stock always gets originalID = 0.
+// Each cut tool gets a unique originalID = 1, 2, 3 ...
+// We track the next available ID here.
+static uint32_t g_nextID = 1;
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — initStock  (from raw mesh)
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_threeapp_NativeCSG_initStock(
+    JNIEnv* env, jobject, jfloatArray stockVerts, jintArray stockInds)
+{
+    g_nextID     = 1;
+    g_stock      = buildManifoldSafe(env, stockVerts, stockInds, /*originalID=*/0);
+    g_stockValid = g_stock.Status() == Manifold::Error::NoError && g_stock.NumVert() > 0;
+    LOGI("initStock: valid=%d", g_stockValid);
+    return g_stockValid ? JNI_TRUE : JNI_FALSE;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — initStockBox
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_threeapp_NativeCSG_initStockBox(
+    JNIEnv*, jobject, jfloat w, jfloat h, jfloat d)
+{
+    if (w <= 0.f || h <= 0.f || d <= 0.f) { g_stockValid = false; return JNI_FALSE; }
+    g_nextID = 1;
+
+    // Build cube, tag all faces as originalID=0 (stock)
+    Manifold raw = Manifold::Cube({w, h, d}, true).Rotate(90.f, 0.f, 0.f);
+    MeshGL mesh  = raw.GetMeshGL();
+    mesh.faceID.assign(mesh.triVerts.size() / 3, 0u);
+    g_stock      = Manifold(mesh);
+    g_stockValid = g_stock.Status() == Manifold::Error::NoError && g_stock.NumVert() > 0;
+    LOGI("initStockBox: valid=%d verts=%d tris=%d",
+         g_stockValid, (int)g_stock.NumVert(), (int)g_stock.NumTri());
+    return g_stockValid ? JNI_TRUE : JNI_FALSE;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — initStockCylinder
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_threeapp_NativeCSG_initStockCylinder(
+    JNIEnv*, jobject, jfloat radius, jfloat height, jint segments)
+{
+    if (radius <= 0.f || height <= 0.f) { g_stockValid = false; return JNI_FALSE; }
+    if (segments < 32) segments = 32;
+    g_nextID = 1;
+
+    Manifold raw = Manifold::Cylinder(height, radius, radius, (int)segments).Rotate(90.f, 0.f, 0.f);
+    MeshGL mesh  = raw.GetMeshGL();
+    mesh.faceID.assign(mesh.triVerts.size() / 3, 0u);
+    g_stock      = Manifold(mesh);
+    g_stockValid = g_stock.Status() == Manifold::Error::NoError && g_stock.NumVert() > 0;
+    LOGI("initStockCylinder: valid=%d verts=%d", g_stockValid, (int)g_stock.NumVert());
+    return g_stockValid ? JNI_TRUE : JNI_FALSE;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — initStockFromProfile
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_threeapp_NativeCSG_initStockFromProfile(
+    JNIEnv* env, jobject, jfloatArray jProfile, jint segments)
+{
+    if (!jProfile) { g_stockValid = false; return JNI_FALSE; }
+    if (segments < 32) segments = 32;
+    jsize pLen = env->GetArrayLength(jProfile);
+    if (pLen < 6 || pLen % 2 != 0) { g_stockValid = false; return JNI_FALSE; }
+
+    jfloat* pData = env->GetFloatArrayElements(jProfile, nullptr);
+    g_nextID = 1;
+    g_stock  = buildRevolveManifold(pData, (int)(pLen / 2), (int)segments, /*originalID=*/0);
+    env->ReleaseFloatArrayElements(jProfile, pData, JNI_ABORT);
+
+    g_stockValid = g_stock.Status() == Manifold::Error::NoError && g_stock.NumVert() > 0;
+    LOGI("initStockFromProfile: valid=%d verts=%d tris=%d",
+         g_stockValid, (int)g_stock.NumVert(), (int)g_stock.NumTri());
+    return g_stockValid ? JNI_TRUE : JNI_FALSE;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — applyMeshToolWithTransform
+//
+// op:    0 = subtract (A - B)
+//        1 = union    (A + B)
+//        2 = intersect(A ^ B)
+// hasMaterial: 1 if this cut has a material override, 0 if not.
+//              When 1, the tool is tagged with a fresh originalID so the JS
+//              side can identify which triangles came from this cut.
+//              Returns the assigned originalID in the result map so JS knows
+//              which faceID to associate with this cut's material.
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_threeapp_NativeCSG_applyMeshToolWithTransform(
+    JNIEnv* env, jobject,
+    jfloatArray toolVerts, jintArray toolInds,
+    jfloat tx, jfloat ty, jfloat tz,
+    jfloat rx, jfloat ry, jfloat rz,
+    jfloat sx, jfloat sy, jfloat sz,
+    jint   op,
+    jint   hasMaterial)   // ← new param
+{
+    if (!g_stockValid) {
+        LOGE("applyMeshToolWithTransform: no stock");
+        return manifoldToJavaSafe(env, Manifold());
+    }
+
+    // Assign a unique originalID to this tool if it has a material
+    uint32_t toolID = hasMaterial ? g_nextID++ : 0u;
+
+    Manifold tool = buildManifoldSafe(env, toolVerts, toolInds, toolID);
+    if (tool.Status() != Manifold::Error::NoError) {
+        LOGE("applyMeshToolWithTransform: bad tool");
+        return manifoldToJavaSafe(env, Manifold());
+    }
+
+    tool = applyTransform(tool, tx, ty, tz, rx, ry, rz, sx, sy, sz);
+
+    switch (op) {
+        case 1:  LOGI("op: UNION");     g_stock = g_stock + tool; break;
+        case 2:  LOGI("op: INTERSECT"); g_stock = g_stock ^ tool; break;
+        default: LOGI("op: SUBTRACT");  g_stock = g_stock - tool; break;
+    }
+
+    if (g_stock.Status() != Manifold::Error::NoError) {
+        LOGE("applyMeshToolWithTransform: op failed status=%d", (int)g_stock.Status());
+        g_stockValid = false;
+        return manifoldToJavaSafe(env, Manifold());
+    }
+
+    LOGI("result: %d verts %d tris toolID=%u", (int)g_stock.NumVert(), (int)g_stock.NumTri(), toolID);
+
+    // Return mesh + faceIDs.  The Java/JS side will find triangles tagged
+    // with toolID and put them in a separate draw group with this cut's material.
+    // We pack toolID as element [3] of the result array so JS can read it.
+    jclass       cls    = env->FindClass("java/lang/Object");
+    jobjectArray result = env->NewObjectArray(4, cls, nullptr);  // 4 elements
+
+    MeshGL mesh = g_stock.GetMeshGL();
+
+    jfloatArray vOut = env->NewFloatArray((jsize)mesh.vertProperties.size());
+    env->SetFloatArrayRegion(vOut, 0, (jsize)mesh.vertProperties.size(),
+                             mesh.vertProperties.data());
+
+    std::vector<jint> iTemp(mesh.triVerts.size());
+    for (size_t i = 0; i < mesh.triVerts.size(); i++) iTemp[i] = (jint)mesh.triVerts[i];
+    jintArray iOut = env->NewIntArray((jsize)iTemp.size());
+    env->SetIntArrayRegion(iOut, 0, (jsize)iTemp.size(), iTemp.data());
+
+    std::vector<jint> fTemp(mesh.faceID.size());
+    for (size_t i = 0; i < mesh.faceID.size(); i++) fTemp[i] = (jint)mesh.faceID[i];
+    jintArray fOut = env->NewIntArray((jsize)fTemp.size());
+    env->SetIntArrayRegion(fOut, 0, (jsize)fTemp.size(), fTemp.data());
+
+    // toolID as a single-element int array
+    jintArray tidOut = env->NewIntArray(1);
+    jint tid = (jint)toolID;
+    env->SetIntArrayRegion(tidOut, 0, 1, &tid);
+
+    env->SetObjectArrayElement(result, 0, vOut);
+    env->SetObjectArrayElement(result, 1, iOut);
+    env->SetObjectArrayElement(result, 2, fOut);
+    env->SetObjectArrayElement(result, 3, tidOut);
+    return result;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — applyLatheProfile
+// ════════════════════════════════════════════════════════════════════════════
+
+extern "C" JNIEXPORT jobject JNICALL
 Java_com_threeapp_NativeCSG_applyLatheProfile(
     JNIEnv* env, jobject,
-    jfloatArray jProfile,
-    jint   segments,
+    jfloatArray jProfile, jint segments,
     jfloat tx, jfloat ty, jfloat tz,
     jfloat rx, jfloat ry, jfloat rz)
 {
-    auto errorResult = [&]() -> jobject {
-        jclass cls = env->FindClass("java/lang/Object");
-        return env->NewObjectArray(2, cls, nullptr);
-    };
+    if (!g_stockValid) return manifoldToJavaSafe(env, Manifold());
+    jsize pLen = env->GetArrayLength(jProfile);
+    if (!jProfile || pLen < 6 || pLen % 2 != 0) return manifoldToJavaSafe(env, Manifold());
+    if (segments < 32) segments = 32;
 
-    if (!gHasStock) {
-        LOGE("applyLatheProfile: no stock — call initStock first");
-        return errorResult();
+    jfloat* pData = env->GetFloatArrayElements(jProfile, nullptr);
+    Manifold tool = buildRevolveManifold(pData, (int)(pLen / 2), (int)segments, 0u);
+    env->ReleaseFloatArrayElements(jProfile, pData, JNI_ABORT);
+
+    if (tool.Status() != Manifold::Error::NoError) return manifoldToJavaSafe(env, Manifold());
+
+    tool    = applyTransform(tool, tx, ty, tz, rx, ry, rz);
+    g_stock = g_stock - tool;
+
+    if (g_stock.Status() != Manifold::Error::NoError) {
+        g_stockValid = false;
+        return manifoldToJavaSafe(env, Manifold());
     }
+    return manifoldToJavaSafe(env, g_stock);
+}
 
-    jsize profileLen = env->GetArrayLength(jProfile);
-    LOGI("applyLatheProfile: profileLen=%d segments=%d", (int)profileLen, (int)segments);
-    LOGI("applyLatheProfile: transform tx=%.3f ty=%.3f tz=%.3f rx=%.3f ry=%.3f rz=%.3f",
-         tx, ty, tz, rx, ry, rz);
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — getStock
+// ════════════════════════════════════════════════════════════════════════════
 
-    if (profileLen < 4 || profileLen % 2 != 0) {
-        LOGE("applyLatheProfile: bad profile length %d — need at least 4 floats (2 points)", (int)profileLen);
-        return errorResult();
-    }
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_threeapp_NativeCSG_getStock(JNIEnv* env, jobject)
+{
+    if (!g_stockValid) { LOGE("getStock: no stock"); return manifoldToJavaSafe(env, Manifold()); }
+    return manifoldToJavaSafe(env, g_stock);
+}
 
-    if (segments < 3) {
-        LOGE("applyLatheProfile: segments=%d too small, minimum is 3", (int)segments);
-        return errorResult();
-    }
+// ════════════════════════════════════════════════════════════════════════════
+// JNI — resetStock
+// ════════════════════════════════════════════════════════════════════════════
 
-    jfloat* profileData = env->GetFloatArrayElements(jProfile, nullptr);
-    if (!profileData) {
-        LOGE("applyLatheProfile: failed to get profile data from JNI");
-        return errorResult();
-    }
-
-    int pointCount = profileLen / 2;
-    LOGI("applyLatheProfile: %d raw points", pointCount);
-
-    SimplePolygon poly;
-    poly.reserve(pointCount);
-
-    for (int i = 0; i < pointCount; i++) {
-        double r = (double)profileData[i * 2 + 0];
-        double z = (double)profileData[i * 2 + 1];
-        LOGI("  pt[%d] r=%.4f z=%.4f", i, r, z);
-
-        if (r < 0.0) {
-            LOGE("applyLatheProfile: pt[%d] has negative radius r=%.4f — clamping to 0", i, r);
-            r = 0.0;
-        }
-
-        poly.push_back({ r, z });
-    }
-
-    env->ReleaseFloatArrayElements(jProfile, profileData, JNI_ABORT);
-
-    if (poly.size() > 1) {
-        const auto& first = poly.front();
-        const auto& last  = poly.back();
-        const double eps  = 1e-5;
-        if (std::abs(first.x - last.x) < eps &&
-            std::abs(first.y - last.y) < eps) {
-            poly.pop_back();
-            LOGI("applyLatheProfile: stripped duplicate closing vertex (first==last)");
-        }
-    }
-
-    if (poly.size() < 3) {
-        LOGE("applyLatheProfile: polygon has only %zu unique points after dedup — need >= 3",
-             poly.size());
-        return errorResult();
-    }
-
-    LOGI("applyLatheProfile: %zu unique points after dedup", poly.size());
-
-    Polygons crossSection = { poly };
-    LOGI("applyLatheProfile: calling Manifold::Revolve with %d segments...", (int)segments);
-
-    Manifold tool;
-    try {
-        tool = Manifold::Revolve(crossSection, (int)segments);
-    } catch (const std::exception& e) {
-        LOGE("applyLatheProfile: Revolve exception: %s", e.what());
-        return errorResult();
-    } catch (...) {
-        LOGE("applyLatheProfile: Revolve threw unknown exception");
-        return errorResult();
-    }
-
-    LOGI("applyLatheProfile: tool created — status=%d verts=%d tris=%d",
-        (int)tool.Status(), (int)tool.NumVert(), (int)tool.NumTri());
-
-    if (tool.Status() != Manifold::Error::NoError) {
-        LOGE("applyLatheProfile: Revolve produced invalid mesh (status=%d)", (int)tool.Status());
-        return errorResult();
-    }
-
-    if (tool.NumVert() == 0 || tool.NumTri() == 0) {
-        LOGE("applyLatheProfile: Revolve produced empty mesh");
-        return errorResult();
-    }
-
-    // ── Apply transforms ─────────────────────────────────────────────────
-    // Order: Rotate → Translate (THREE.js convention)
-
-    const float EPS = 1e-6f;
-    
-    // Check if rotation is non-trivial
-    if (std::fabs(rx) > EPS || std::fabs(ry) > EPS || std::fabs(rz) > EPS) {
-        LOGI("applyLatheProfile: applying rotation (%.2f, %.2f, %.2f) deg", rx, ry, rz);
-        tool = tool.Rotate(rx, ry, rz);
-        auto toolBox = tool.BoundingBox();
-        LOGI("applyLatheProfile: after rotation bounds X[%.2f..%.2f] Y[%.2f..%.2f] Z[%.2f..%.2f]",
-            toolBox.min.x, toolBox.max.x, toolBox.min.y, toolBox.max.y, toolBox.min.z, toolBox.max.z);
-    }
-
-    // Check if translation is non-trivial
-    if (std::fabs(tx) > EPS || std::fabs(ty) > EPS || std::fabs(tz) > EPS) {
-        LOGI("applyLatheProfile: applying translation (%.2f, %.2f, %.2f)", tx, ty, tz);
-        tool = tool.Translate({tx, ty, tz});
-        auto toolBox = tool.BoundingBox();
-        LOGI("applyLatheProfile: after translation bounds X[%.2f..%.2f] Y[%.2f..%.2f] Z[%.2f..%.2f]",
-            toolBox.min.x, toolBox.max.x, toolBox.min.y, toolBox.max.y, toolBox.min.z, toolBox.max.z);
-    }
-
-    // Log final tool bounds
-    auto toolBox = tool.BoundingBox();
-    LOGI("applyLatheProfile: final tool bounds X[%.2f..%.2f] Y[%.2f..%.2f] Z[%.2f..%.2f]",
-        toolBox.min.x, toolBox.max.x, toolBox.min.y, toolBox.max.y, toolBox.min.z, toolBox.max.z);
-
-    // Log stock bounds for comparison
-    auto stockBox = gStock.BoundingBox();
-    LOGI("applyLatheProfile: stock bounds X[%.2f..%.2f] Y[%.2f..%.2f] Z[%.2f..%.2f]",
-        stockBox.min.x, stockBox.max.x, stockBox.min.y, stockBox.max.y, stockBox.min.z, stockBox.max.z);
-
-    LOGI("applyLatheProfile: subtracting tool (%d verts, %d tris) from stock...",
-        (int)tool.NumVert(), (int)tool.NumTri());
-
-    try {
-        gStock = gStock - tool;
-    } catch (const std::exception& e) {
-        LOGE("applyLatheProfile: subtract exception: %s", e.what());
-        return errorResult();
-    } catch (...) {
-        LOGE("applyLatheProfile: subtract threw unknown exception");
-        return errorResult();
-    }
-
-    if (gStock.Status() != Manifold::Error::NoError) {
-        LOGE("applyLatheProfile: stock is invalid after subtraction (status=%d)",
-             (int)gStock.Status());
-        return errorResult();
-    }
-
-    LOGI("applyLatheProfile: SUCCESS — stock now %d verts %d tris",
-        (int)gStock.NumVert(), (int)gStock.NumTri());
-
-    return manifoldToJava(env, gStock);
+extern "C" JNIEXPORT void JNICALL
+Java_com_threeapp_NativeCSG_resetStock(JNIEnv*, jobject)
+{
+    g_stock      = Manifold();
+    g_stockValid = false;
+    g_nextID     = 1;
+    LOGI("resetStock: cleared");
 }
