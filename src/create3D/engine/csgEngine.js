@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as THREE from 'three'
 import { NativeModules } from 'react-native'
-import { useTextureLoader } from '../../../../assets/all_textures'
+import { useTextureLoader } from '../../assets/all_textures'
 import { useFrame } from '@react-three/fiber/native'
 
 const { NativeCSG } = NativeModules
@@ -25,47 +25,17 @@ const DEFAULT_CUTLIST  = Object.freeze([{
   material: { color: '#888888', roughness: 0.2, metalness: 0.8 },
 }])
 
-/* ─────────────────────────────────────────────────────────────
-   HELPERS
-───────────────────────────────────────────────────────────── */
-
-// Accepts array [x,y,z] or object {x,y,z}
-function resolveVec3(v, def = 0) {
-  if (!v) return { x: def, y: def, z: def }
-  if (Array.isArray(v)) return { x: v[0] ?? def, y: v[1] ?? def, z: v[2] ?? def }
-  return { x: v.x ?? def, y: v.y ?? def, z: v.z ?? def }
-}
-
-// Bake position + rotation + scale into geometry vertices
-// so NativeCSG receives an already-transformed mesh
-function bakeTransform(geometry, position, rotation, scale) {
-  const geo = geometry.clone()
-  const pos = resolveVec3(position)
-  const rot = resolveVec3(rotation)
-  const scl = resolveVec3(scale, 1)
-
-  const mat = new THREE.Matrix4().compose(
-    new THREE.Vector3(pos.x, pos.y, pos.z),
-    new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(rot.x, rot.y, rot.z, 'XYZ')
-    ),
-    new THREE.Vector3(scl.x, scl.y, scl.z),
-  )
-
-  geo.applyMatrix4(mat)
-  return geo
-}
 
 /* ─────────────────────────────────────────────────────────────
    MERGE VERTICES
 ───────────────────────────────────────────────────────────── */
 
 function mergeVertices(geometry, tolerance = 1e-4) {
-  const pos    = geometry.getAttribute('position')
-  const map    = new Map()
-  const unique = []
+  const pos     = geometry.getAttribute('position')
+  const map     = new Map()
+  const unique  = []
   const indices = []
-  const invTol = 1 / tolerance
+  const invTol  = 1 / tolerance
 
   for (let i = 0; i < pos.count; i++) {
     const x   = pos.getX(i)
@@ -114,8 +84,8 @@ function applyAutoUVs(geometry) {
   geometry.computeVertexNormals()
   geometry.computeBoundingBox()
 
-  const box    = geometry.boundingBox
-  const size   = new THREE.Vector3()
+  const box      = geometry.boundingBox
+  const size     = new THREE.Vector3()
   box.getSize(size)
 
   const pos      = geometry.getAttribute('position')
@@ -161,7 +131,7 @@ function resolveMaterial(desc, textureLoader = () => null) {
     desc.map.wrapS = desc.map.wrapT = THREE.RepeatWrapping
     params.map = desc.map
   } else if (desc.texture) {
-    const tex = textureLoader(desc.texture)
+    const tex = textureLoader(desc.texture)   // <- must be a function
     if (tex) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; params.map = tex }
   }
 
@@ -291,32 +261,33 @@ async function applyCut(cut, mergeTolerance = 0.0001) {
     return null
   }
 
-  const bakedGeo = bakeTransform(cut.geometry, cut.position, cut.rotation, cut.scale)
-
   let manifoldInput
   try {
-    manifoldInput = makeManifoldSafe(bakedGeo, mergeTolerance)
-    bakedGeo.dispose()
+    manifoldInput = makeManifoldSafe(cut.geometry, mergeTolerance)
   } catch (e) {
     console.warn(`Cut ${i}: makeManifoldSafe —`, e.message)
-    bakedGeo.dispose()
     return null
   }
 
-  // 0 = subtract, 1 = union, 2 = intersect
-  const op = cut.intersect === true  ? 2
-           : cut.subtract  === false ? 1
-           : 0
-
+  const tx = cut.position?.x ?? 0
+  const ty = cut.position?.y ?? 0
+  const tz = cut.position?.z ?? 0
+  const rx = cut.rotation?.x ?? 0
+  const ry = cut.rotation?.y ?? 0
+  const rz = cut.rotation?.z ?? 0
+  const sx = cut.scale?.x    ?? 1
+  const sy = cut.scale?.y    ?? 1
+  const sz = cut.scale?.z    ?? 1
+  const op          = cut.subtract === false ? 1 : 0
   const hasMaterial = cut.material ? 1 : 0
 
   let result = null
   try {
     result = await NativeCSG.applyMeshToolWithTransform(
       manifoldInput.vertices, manifoldInput.indices,
-      0, 0, 0,
-      0, 0, 0,
-      1, 1, 1,
+      tx, ty, tz,
+      rx, ry, rz,
+      sx, sy, sz,
       op, hasMaterial,
     )
   } catch (e) {
@@ -331,17 +302,18 @@ async function applyCut(cut, mergeTolerance = 0.0001) {
 
   return result
 }
-/* ─────────────────────────────────────────────────────────────
-   FALLBACK MATERIAL
-───────────────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────────────
+   FALLBACK MATERIAL  (module-level singleton)
+───────────────────────────────────────────────────────────── */
 const FALLBACK_MAT = new THREE.MeshStandardMaterial({ color: 0x888888 })
 
 /* ─────────────────────────────────────────────────────────────
    COMPONENT
+
 ───────────────────────────────────────────────────────────── */
 
-const StepWithCsg = ({
+const CSGEngine = ({
   stockType     = DEFAULT_STOCK_TYPE,
   stockRadius   = DEFAULT_STOCK_RADIUS,
   stockHeight   = DEFAULT_STOCK_HEIGHT,
@@ -357,30 +329,44 @@ const StepWithCsg = ({
 } = {}) => {
 
   const meshRef  = useRef()
-  const rotationY  = useRef(0)
   const hasBuilt = useRef(false)
   const stockMat = useRef(null)
 
   const [geo,       setGeo]       = useState(() => new THREE.BufferGeometry())
   const [materials, setMaterials] = useState(null)
 
+  /* ── Texture loading ────────────────────────────────────────────────
+     Stock: read stockMaterial.texture directly — no separate prop needed.
+       stockMaterial={{ texture: 'steel', roughness: 0.2, metalness: 1 }}
+                                 ↑ this key is used automatically
+     'wood' is always loaded as the fallback (index 0 is stable).
+     Cut materials: loadTexture falls back to wood for unknown keys.
+
+     Rules of Hooks: two fixed useTextureLoader calls — never conditional,
+     never in a loop. stockTexKey is a stable string derived from the prop.
+  ─────────────────────────────────────────────────────────────────── */
+
+  // Derive the stock texture key from stockMaterial — fallback to 'wood'
   const stockTexKey = (typeof stockMaterial?.texture === 'string' && stockMaterial.texture)
     ? stockMaterial.texture
     : 'wood'
 
-  const woodTex  = useTextureLoader('wood')
-  const stockTex = useTextureLoader(stockTexKey)
+  // Two fixed hook calls — 'wood' always loads, stock texture loads from key
+  // When stockTexKey === 'wood' both hooks return the same texture (no waste)
+  const woodTex     = useTextureLoader('wood')
+  const stockTex    = useTextureLoader(stockTexKey)
 
+  // Stable lookup function for cut materials — unknown keys fall back to wood
   const loadTexture = useCallback(
     (key) => {
       if (key === stockTexKey) return stockTex ?? woodTex
       if (key === 'wood')      return woodTex
-      return woodTex
+      return woodTex   // fallback for any other key
     },
     [stockTexKey, stockTex, woodTex]
   )
 
-  /* ── Stock material ─────────────────────────────────────────────── */
+  /* ── Stock material ──────────────────────────────────────────────── */
   useEffect(() => {
     if (!woodTex) return
     stockMat.current?.dispose()
@@ -399,7 +385,7 @@ const StepWithCsg = ({
     }
   }, [woodTex, stockMaterial, loadTexture])
 
-  /* ── CSG rebuild trigger ────────────────────────────────────────── */
+  /* ── CSG rebuild trigger ─────────────────────────────────────────── */
   const stockKey = `${stockType}|${stockRadius}|${stockHeight}|${stockSegments}|${stockWidth}|${stockDepth}`
 
   useEffect(() => {
@@ -407,7 +393,7 @@ const StepWithCsg = ({
     hasBuilt.current = false
   }, [stockKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Build ──────────────────────────────────────────────────────── */
+  /* ── Build ───────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!woodTex || !stockMat.current || hasBuilt.current) return
     hasBuilt.current = true
@@ -467,25 +453,19 @@ const StepWithCsg = ({
 
   }, [woodTex, stockKey, loadTexture]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Animation ──────────────────────────────────────────────────── */
+  /* ── Animation ───────────────────────────────────────────────────── */
   const animRef = useRef(null)
+  useEffect(() => {
+    animRef.current = (
+      animation?.type === 'rotation' && ['x', 'y', 'z'].includes(animation.axis)
+    ) ? { axis: animation.axis, speed: animation.speed ?? 0.01 } : null
+  }, [animation?.type, animation?.axis, animation?.speed])
 
-useEffect(() => {
-  animRef.current = (
-    animation?.type === 'rotation' && ['x', 'y', 'z'].includes(animation.axis)
-  ) ? { axis: animation.axis, speed: animation.speed ?? 0.01 } : null
-}, [animation?.type, animation?.axis, animation?.speed])
-
-useFrame((_, delta) => {
-  const mesh = meshRef.current
-  if (!mesh || !animRef.current) return
-
-  // Use delta time — smooth regardless of frame rate or re-renders
-  rotationY.current += animRef.current.speed * delta * 60
-
-  // Direct mutation — zero React involvement
-  mesh.rotation[animRef.current.axis] = rotationY.current
-})
+  useFrame(() => {
+    if (animRef.current && meshRef.current) {
+      meshRef.current.rotation[animRef.current.axis] += animRef.current.speed
+    }
+  })
 
   const renderMaterial = materials ?? stockMat.current ?? FALLBACK_MAT
 
@@ -502,4 +482,4 @@ useFrame((_, delta) => {
   )
 }
 
-export default StepWithCsg
+export default CSGEngine

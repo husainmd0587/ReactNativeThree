@@ -19,9 +19,10 @@ import {
   Example8_DynamicControl 
 } from './components/turning/operations/tseting/examples.js'
 import { DrilledCylinder,PocketedBlock,TurnedRook,GearBlank,ConfigurablePart,
-BoltAssembly
+BoltAssembly,ThorHammer,LensSlugs,SquareGear,HollowPipe
  } from './components/turning/operations/stepWithCSGTurning/stepTurningCSGExamples.js'
-
+import { M6Bolt,M12Bolt,LeadScrew,ButtressScrew,SquareScrew,TrapezoidalScrew,KnuckleScrew ,M6Nut}
+from './components/turning/operations/stepWithCSGTurning/others/thread.js'
 
 const Home = () => {
   return (
@@ -42,8 +43,20 @@ const Home = () => {
       {/* <PocketedBlock/> */}
       {/* <TurnedRook/> */}
       <GearBlank/>
-      {/* <ConfigurablePart/> */}
-        {/* <BoltAssembly/> */}
+      
+      {/* <BoltAssembly/> */}
+      {/* <ThorHammer/>   */}
+      {/* <M6Bolt/> */}
+      {/* <M12Bolt/> */}
+      {/* <LeadScrew/> */}
+     
+      {/* <SquareScrew/> */}
+      {/* <KnuckleScrew/> */}
+      {/* <TrapezoidalScrew/> */}
+      {/* <M6Nut/> */}
+      {/* <LensSlugs/> */}
+      {/* <SquareGear/> */}
+      {/* <HollowPipe/> */}
     </AppProvider>
   )
 }

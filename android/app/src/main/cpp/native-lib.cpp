@@ -210,7 +210,7 @@ Java_com_threeapp_NativeCSG_initStockCylinder(
     if (segments < 32) segments = 32;
     g_nextID = 1;
 
-    Manifold raw = Manifold::Cylinder(height, radius, radius, (int)segments).Rotate(90.f, 0.f, 0.f);
+    Manifold raw = Manifold::Cylinder(height, radius, radius, (int)segments).Rotate(90.f, 0.f, 0.f).Translate({0.f, height/2, 0.f});
     MeshGL mesh  = raw.GetMeshGL();
     mesh.faceID.assign(mesh.triVerts.size() / 3, 0u);
     g_stock      = Manifold(mesh);
