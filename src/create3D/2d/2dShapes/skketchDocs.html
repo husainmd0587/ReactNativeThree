@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SketchScreen — Component Documentation</title>
+<style>
+ @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Syne:wght@400;600;700;800&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Roboto+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+
+  :root {
+    --bg: #06080f;
+    --surface: #0b0e18;
+    --surface2: #0f1320;
+    --surface3: #141826;
+    --border: #1a2035;
+    --border2: #222a40;
+    --accent: #2a8ef2;
+    --accent2: #00e5a0;
+    --accent3: #f7c948;
+    --accent4: #a855f7;
+    --accent5: #ff7a45;
+    --text: #b8c8e0;
+    --text2: #6b7a96;
+    --text3: #3a4860;
+    --bright: #e8f0ff;
+    --danger: #f04040;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans:'Roboto', 'Syne', sans-serif;
+  }
+
+  body.light {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --surface2: #edf0f7;
+    --surface3: #e4e8f2;
+    --border: #d0d8ea;
+    --border2: #b8c4d8;
+    --accent: #1a6ed8;
+    --accent2: #00a372;
+    --accent3: #c9960a;
+    --accent4: #8b34d6;
+    --accent5: #d95a1e;
+    --text: #2a3450;
+    --text2: #5a6882;
+    --text3: #9aa4b8;
+    --bright: #0d1220;
+    --danger: #cc2020;
+  }
+
+  /* ─── THEME TOGGLE ─── */
+  .theme-toggle {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 8px; margin: 0 10px 10px;
+    background: var(--surface2); border: 1px solid var(--accent);
+    border-radius: 8px; cursor: pointer; transition: all 0.2s;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.6px; color: var(--text2); text-transform: uppercase;
+    z-index: 99;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-track {
+    width: 32px; height: 17px; border-radius: 9px;
+    background: var(--border2); position: relative;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  body.light .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  body.light .toggle-thumb { transform: translateX(15px); }
+  .toggle-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .toggle-icon svg { width: 16px; height: 16px; display: block; }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* ─── NOISE OVERLAY ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+
+  .sidebar-logo {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-logo .hex { color: var(--accent); font-size: 22px; }
+  .sidebar-logo h1 { font-family: var(--sans); font-size: 14px; font-weight: 800; color: var(--bright); letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+  .sidebar-logo p { font-size: 9px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+
+  .nav-section { padding: 14px 12px 4px; }
+  .nav-section-title { font-size: 8px; font-weight: 700; letter-spacing: 2px; color: var(--text3); text-transform: uppercase; padding: 0 8px 6px; }
+
+  .nav-link {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 4px;
+    color: var(--text2); font-size: 10px; text-decoration: none;
+    transition: all 0.15s; cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-link:hover { background: rgba(42,142,242,0.08); color: var(--bright); }
+  .nav-link.active { background: rgba(42,142,242,0.12); color: var(--accent); border-left: 2px solid var(--accent); }
+  .nav-link .icon { width: 16px; text-align: center; font-size: 11px; }
+  .nav-pip { width: 5px; height: 5px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+
+  /* ─── MAIN ─── */
+  .main {
+    margin-left: 260px;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ─── HERO ─── */
+  .hero {
+    padding: 64px 60px 48px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(42,142,242,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(42,142,242,0.10); border: 1px solid rgba(42,142,242,0.3);
+    border-radius: 3px; padding: 3px 10px; font-size: 9px; color: var(--accent);
+    letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-family: var(--sans); font-size: 48px; font-weight: 800;
+    color: var(--bright); letter-spacing: -1px; line-height: 1.1;
+    max-width: 700px;
+  }
+
+  .hero h1 span { color: var(--accent); }
+
+  .hero-sub {
+    color: var(--text2); font-size: 13px; margin-top: 16px; max-width: 600px; line-height: 1.7;
+  }
+
+  .hero-stats {
+    display: flex; gap: 32px; margin-top: 32px;
+  }
+
+  .hero-stat { }
+  .hero-stat-val { font-family: var(--sans); font-size: 24px; font-weight: 800; color: var(--bright); }
+  .hero-stat-label { font-size: 9px; color: var(--text3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+  /* ─── CONTENT ─── */
+  .content { padding: 0 60px 80px; }
+
+  /* ─── SECTIONS ─── */
+  .section {
+    padding: 56px 0 0;
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+    scroll-margin-top: 32px;
+  }
+
+  .section:first-child { border-top: none; }
+
+  .section-header {
+    display: flex; align-items: flex-start; gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .section-num {
+    font-size: 10px; color: var(--text3); font-weight: 700; letter-spacing: 1px;
+    padding-top: 6px; min-width: 28px;
+  }
+
+  .section-title-wrap { flex: 1; }
+
+  .section-title {
+    font-family: var(--sans); font-size: 26px; font-weight: 800;
+    color: var(--bright); letter-spacing: -0.5px;
+  }
+
+  .section-desc { color: var(--text2); font-size: 12px; margin-top: 6px; line-height: 1.6; }
+
+  /* ─── SUBSECTION ─── */
+  .subsection { margin-top: 36px; }
+  .subsection-title {
+    font-family: var(--sans); font-size: 16px; font-weight: 700;
+    color: var(--bright); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .subsection-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ─── TABLE ─── */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  thead tr { background: var(--surface2); }
+
+  th {
+    padding: 10px 14px; text-align: left;
+    font-size: 8px; font-weight: 700; letter-spacing: 1.5px;
+    color: var(--text3); text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(26,32,53,0.6);
+    vertical-align: top;
+  }
+
+  tr:hover td { background: rgba(42,142,242,0.025); }
+
+  td:first-child { color: var(--accent2); font-weight: 600; white-space: nowrap; }
+  td:nth-child(2) { color: var(--accent3); white-space: nowrap; }
+
+  .td-desc { color: var(--text); line-height: 1.5; }
+  .td-init { color: var(--accent4); }
+
+  /* ─── CODE ─── */
+  code {
+    font-family: var(--mono); font-size: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 5px; color: var(--accent2);
+  }
+
+  pre {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 18px 20px; overflow-x: auto;
+    font-size: 11px; line-height: 1.7; margin: 12px 0;
+  }
+
+  pre .k { color: var(--accent); }
+  pre .s { color: var(--accent3); }
+  pre .c { color: var(--text3); font-style: italic; }
+  pre .f { color: var(--accent2); }
+  pre .v { color: var(--accent5); }
+  pre .t { color: var(--accent4); }
+
+  /* ─── CARDS ─── */
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px; margin-top: 4px;
+  }
+
+  .card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px; position: relative; overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .card:hover { border-color: var(--border2); transform: translateY(-1px); }
+
+  .card-accent { position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
+
+  .card-title { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--bright); margin-bottom: 6px; }
+  .card-type { font-size: 9px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .card-desc { font-size: 11px; color: var(--text2); line-height: 1.55; }
+
+  .card-init { margin-top: 10px; font-size: 10px; }
+  .card-init-label { color: var(--text3); font-size: 8px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+  .card-init-val { color: var(--accent4); }
+
+  /* ─── TOOL GROUPS ─── */
+  .tool-group { margin-bottom: 24px; }
+  .tool-group-title {
+    font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--text3);
+    text-transform: uppercase; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tool-group-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .tool-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tool-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 4px; padding: 5px 10px; font-size: 10px; color: var(--text);
+  }
+  .tool-chip .chip-icon { font-size: 13px; }
+  .tool-chip .chip-key {
+    font-size: 8px; background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 2px; padding: 1px 4px; color: var(--accent3); font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  /* ─── FLOW DIAGRAM ─── */
+  .flow {
+    display: flex; flex-direction: column; gap: 0;
+    margin: 16px 0; max-width: 520px;
+  }
+
+  .flow-step {
+    display: flex; align-items: stretch; gap: 0;
+  }
+
+  .flow-left {
+    display: flex; flex-direction: column; align-items: center; width: 40px; flex-shrink: 0;
+  }
+
+  .flow-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--accent); background: var(--bg);
+    flex-shrink: 0; margin-top: 4px;
+    position: relative; z-index: 1;
+  }
+
+  .flow-line {
+    width: 2px; flex: 1; background: var(--border);
+    margin: 0 auto;
+  }
+
+  .flow-body {
+    flex: 1; padding: 4px 0 20px 12px;
+  }
+
+  .flow-title { font-size: 12px; font-weight: 600; color: var(--bright); }
+  .flow-desc { font-size: 10px; color: var(--text2); margin-top: 3px; line-height: 1.5; }
+
+  /* ─── TAGS ─── */
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.8px;
+    padding: 2px 7px; border-radius: 3px; text-transform: uppercase;
+  }
+
+  .tag-state { background: rgba(42,142,242,0.12); border: 1px solid rgba(42,142,242,0.3); color: var(--accent); }
+  .tag-ref { background: rgba(0,229,160,0.10); border: 1px solid rgba(0,229,160,0.3); color: var(--accent2); }
+  .tag-sv { background: rgba(247,201,72,0.10); border: 1px solid rgba(247,201,72,0.3); color: var(--accent3); }
+  .tag-fn { background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.3); color: var(--accent4); }
+  .tag-effect { background: rgba(255,122,69,0.10); border: 1px solid rgba(255,122,69,0.3); color: var(--accent5); }
+  .tag-cb { background: rgba(240,64,64,0.10); border: 1px solid rgba(240,64,64,0.3); color: var(--danger); }
+
+  /* ─── CALLOUT ─── */
+  .callout {
+    display: flex; gap: 12px; padding: 14px 16px;
+    border-radius: 6px; margin: 14px 0; font-size: 11px; line-height: 1.6;
+  }
+
+  .callout-info { background: rgba(42,142,242,0.07); border: 1px solid rgba(42,142,242,0.2); }
+  .callout-warn { background: rgba(247,201,72,0.07); border: 1px solid rgba(247,201,72,0.2); }
+  .callout-tip { background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.2); }
+
+  .callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .callout-info .callout-icon { color: var(--accent); }
+  .callout-warn .callout-icon { color: var(--accent3); }
+  .callout-tip .callout-icon { color: var(--accent2); }
+
+  .callout-text { color: var(--text); }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); }
+    .main { margin-left: 0; }
+    .hero, .content { padding-left: 24px; padding-right: 24px; }
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .section { animation: fadeIn 0.4s ease both; }
+
+  /* ─── HIGHLIGHT ROW ─── */
+  .highlight-row td { background: rgba(42,142,242,0.05) !important; }
+  .highlight-row td:first-child { color: var(--bright) !important; }
+
+  /* ─── DIVIDER ─── */
+  .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+  /* ─── INLINE BLOCK ─── */
+  .inline-block { display: inline-block; }
+
+  /* ─── BADGE ─── */
+  .badge {
+    display: inline-block; font-size: 8px; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 2px; margin-left: 6px;
+    background: rgba(168,85,247,0.15); color: var(--accent4); border: 1px solid rgba(168,85,247,0.3);
+  }
+  .badge-green { background: rgba(0,229,160,0.12); color: var(--accent2); border-color: rgba(0,229,160,0.3); }
+
+  /* ─── TOC ACTIVE ─── */
+  .toc-sub { padding-left: 18px; }
+
+  /* ─── GRID 2COL ─── */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 1100px) { .grid2 { grid-template-columns: 1fr; } }
+
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="hex">⬡</div>
+    <h1>CADSketch</h1>
+    <p>Component Docs</p>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Overview</div>
+    <a href="#overview" class="nav-link active"><span class="icon">◎</span> Overview</a>
+    <a href="#architecture" class="nav-link"><span class="icon">⬡</span> Architecture</a>
+    <a href="#constants" class="nav-link"><span class="icon">#</span> Constants</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">State</div>
+    <a href="#ui-state" class="nav-link"><span class="icon">◈</span> UI State <span class="nav-pip" style="background:#2a8ef2"></span></a>
+    <a href="#tool-state" class="nav-link"><span class="icon">◈</span> Tool State <span class="nav-pip" style="background:#00e5a0"></span></a>
+    <a href="#edit-state" class="nav-link"><span class="icon">◈</span> Edit Op State <span class="nav-pip" style="background:#f7c948"></span></a>
+    <a href="#shared-values" class="nav-link"><span class="icon">◈</span> Shared Values <span class="nav-pip" style="background:#a855f7"></span></a>
+    <a href="#refs" class="nav-link"><span class="icon">◈</span> Refs <span class="nav-pip" style="background:#ff7a45"></span></a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Functions</div>
+    <a href="#math-utils" class="nav-link"><span class="icon">∫</span> Math Utilities</a>
+    <a href="#path-builders" class="nav-link"><span class="icon">⌇</span> Path Builders</a>
+    <a href="#core-callbacks" class="nav-link"><span class="icon">↩</span> Core Callbacks</a>
+    <a href="#edit-ops" class="nav-link"><span class="icon">✏</span> Edit Operations</a>
+    <a href="#gestures" class="nav-link"><span class="icon">✥</span> Gestures</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Components</div>
+    <a href="#sub-components" class="nav-link"><span class="icon">▭</span> Sub-Components</a>
+    <a href="#tools-ref" class="nav-link"><span class="icon">⬡</span> Tools Reference</a>
+    <a href="#layers" class="nav-link"><span class="icon">≡</span> Layers System</a>
+    <a href="#themes" class="nav-link"><span class="icon">◑</span> Themes</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Data Flow</div>
+    <a href="#data-flow" class="nav-link"><span class="icon">→</span> Data Flow</a>
+    <a href="#effects" class="nav-link"><span class="icon">⚡</span> useEffect Hooks</a>
+    <a href="#extrude" class="nav-link"><span class="icon">⬆</span> Extrude Pipeline</a>
+  </div>
+</nav>
+  <button class="theme-toggle" onclick="toggleTheme()">
+    <svg id="toggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" 
+    stroke-linejoin="round" style="width:16px;height:16px;flex-shrink:0;color:gold"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/></svg>
+    <div class="toggle-track"><div class="toggle-thumb"></div></div>
+    <!-- <span id="toggleLabel">Dark</span> -->
+  </button>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-badge">⬡ React Native · Skia · Reanimated</div>
+    <h1>SketchScreen <span>Component</span><br>Documentation</h1>
+    <p class="hero-sub">
+      A professional CAD/CAM drawing canvas for React Native. Full reference for every state variable,
+      shared value, ref, callback, gesture handler, and sub-component in the SketchScreen component.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="hero-stat-val">48</div><div class="hero-stat-label">useState vars</div></div>
+      <div class="hero-stat"><div class="hero-stat-val">27</div><div class="hero-stat-label">Shared Values</div></div>
+      <div class="hero-stat"><div class="hero-stat-val">30+</div><div class="hero-stat-label">Tool Types</div></div>
+      <div class="hero-stat"><div class="hero-stat-val">6</div><div class="hero-stat-label">Tool Groups</div></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════════════════════════════════════════════
+         OVERVIEW
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="overview">
+      <div class="section-header">
+        <div class="section-num">01</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Overview</div>
+          <div class="section-desc">What SketchScreen is and how it fits into the application</div>
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:var(--text);line-height:1.8;max-width:720px;">
+        <code>SketchScreen</code> is the main drawing component for a CAD/CAM application built with <strong>React Native</strong>,
+        <strong>@shopify/react-native-skia</strong> for canvas rendering, and
+        <strong>react-native-reanimated</strong> for gesture-driven shared values.
+        It manages the complete lifecycle of 2D shape drawing, editing, snapping, layering, and extrusion to 3D.
+      </p>
+
+      <div class="callout callout-info" style="margin-top:20px;">
+        <span class="callout-icon">ℹ</span>
+        <span class="callout-text">The component receives a single optional prop: <code>navigation</code> — used to navigate to <code>ToThreeDScreen</code> when the user confirms an extrusion operation.</span>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Component Props</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Prop</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>navigation</td><td class="td-init">object</td><td style="color:var(--text3)">optional</td><td class="td-desc">React Navigation prop. Used to call <code>navigation.navigate("ToThreeDScreen", { shape2D })</code> when extruding a shape.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Key Dependencies</div>
+        <div class="cards">
+          <div class="card"><div class="card-accent" style="background:var(--accent)"></div><div class="card-title">@shopify/react-native-skia</div><div class="card-type">Rendering</div><div class="card-desc">GPU-accelerated 2D canvas. Used for <code>Canvas</code>, <code>Path</code>, <code>Circle</code>, <code>Group</code>, <code>Skia.Path.Make()</code> and all shape rendering.</div></div>
+          <div class="card"><div class="card-accent" style="background:var(--accent4)"></div><div class="card-title">react-native-reanimated</div><div class="card-type">Animation / Gesture</div><div class="card-desc">Provides <code>useSharedValue</code>, <code>useDerivedValue</code>, <code>runOnJS</code>, <code>withSpring</code>. All gesture state lives in shared values so the worklet thread can access it without crossing the JS bridge.</div></div>
+          <div class="card"><div class="card-accent" style="background:var(--accent2)"></div><div class="card-title">react-native-gesture-handler</div><div class="card-type">Input</div><div class="card-desc"><code>Gesture.Pan()</code>, <code>Gesture.Tap()</code>, <code>GestureDetector</code>, and <code>Gesture.Exclusive/Simultaneous</code> compose into a single gesture tree for the canvas.</div></div>
+          <div class="card"><div class="card-accent" style="background:var(--accent3)"></div><div class="card-title">react-native core</div><div class="card-type">UI</div><div class="card-desc"><code>Animated</code>, <code>Modal</code>, <code>ScrollView</code>, <code>TextInput</code>, <code>Switch</code>, <code>KeyboardAvoidingView</code> used across the toolbar, panels, and modals.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         ARCHITECTURE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="architecture">
+      <div class="section-header">
+        <div class="section-num">02</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Architecture</div>
+          <div class="section-desc">Thread model and data flow between UI thread, worklet thread, and JS thread</div>
+        </div>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠</span>
+        <span class="callout-text">The component uses a <strong>dual-thread model</strong>. Gesture handlers run on the Reanimated <em>worklet thread</em> for 60+ fps. They read <code>SharedValue</code>s directly and call back to the JS thread via <code>runOnJS()</code> for state mutations.</span>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Thread Flow</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-left"><div class="flow-dot" style="border-color:var(--accent2)"></div><div class="flow-line"></div></div>
+            <div class="flow-body"><div class="flow-title">User Touch Event</div><div class="flow-desc">Raw touch enters via <code>GestureDetector</code> wrapping the Skia <code>Canvas</code>.</div></div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-left"><div class="flow-dot" style="border-color:var(--accent)"></div><div class="flow-line"></div></div>
+            <div class="flow-body"><div class="flow-title">Worklet Thread — Gesture Handler</div><div class="flow-desc">Pan / Tap gestures (tagged <code>"worklet"</code>) convert screen coords to canvas coords using current <code>zoomSV</code>. Snap is applied via <code>snapPoint()</code> worklet. SharedValues (<code>x0SV, y1SV, draggingSV…</code>) are updated instantly, no JS bridge.</div></div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div><div class="flow-line"></div></div>
+            <div class="flow-body"><div class="flow-title">runOnJS() — Cross-thread Dispatch</div><div class="flow-desc">At key moments (end of drag, tap, poly segment commit), stable JS callbacks (<code>sEnd, sTap, sMoveEnd…</code>) are called via <code>runOnJS()</code>. These are stable <code>useRef</code> wrappers that delegate to mutable <code>cb.current.*</code> handlers to always see fresh state.</div></div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-left"><div class="flow-dot" style="border-color:var(--accent3)"></div><div class="flow-line"></div></div>
+            <div class="flow-body"><div class="flow-title">JS Thread — State Update</div><div class="flow-desc"><code>setShapes()</code>, <code>setSelectedId()</code>, <code>commit()</code> etc. run on the JS thread and trigger React re-renders.</div></div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-left"><div class="flow-dot" style="border-color:var(--accent5)"></div></div>
+            <div class="flow-body"><div class="flow-title">Skia Canvas Re-render</div><div class="flow-desc">Derived values (<code>livePath, ghostPath…</code>) update the canvas on the GPU thread via <code>useDerivedValue</code>, completely bypassing React diffing for live drawing previews.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Stable Callback Pattern</div>
+        <pre><span class="c">// Problem: runOnJS() captures stale closures</span>
+<span class="c">// Solution: stable useRef wrapper → mutable cb.current dispatch</span>
+
+<span class="c">// 1. Mutable handler (always current closure)</span>
+<span class="k">onTapRef</span>.current = (<span class="v">rx</span>, <span class="v">ry</span>) => { ... <span class="c">/* sees latest state */</span> };
+
+<span class="c">// 2. Stable cb object</span>
+<span class="k">cb</span>.current.tap = (<span class="v">x</span>, <span class="v">y</span>) => <span class="f">onTapRef</span>.current(<span class="v">x</span>, <span class="v">y</span>);
+
+<span class="c">// 3. Stable runOnJS wrapper (created once, never recreated)</span>
+<span class="k">const</span> <span class="f">sTap</span> = <span class="f">useRef</span>((<span class="v">x</span>, <span class="v">y</span>) => cb.current.tap(<span class="v">x</span>, <span class="v">y</span>)).current;
+
+<span class="c">// 4. Used safely in worklet</span>
+<span class="f">runOnJS</span>(<span class="f">sTap</span>)(<span class="v">canvasX</span>, <span class="v">canvasY</span>);</pre>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         CONSTANTS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="constants">
+      <div class="section-header">
+        <div class="section-num">03</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Constants</div>
+          <div class="section-desc">Global configuration values used throughout the component</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Constant</th><th>Value</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>GRID_MINOR</td><td class="td-init">10</td><td class="td-desc">Minor grid spacing in canvas units (mm). Dots are shown at every minor grid intersection.</td></tr>
+            <tr><td>GRID_MAJOR</td><td class="td-init">50</td><td class="td-desc">Major grid line spacing. Lines drawn every 5 minor grid cells.</td></tr>
+            <tr><td>SNAP_R</td><td class="td-init">18</td><td class="td-desc">Snap detection radius in canvas units. If cursor is within 18 units of a keypoint, it snaps.</td></tr>
+            <tr><td>MIN_ZOOM</td><td class="td-init">0.08</td><td class="td-desc">Minimum zoom level (8% of original size).</td></tr>
+            <tr><td>MAX_ZOOM</td><td class="td-init">16</td><td class="td-desc">Maximum zoom level (1600%).</td></tr>
+            <tr><td>ZOOM_STEP</td><td class="td-init">1.3</td><td class="td-desc">Multiplicative factor per zoom in/out button press.</td></tr>
+            <tr><td>AUTO_CLOSE_R</td><td class="td-init">22</td><td class="td-desc">Radius within which a polyline endpoint snaps to the start to auto-close.</td></tr>
+            <tr><td>COINCIDENT_R</td><td class="td-init">6</td><td class="td-desc">Distance threshold for marking two terminal points as coincident.</td></tr>
+            <tr><td>DIM_OFFSET</td><td class="td-init">36</td><td class="td-desc">Pixel offset for inline dimension labels from the shape edge.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         UI STATE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="ui-state">
+      <div class="section-header">
+        <div class="section-num">04</div>
+        <div class="section-title-wrap">
+          <div class="section-title">UI State <span class="badge">useState</span></div>
+          <div class="section-desc">Core React state variables controlling the drawing canvas and interface</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Canvas & Shape State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>shapes</td><td class="td-init">[]</td><td class="td-desc">Master array of all committed shape objects. Each shape has a unique <code>id</code>, a <code>type</code> string, a <code>layer</code> ID, and type-specific geometry fields (e.g. <code>p1/p2</code> for LINE, <code>center/radius</code> for CIRCLE).</td></tr>
+              <tr><td>history</td><td class="td-init">[[]]</td><td class="td-desc">Undo/redo stack. Array of shapes snapshots. Index 0 is always the empty canvas.</td></tr>
+              <tr><td>historyIdx</td><td class="td-init">0</td><td class="td-desc">Current position in the history stack. Undo decrements, redo increments.</td></tr>
+              <tr><td>selectedId</td><td class="td-init">null</td><td class="td-desc">ID of the currently selected shape. Drives highlight rendering, inline dims, properties panel, and extrude button.</td></tr>
+              <tr><td>shapeCount</td><td class="td-init">0</td><td class="td-desc">Mirror of <code>shapes.length</code>, updated via effect. Displayed in the menu bar badge.</td></tr>
+              <tr><td>defaultGeomCreated</td><td class="td-init">false</td><td class="td-desc">Flag preventing duplicate default-geometry previews. Set to <code>true</code> once a preview shape is injected for the active tool. Reset to <code>false</code> on tool switch.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Tool & Drawing State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>activeTool</td><td class="td-init">null</td><td class="td-desc">Key string of the currently selected tool (e.g. <code>"LINE"</code>, <code>"CIRCLE"</code>, <code>"SELECT"</code>). Controls gesture routing, live preview rendering, and canvas cursor.</td></tr>
+              <tr><td>polygonSides</td><td class="td-init">6</td><td class="td-desc">Number of sides for POLYGON and STAR tools. Adjustable via the sides strip below the toolbar.</td></tr>
+              <tr><td>arcStep</td><td class="td-init">null</td><td class="td-desc">Intermediate ARC drawing state. When <code>null</code>, the first drag sets center+P1. When set, the second drag commits the arc with P2. Contains <code>{ center, p1 }</code>.</td></tr>
+              <tr><td>polySegMode</td><td class="td-init">"line"</td><td class="td-desc">Segment type for polyline drawing. Either <code>"line"</code> or <code>"arc"</code>. Toggled via the status bar button. When <code>"arc"</code>, each segment is computed as an arc through a default offset midpoint.</td></tr>
+              <tr><td>polyStarted</td><td class="td-init">false</td><td class="td-desc">Whether a polyline/spline is currently being drawn. Controls rubber-band rendering and auto-close detection.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Canvas Settings State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>snapEnabled</td><td class="td-init">true</td><td class="td-desc">When <code>true</code>, cursor snaps to keypoints of existing shapes (within <code>SNAP_R</code>) and to the minor grid. Toggled via the SNAP button in the menu bar.</td></tr>
+              <tr><td>gridEnabled</td><td class="td-init">true</td><td class="td-desc">Shows/hides the dot grid and major grid lines on the canvas.</td></tr>
+              <tr><td>orthoEnabled</td><td class="td-init">false</td><td class="td-desc">Constrains LINE and RECTANGLE drawing to 45° multiples. The endpoint is projected onto the nearest 45° angle from the start.</td></tr>
+              <tr><td>zoom</td><td class="td-init">1</td><td class="td-desc">Canvas scale factor. Applied as <code>scaleX/scaleY</code> transform to the Skia canvas group. Screen coordinates are divided by zoom to get canvas coordinates.</td></tr>
+              <tr><td>defaultSize</td><td class="td-init">{w:100,h:80,r:50}</td><td class="td-desc">Default dimensions for preview shapes injected when a drawing tool is selected. <code>w</code>=width, <code>h</code>=height, <code>r</code>=radius. Editable in Settings panel.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">UI Panels State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>isDark</td><td class="td-init">false</td><td class="td-desc">Active theme toggle. <code>true</code> = dark theme (THEMES.dark), <code>false</code> = light theme. Calls <code>applyTheme(isDark)</code> on every render to mutate the global <code>T</code> object.</td></tr>
+              <tr><td>showLayers</td><td class="td-init">false</td><td class="td-desc">Controls visibility of the <code>LayersPanel</code> modal.</td></tr>
+              <tr><td>showSettings</td><td class="td-init">false</td><td class="td-desc">Controls visibility of the <code>SettingsPanel</code> modal.</td></tr>
+              <tr><td>editModeEnabled</td><td class="td-init">false</td><td class="td-desc">Activates edit mode overlay — shows delete handles on all shapes and endpoint handles on selected lines. Auto-disables when switching away from SELECT/MOVE tools.</td></tr>
+              <tr><td>editMoveMode</td><td class="td-init">"whole"</td><td class="td-desc">How MOVE drags operate on lines. <code>"whole"</code> = translate entire shape. <code>"segment"</code> = move nearest endpoint and connected coincident endpoints.</td></tr>
+              <tr><td>inlineEditId</td><td class="td-init">null</td><td class="td-desc">ID of shape whose inline dimension labels are in active edit mode (after double-tap). Clears when another shape is tapped.</td></tr>
+              <tr><td>inlineDimTexts</td><td class="td-init">{}</td><td class="td-desc">Pending text values for inline dimension inputs. Key is <code>"{shapeId}-{dimKey}"</code>. Cleared on commit.</td></tr>
+              <tr><td>autoCloseTarget</td><td class="td-init">null</td><td class="td-desc">Canvas coordinates <code>{x,y}</code> of the nearest terminal point for polyline auto-close. Displayed as a pulsing green circle on the canvas.</td></tr>
+              <tr><td>coincidentPts</td><td class="td-init">[]</td><td class="td-desc">Array of <code>{x,y}</code> positions where terminal points from different shapes overlap within <code>COINCIDENT_R</code>. Rendered as orange circles.</td></tr>
+              <tr><td>arcLiveInfo</td><td class="td-init">null</td><td class="td-desc">Live arc HUD data: <code>{ cx, cy, radius }</code>. Updated during polyline arc-mode drawing. Displayed in <code>ArcSegmentHUD</code>.</td></tr>
+              <tr><td>extrudeShape</td><td class="td-init">null</td><td class="td-desc">The shape currently being extruded. When set, the <code>ExtrudeModal</code> is shown.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         TOOL STATE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="tool-state">
+      <div class="section-header">
+        <div class="section-num">05</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Tool State <span class="badge">useState</span></div>
+          <div class="section-desc">State variables specific to tool behaviour and layer management</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>layers</td><td class="td-init">DEFAULT_LAYERS</td><td class="td-desc">Array of layer objects: <code>{ id, name, color, visible, locked }</code>. Four default layers: Construction, Geometry, Dimensions, Annotations.</td></tr>
+            <tr><td>activeLayer</td><td class="td-init">"L1"</td><td class="td-desc">ID of the layer new shapes are added to. Displayed in the bottom-left layer indicator.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         EDIT OPERATION STATE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="edit-state">
+      <div class="section-header">
+        <div class="section-num">06</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Edit Operation State <span class="badge">useState</span></div>
+          <div class="section-desc">Parameters driving the edit tool operations (rotate, scale, mirror, etc.)</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Initial</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>rotateAngle</td><td class="td-init">0</td><td class="td-desc">Rotation angle in degrees for the ROTATE tool. Can be set via the <code>EditOpPanel</code> input or preset buttons (0°, 45°, 90°, 180°, 270°).</td></tr>
+            <tr><td>rotateOrigin</td><td class="td-init">null</td><td class="td-desc">Optional canvas <code>{x,y}</code> point to rotate around. If <code>null</code>, defaults to the shape's centroid.</td></tr>
+            <tr><td>scaleFactorX</td><td class="td-init">1</td><td class="td-desc">Horizontal scale multiplier for the SCALE tool.</td></tr>
+            <tr><td>scaleFactorY</td><td class="td-init">1</td><td class="td-desc">Vertical scale multiplier for the SCALE tool. Set equal to <code>scaleFactorX</code> by the presets for uniform scaling.</td></tr>
+            <tr><td>mirrorAxis</td><td class="td-init">"vertical"</td><td class="td-desc">Axis for MIRROR tool. Options: <code>"vertical"</code>, <code>"horizontal"</code>, <code>"custom"</code>. Custom uses <code>mirrorLine</code>.</td></tr>
+            <tr><td>mirrorLine</td><td class="td-init">null</td><td class="td-desc">Custom mirror axis defined as <code>{ p1, p2 }</code>. Used when <code>mirrorAxis === "custom"</code>.</td></tr>
+            <tr><td>offsetDist</td><td class="td-init">10</td><td class="td-desc">Distance in canvas units to offset a shape outward for the OFFSET tool.</td></tr>
+            <tr><td>filletRadius</td><td class="td-init">5</td><td class="td-desc">Corner radius for FILLET operation between two intersecting lines.</td></tr>
+            <tr><td>chamferDist</td><td class="td-init">5</td><td class="td-desc">Distance from corner intersection for the CHAMFER cut.</td></tr>
+            <tr><td>trimBoundary</td><td class="td-init">null</td><td class="td-desc">ID of the boundary line selected as the first tap in a TRIM operation.</td></tr>
+            <tr><td>extendTarget</td><td class="td-init">null</td><td class="td-desc">ID of the boundary line selected as the first tap in an EXTEND operation.</td></tr>
+            <tr><td>stretchWindow</td><td class="td-init">null</td><td class="td-desc">The selection rectangle for STRETCH: <code>{ x, y, w, h }</code> in canvas coordinates. Points within this box are moved on the second drag.</td></tr>
+            <tr><td>stretchPhase</td><td class="td-init">"select"</td><td class="td-desc">Current phase of the STRETCH tool. <code>"select"</code> = drawing the selection window. <code>"drag"</code> = applying the stretch displacement.</td></tr>
+            <tr><td>copyOffset</td><td class="td-init">{x:20,y:20}</td><td class="td-desc">Reserved offset for the COPY tool (currently unused in placement — placement uses tap position instead).</td></tr>
+            <tr><td>editOpStep</td><td class="td-init">0</td><td class="td-desc">Generic step counter for multi-step edit operations (reserved for future use).</td></tr>
+            <tr><td>editOpPreview</td><td class="td-init">null</td><td class="td-desc">Preview shape data for edit operation previews (reserved for future use).</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         SHARED VALUES
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="shared-values">
+      <div class="section-header">
+        <div class="section-num">07</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Shared Values <span class="badge" style="background:rgba(247,201,72,0.15);color:var(--accent3);border-color:rgba(247,201,72,0.35)">useSharedValue</span></div>
+          <div class="section-desc">Reanimated shared values — readable/writable from both worklet thread and JS thread without a bridge crossing</div>
+        </div>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">⚡</span>
+        <span class="callout-text">Shared values are the backbone of the zero-lag drawing experience. Gesture worklets write them directly; Skia <code>useDerivedValue</code> reads them to rebuild paths on the GPU thread without touching React state.</span>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Drawing Coordinates</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>x0SV, y0SV</td><td class="td-init">number (0)</td><td class="td-desc">Start point of the current drawing gesture in canvas coordinates. Set on <code>onBegin</code> for most tools.</td></tr>
+              <tr><td>x1SV, y1SV</td><td class="td-init">number (0)</td><td class="td-desc">End/cursor point of the current gesture. Updated continuously in <code>onUpdate</code>. Used by <code>LivePreview</code> and <code>Crosshair</code> components.</td></tr>
+              <tr><td>draggingSV</td><td class="td-init">boolean (false)</td><td class="td-desc">Whether a drawing drag is in progress. Guards live preview rendering — preview only shows while <code>true</code>.</td></tr>
+              <tr><td>snapOriginSV</td><td class="td-init">boolean (false)</td><td class="td-desc">When <code>true</code>, the next <code>onBegin</code> uses the pre-set <code>x0/y0</code> instead of the touch position (used for tool-to-tool continuation from polyline endpoint).</td></tr>
+              <tr><td>coordXSV, coordYSV</td><td class="td-init">number (0)</td><td class="td-desc">Current cursor canvas coordinates polled by <code>CoordBox</code> via <code>requestAnimationFrame</code>. Updated on every gesture event.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Tool & Snap</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>toolSV</td><td class="td-init">string ("LINE")</td><td class="td-desc">Mirror of <code>activeTool</code> readable in worklets. Synced via <code>useEffect(() => { toolSV.value = activeTool; })</code>.</td></tr>
+              <tr><td>sidesSV</td><td class="td-init">number (6)</td><td class="td-desc">Mirror of <code>polygonSides</code>. Used in the <code>buildLivePath</code> worklet to render polygon/star previews.</td></tr>
+              <tr><td>snapOnSV</td><td class="td-init">boolean (true)</td><td class="td-desc">Mirror of <code>snapEnabled</code>. Read by the <code>snapPoint</code> worklet function.</td></tr>
+              <tr><td>kpSV</td><td class="td-init">number[] ([])</td><td class="td-desc">Flat array of all keypoint coordinates: <code>[x0,y0,x1,y1,…]</code>. Built by <code>flatKP(shapes)</code> on every shapes change. Used by the worklet-side <code>snapPoint()</code> for O(n) nearest-point snap.</td></tr>
+              <tr><td>zoomSV</td><td class="td-init">number (1)</td><td class="td-desc">Mirror of <code>zoom</code>. Used in gesture handlers to convert screen pixels to canvas coordinates: <code>canvasX = (e.x - width/2) / zoomSV.value</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Arc Drawing</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>arcCenterSV</td><td class="td-init">null</td><td class="td-desc">Arc center point <code>{x,y}</code> after the first ARC tool drag. Passed to <code>LivePreview</code> to show arc preview.</td></tr>
+              <tr><td>arcP1SV</td><td class="td-init">null</td><td class="td-desc">First arc point (radius endpoint) after the first ARC drag.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Move / Selection</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>movingSV</td><td class="td-init">boolean (false)</td><td class="td-desc">Whether a MOVE drag is active. Enables <code>MoveGhost</code> rendering.</td></tr>
+              <tr><td>moveDxSV, moveDySV</td><td class="td-init">number (0)</td><td class="td-desc">Live displacement of the MOVE drag. Continuously updated in <code>onUpdate</code>. The ghost path is offset by these values.</td></tr>
+              <tr><td>selectedIdSV</td><td class="td-init">null</td><td class="td-desc">Worklet-readable mirror of <code>selectedId</code>.</td></tr>
+              <tr><td>selectedShapeSV</td><td class="td-init">null</td><td class="td-desc">Deep copy of the currently selected shape (JSON serialized). Used by <code>MoveGhost</code> to render the translating ghost without accessing React state in a worklet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Polyline</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>polyStartedSV</td><td class="td-init">boolean (false)</td><td class="td-desc">Whether a polyline segment sequence is in progress. Mirror of <code>polyStarted</code> for worklet access.</td></tr>
+              <tr><td>lastPolyXSV, lastPolyYSV</td><td class="td-init">number (0)</td><td class="td-desc">Canvas position of the last committed polyline point. Used as the rubber-band start for the next segment.</td></tr>
+              <tr><td>segModeSV2</td><td class="td-init">string ("line")</td><td class="td-desc">Mirror of <code>polySegMode</code> for worklet reads. Controls whether the tap/drag commits a line or arc segment.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Stretch Tool</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Shared Value</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>stretchPhaseSV</td><td class="td-init">string ("select")</td><td class="td-desc">Worklet-readable mirror of <code>stretchPhase</code>. The gesture <code>onEnd</code> handler dispatches to either <code>sStretchWindow</code> or <code>sStretchApply</code> based on this value.</td></tr>
+              <tr><td>stretchX0SV, stretchY0SV</td><td class="td-init">number (0)</td><td class="td-desc">Start point of the current stretch drag. Reset to the drag end position after each dispatch so the next drag starts from the correct origin.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         REFS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="refs">
+      <div class="section-header">
+        <div class="section-num">08</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Refs <span class="badge badge-green">useRef</span></div>
+          <div class="section-desc">Mutable values that don't trigger re-renders — used for JS-thread state readable by callbacks and gesture handlers</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">State Mirrors (for gesture callbacks)</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ref</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>shapesRef</td><td class="td-desc">Always points to the current <code>shapes</code> array. Assigned via <code>shapesRef.current = shapes</code> on every render. Used inside callbacks (<code>onTapRef.current</code>, etc.) to see the latest shapes without stale closure issues.</td></tr>
+              <tr><td>snapEnabledRef</td><td class="td-desc">Mirror of <code>snapEnabled</code> for use in <code>snapJS()</code> called from JS-thread callbacks.</td></tr>
+              <tr><td>orthoEnabledRef</td><td class="td-desc">Mirror of <code>orthoEnabled</code> for use in <code>onEndRef.current</code>.</td></tr>
+              <tr><td>polygonSidesRef</td><td class="td-desc">Mirror of <code>polygonSides</code> for reading inside commit handlers.</td></tr>
+              <tr><td>selectedIdRef</td><td class="td-desc">Mirror of <code>selectedId</code>. Critical for edit operation callbacks (COPY, FILLET, CHAMFER, ROTATE, SCALE, MIRROR, OFFSET) that capture this ref rather than the state directly to avoid stale closures.</td></tr>
+              <tr><td>polySegModeRef</td><td class="td-desc">Mirror of <code>polySegMode</code> for use in <code>onPolySegEnd</code>.</td></tr>
+              <tr><td>editModeRef</td><td class="td-desc">Mirror of <code>editModeEnabled</code> for the <code>onMoveEndRef</code> handler.</td></tr>
+              <tr><td>editMoveModeRef</td><td class="td-desc">Mirror of <code>editMoveMode</code> for the <code>onMoveEndRef</code> handler.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">In-Progress Drawing State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ref</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>arcStepRef</td><td class="td-desc">ARC tool intermediate state: <code>{ center, p1 }</code> after first drag. Set and cleared by <code>onEndRef.current</code>. Mirrors <code>arcStep</code> state but avoids stale closure via direct mutation.</td></tr>
+              <tr><td>polyPtsRef</td><td class="td-desc">Accumulating array of polyline/spline points as the user draws. Not React state — mutation is synchronous and directly read by <code>onPolySegEnd</code>. The component <code>registerRef</code> pattern passes these to child canvas components.</td></tr>
+              <tr><td>freehandRef</td><td class="td-desc">Accumulating array of raw freehand stroke points. Pushed on every <code>onUpdate</code>. Flushed to a FREEHAND shape on <code>onEnd</code>.</td></tr>
+              <tr><td>dragEndpointRef</td><td class="td-desc">Stores the endpoint key (<code>"p1"</code> or <code>"p2"</code>) being dragged during segment-mode line editing. <code>null</code> when in whole-shape move mode.</td></tr>
+              <tr><td>arcRadiusOverride</td><td class="td-desc">User-typed radius value from the ArcSegmentHUD input. When set, overrides the auto-computed arc radius for the next segment commit.</td></tr>
+              <tr><td>coincTimerRef</td><td class="td-desc">Debounce timer for the <code>findCoincidentPairs</code> computation, which runs 150ms after any shapes change.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Callback & Register Refs</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Ref</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>cb</td><td class="td-desc">Mutable dispatch object. <code>cb.current.end/tap/dblTap/finish/moveEnd/…</code> are always assigned to the current handler. Stable <code>s*</code> wrappers (<code>sEnd</code>, <code>sTap</code>, etc.) call through <code>cb.current</code>.</td></tr>
+              <tr><td>onEndRef</td><td class="td-desc">Mutable ref holding the current <code>onEnd</code> callback (handles shape commit after drag). Re-assigned on every render so it always closes over fresh state.</td></tr>
+              <tr><td>onTapRef</td><td class="td-desc">Mutable ref for single-tap handler. Routes to tool-specific logic (COPY, TRIM, EXTEND, SELECT, ERASER, etc.).</td></tr>
+              <tr><td>onDblTapRef</td><td class="td-desc">Mutable ref for double-tap handler. Finishes polylines or enters inline edit mode on shapes.</td></tr>
+              <tr><td>onMoveEndRef</td><td class="td-desc">Mutable ref for MOVE drag end. Commits the translated shape or endpoint drag to state.</td></tr>
+              <tr><td>polyRegisterRef</td><td class="td-desc">Register pattern: holds a <code>setState</code> function injected by <code>PolylineCanvas</code>. Calling <code>polyRegisterRef.current([...pts])</code> updates the child's point list without prop drilling re-renders.</td></tr>
+              <tr><td>freehandRegisterRef</td><td class="td-desc">Same register pattern for <code>FreehandPreview</code>. Updated every 8 points during freehand drawing.</td></tr>
+              <tr><td>statusRegisterRef</td><td class="td-desc">Register for <code>StatusText</code> component. Calling <code>statusRegisterRef.current("message")</code> sets the status bar text.</td></tr>
+              <tr><td>polyStatusRegRef</td><td class="td-desc">Register for <code>PolyStatusBar</code>. Called with <code>(count, mode, isActive)</code> to update point count, segment mode display, and visibility.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         MATH UTILITIES
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="math-utils">
+      <div class="section-header">
+        <div class="section-num">09</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Math Utilities</div>
+          <div class="section-desc">Pure geometry functions used for snapping, hit testing, transformations, and shape calculations</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Core Geometry</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Signature</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>dist</td><td class="td-init">(a, b) → number</td><td class="td-desc">Euclidean distance between two <code>{x,y}</code> points using <code>Math.hypot</code>.</td></tr>
+              <tr><td>mid</td><td class="td-init">(a, b) → point</td><td class="td-desc">Midpoint between two points.</td></tr>
+              <tr><td>gSnap</td><td class="td-init">(v, g) → number</td><td class="td-desc">Snap value <code>v</code> to nearest multiple of grid size <code>g</code>.</td></tr>
+              <tr><td>clamp</td><td class="td-init">(v, lo, hi) → number</td><td class="td-desc">Clamp value to [lo, hi].</td></tr>
+              <tr><td>lerp</td><td class="td-init">(a, b, t) → number</td><td class="td-desc">Linear interpolation.</td></tr>
+              <tr><td>deg2rad / rad2deg</td><td class="td-init">(n) → number</td><td class="td-desc">Angle unit conversion.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Snapping</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Thread</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>snapPoint(rx, ry, snapEnabled, kpFlat)</td><td class="td-init">worklet</td><td class="td-desc">Tagged <code>"worklet"</code>. Scans the flat keypoint array for nearest point within <code>SNAP_R</code>. Falls back to grid snap. Returns <code>{x, y, snapped}</code>.</td></tr>
+              <tr><td>snapJS(rx, ry, shapes, snapEnabled)</td><td class="td-init">JS thread</td><td class="td-desc">Same logic but runs on the JS thread and receives the full shapes array. Used in JS-thread callbacks (<code>onTapRef</code>, <code>onEndRef</code>) via the <code>snapJ</code> callback.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Shape Geometry</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>keyPoints(shape)</td><td class="td-desc">Returns array of significant <code>{x,y}</code> points for a shape (endpoints, center, midpoints, quadrant points). Used for snapping targets and keypoint rendering.</td></tr>
+              <tr><td>terminalPoints(shape)</td><td class="td-desc">Returns only the open endpoints of a shape (line endpoints, rect corners, polyline ends). Used for coincident constraint detection and auto-close.</td></tr>
+              <tr><td>findNearestTerminal(x, y, shapes, excludeId, radius)</td><td class="td-desc">Finds the closest terminal point from any shape within <code>radius</code>. Used for auto-close during polyline drawing.</td></tr>
+              <tr><td>findCoincidentPairs(shapes)</td><td class="td-desc">Scans all pairs of shape terminal points. Returns array of <code>{x,y}</code> midpoints where terminals overlap within <code>COINCIDENT_R</code>.</td></tr>
+              <tr><td>shapeCentroid(shape)</td><td class="td-desc">Returns the geometric center of a shape. Used as the default origin for rotate and scale operations.</td></tr>
+              <tr><td>flatKP(shapes)</td><td class="td-desc">Flattens all keypoints to a <code>Float64Array</code>-friendly flat number array for the worklet-side <code>snapPoint()</code> function.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Transform Functions</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>translateShape(shape, dx, dy)</td><td class="td-desc">Tagged <code>"worklet"</code>. Moves all geometry points of a shape by <code>(dx, dy)</code>. Handles all shape types uniformly.</td></tr>
+              <tr><td>rotateShape(shape, origin, angleDeg)</td><td class="td-desc">Rotates all shape points around <code>origin</code>. Rectangles are converted to closed POLYLINEs since rotation breaks axis-alignment.</td></tr>
+              <tr><td>scaleShape(shape, origin, sx, sy)</td><td class="td-desc">Scales all shape points from <code>origin</code>. Preserves shape-specific values (e.g. scales <code>radius</code>, <code>rx</code>, <code>ry</code>) proportionally.</td></tr>
+              <tr><td>mirrorShape(shape, p1, p2)</td><td class="td-desc">Reflects all shape points across the line defined by <code>p1→p2</code>. Rectangles become closed POLYLINEs.</td></tr>
+              <tr><td>offsetShape(shape, d)</td><td class="td-desc">Creates an outward-offset copy. For circles/ellipses: increases radius. For rectangles: expands all edges by <code>d</code>. For lines: parallel offset.</td></tr>
+              <tr><td>stretchShape(shape, window, dx, dy)</td><td class="td-desc">Moves only the subset of shape points that fall inside the selection window by <code>(dx, dy)</code>.</td></tr>
+              <tr><td>moveConnectedEndpoint(shapes, shapeId, endpointKey, dx, dy)</td><td class="td-desc">Moves a LINE endpoint and propagates the move to any other LINE that shares that point (within <code>COINCIDENT_R</code>), maintaining topological connectivity.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Intersection & Edit Math</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>lineIntersect(p1, p2, p3, p4)</td><td class="td-desc">Finds the intersection of two infinite lines. Returns <code>{x, y, t}</code> where <code>t</code> is the parametric position on line 1. Returns <code>null</code> if parallel.</td></tr>
+              <tr><td>computeFillet(lineA, lineB, radius)</td><td class="td-desc">Computes a circular fillet of given radius at the intersection of two lines. Returns <code>{ arc, line1, line2 }</code> — the trimmed lines and the connecting arc shape.</td></tr>
+              <tr><td>computeChamfer(lineA, lineB, dist1, dist2?)</td><td class="td-desc">Computes a chamfer at the intersection of two lines. Returns <code>{ line1, line2, chamferLine }</code>.</td></tr>
+              <tr><td>trimLine(targetLine, boundaryLine, trimPt)</td><td class="td-desc">Trims <code>targetLine</code> at its intersection with <code>boundaryLine</code>. The half nearest to <code>trimPt</code> is removed.</td></tr>
+              <tr><td>extendLine(targetLine, boundaryLine)</td><td class="td-desc">Extends the nearer endpoint of <code>targetLine</code> to its intersection with <code>boundaryLine</code>.</td></tr>
+              <tr><td>rotatePoint(pt, origin, angle)</td><td class="td-desc">Rotates a single point around an origin by <code>angle</code> radians.</td></tr>
+              <tr><td>hitTest(shape, pt, tol?)</td><td class="td-desc">Returns <code>true</code> if <code>pt</code> is within <code>tol</code> (default 18) units of the shape boundary. Uses type-specific math (point-to-segment distance for LINE, radius check for CIRCLE, etc.).</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         PATH BUILDERS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="path-builders">
+      <div class="section-header">
+        <div class="section-num">10</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Path Builders</div>
+          <div class="section-desc">Functions that produce Skia Path objects for rendering shapes and live previews</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Live Preview — Worklet</div>
+        <pre><span class="f">buildLivePath</span>(<span class="v">tool</span>, <span class="v">x0</span>, <span class="v">y0</span>, <span class="v">x1</span>, <span class="v">y1</span>, <span class="v">arcCenter</span>, <span class="v">arcP1</span>, <span class="v">sides</span>)</pre>
+        <p style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;">Tagged <code>"worklet"</code>. Called inside <code>useDerivedValue</code> for zero-lag preview. Builds a Skia path purely from shared value inputs for all tool types. Returns an empty path when called for unrecognized tools.</p>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Committed Shape Builders (JS thread)</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>mkLine(p1, p2)</td><td class="td-desc">Straight line segment path.</td></tr>
+              <tr><td>mkRect(x, y, w, h)</td><td class="td-desc">Axis-aligned rectangle path using <code>addRect</code>.</td></tr>
+              <tr><td>mkCircle(cx, cy, r)</td><td class="td-desc">Full circle path using <code>addCircle</code>.</td></tr>
+              <tr><td>mkEllipse(center, rx, ry)</td><td class="td-desc">Ellipse path using <code>addOval</code>.</td></tr>
+              <tr><td>mkArc(center, p1, p2)</td><td class="td-desc">Arc from P1 to P2 around center. Sweep is always the shorter (CCW) arc (0→360° sweep from P1 angle to P2 angle).</td></tr>
+              <tr><td>mkPolygon(center, radius, sides)</td><td class="td-desc">Regular polygon with vertices at <code>radius</code> distance, starting at top (-π/2).</td></tr>
+              <tr><td>mkTriangle(center, radius)</td><td class="td-desc">Alias for <code>mkPolygon</code> with 3 sides.</td></tr>
+              <tr><td>mkStar(center, outerR, innerR, numPts)</td><td class="td-desc">Star polygon alternating outer and inner radii.</td></tr>
+              <tr><td>mkSlot(p1, p2, radius)</td><td class="td-desc">Rounded slot (stadium) shape: two parallel lines capped with semicircles at each end.</td></tr>
+              <tr><td>mkSpline(pts, closed)</td><td class="td-desc">Catmull-Rom spline with centripetal parameterization. Walks all segments at 16 steps each for smooth curves.</td></tr>
+              <tr><td>mkCloud(p1, p2)</td><td class="td-desc">Revision cloud: a series of bumped arcs along the line from p1 to p2.</td></tr>
+              <tr><td>mkFreehand(pts)</td><td class="td-desc">Simple polyline through all points (used for FREEHAND and plain POLYLINE).</td></tr>
+              <tr><td>mkPolylineWithArcs(pts, closed)</td><td class="td-desc">Polyline that supports mixed arc segments. Points with <code>{ arcTo: true, cx, cy, radius, startA, sweepDeg }</code> are rendered as arc-to-oval; plain points become lineTo.</td></tr>
+              <tr><td>buildShapePath(shape)</td><td class="td-desc">Dispatcher. Selects the correct builder by <code>shape.type</code> and returns the Skia path, or <code>null</code> if geometry is incomplete.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         CORE CALLBACKS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="core-callbacks">
+      <div class="section-header">
+        <div class="section-num">11</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Core Callbacks</div>
+          <div class="section-desc">Main event handlers wired through the cb.current dispatch pattern</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">commit(shape)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;">The central shape-commit function. Wraps shape creation with ID generation, layer assignment, and cleanup.</p>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Validate</div><div class="flow-desc">Returns early if <code>shape</code> is null/undefined.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Assign ID</div><div class="flow-desc">Generates <code>shape_{timestamp}_{random9}</code> unique ID. Adds <code>layer: activeLayer</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Filter defaults</div><div class="flow-desc">Removes any existing <code>DEFAULT_*</code> preview shapes before appending the committed shape.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot"></div></div><div class="flow-body"><div class="flow-title">Update state</div><div class="flow-desc">Calls <code>setShapes</code>, <code>setSelectedId(id)</code>, clears status text, auto-close target, and arc HUD data.</div></div></div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">onEndRef.current(rx, ry)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;">Called when a drawing drag ends. Routes by <code>toolSV.value</code>:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool</th><th>Behavior</th></tr></thead>
+            <tbody>
+              <tr><td>FREEHAND</td><td class="td-desc">Commits accumulated <code>freehandRef</code> points as a FREEHAND shape if ≥3 points.</td></tr>
+              <tr><td>ARC (step 1)</td><td class="td-desc">Stores center + P1 in <code>arcStepRef</code>. Shows "Tap to set arc endpoint" status.</td></tr>
+              <tr><td>ARC (step 2)</td><td class="td-desc">Commits full ARC shape with center, p1, p2.</td></tr>
+              <tr><td>LINE, RECT, CIRCLE…</td><td class="td-desc">Applies ortho constraint if enabled. Checks minimum size guard. Commits the shape via <code>commit()</code>.</td></tr>
+              <tr><td>SELECT, MOVE, POLYLINE, SPLINE, ERASER</td><td class="td-desc">Exits early — these tools handle their own commit logic.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">onTapRef.current(rx, ry)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;">Handles single tap events. <strong>Order matters</strong> — edit tool handlers fire before SELECT to prevent accidental deselection.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td>COPY</td><td class="td-desc">Calls <code>handleCopyPlace(pt.x, pt.y)</code>.</td></tr>
+              <tr><td>TRIM</td><td class="td-desc">Two-tap workflow: first tap selects boundary, second tap trims segment.</td></tr>
+              <tr><td>EXTEND</td><td class="td-desc">Two-tap workflow: first tap selects boundary, second tap extends target line to it.</td></tr>
+              <tr><td>FILLET / CHAMFER</td><td class="td-desc">Two-tap workflow: first tap selects first line, second tap applies operation between both selected lines.</td></tr>
+              <tr><td>SELECT / MOVE</td><td class="td-desc">Hit-tests all shapes from back to front, sets <code>selectedId</code> to topmost match.</td></tr>
+              <tr><td>ERASER</td><td class="td-desc">Removes all shapes that pass hit test at tap point.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">onPolySegEnd(x1, y1, x2, y2)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;">Called when a polyline segment drag ends. Handles both line and arc segment modes.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Scenario</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td>Auto-close (endpoint near start)</td><td class="td-desc">Commits the completed closed shape and resets all poly state.</td></tr>
+              <tr><td>Arc mode</td><td class="td-desc">Computes arc segment via <code>computeArcSegment()</code>, stores <code>{ arcTo, cx, cy, radius, startA, sweepDeg }</code> in the points array.</td></tr>
+              <tr><td>Line mode</td><td class="td-desc">Appends plain <code>{x, y}</code> point to the accumulating array.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         EDIT OPERATIONS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="edit-ops">
+      <div class="section-header">
+        <div class="section-num">12</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Edit Operations</div>
+          <div class="section-desc">useCallback handlers for the 10 edit tools</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Handler</th><th>Tool</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>handleCopyPlace(x, y)</td><td class="td-init">COPY</td><td class="td-desc">Computes displacement from selected shape centroid to tap point. Translates shape by that delta. Commits copy as new shape. Reads <code>selectedIdRef.current</code> to avoid stale closure.</td></tr>
+            <tr><td>handleRotateApply(originPt?)</td><td class="td-init">ROTATE</td><td class="td-desc">Rotates selected shape by <code>rotateAngle</code> degrees around <code>originPt</code> (or centroid if null). Calls <code>rotateShape()</code>.</td></tr>
+            <tr><td>handleScaleApply()</td><td class="td-init">SCALE</td><td class="td-desc">Scales selected shape by <code>scaleFactorX × scaleFactorY</code> around its centroid. Calls <code>scaleShape()</code>.</td></tr>
+            <tr><td>handleMirrorApply()</td><td class="td-init">MIRROR</td><td class="td-desc">Creates mirrored copy using axis from <code>mirrorAxis</code> (vertical / horizontal / custom). Vertical/horizontal axes pass through the shape centroid. Custom uses <code>mirrorLine.p1/p2</code>. Calls <code>mirrorShape()</code>.</td></tr>
+            <tr><td>handleOffsetApply()</td><td class="td-init">OFFSET</td><td class="td-desc">Creates an offset copy of the selected shape outward by <code>offsetDist</code> canvas units. Calls <code>offsetShape()</code>.</td></tr>
+            <tr><td>handleFilletApply(lineAId, lineBId)</td><td class="td-init">FILLET</td><td class="td-desc">Calls <code>computeFillet()</code> to produce trimmed lines + arc. Replaces both input lines in state and inserts the arc shape.</td></tr>
+            <tr><td>handleChamferApply(lineAId, lineBId)</td><td class="td-init">CHAMFER</td><td class="td-desc">Calls <code>computeChamfer()</code>. Replaces both input lines with trimmed versions and inserts the chamfer line segment.</td></tr>
+            <tr><td>handleTrimTap(x, y)</td><td class="td-init">TRIM</td><td class="td-desc">Two-phase handler. Phase 1: select boundary line. Phase 2: snap tap point, find target line, call <code>trimLine()</code>. Guards against null intersection result.</td></tr>
+            <tr><td>handleExtendTap(x, y)</td><td class="td-init">EXTEND</td><td class="td-desc">Two-phase handler. Phase 1: select boundary line. Phase 2: snap tap point, find target line, call <code>extendLine()</code>. Guards parallel-line case.</td></tr>
+            <tr><td>handleStretchWindow(x, y, w, h)</td><td class="td-init">STRETCH (phase 1)</td><td class="td-desc">Sets <code>stretchWindow</code> and advances <code>stretchPhase</code> to <code>"drag"</code>. Ignores micro-drags (w/h &lt; 4).</td></tr>
+            <tr><td>handleStretchApply(x0, y0, x1, y1)</td><td class="td-init">STRETCH (phase 2)</td><td class="td-desc">Calls <code>stretchShape()</code> on all shapes with the window and displacement. Resets phase to <code>"select"</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         GESTURES
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="gestures">
+      <div class="section-header">
+        <div class="section-num">13</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Gesture System</div>
+          <div class="section-desc">Three gesture recognizers composed into one exclusive gesture tree</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Gesture Tree</div>
+        <pre><span class="f">Gesture.Exclusive</span>(
+  <span class="f">Gesture.Simultaneous</span>(<span class="v">dblG</span>, <span class="v">tapG</span>),  <span class="c">// double tap wins over single tap</span>
+  <span class="v">panG</span>                                <span class="c">// fallback for drags</span>
+)</pre>
+        <div class="callout callout-info" style="margin-top:12px;">
+          <span class="callout-icon">ℹ</span>
+          <span class="callout-text"><code>dblG</code> and <code>tapG</code> run simultaneously so the double-tap can intercept before the single-tap fires. <code>panG</code> only activates after <code>minDistance(1)</code> threshold.</span>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">panG — Gesture.Pan()</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Handler</th><th>Key Actions</th></tr></thead>
+            <tbody>
+              <tr class="highlight-row"><td>onBegin</td><td class="td-desc">Converts screen → canvas coords. Routes to tool-specific begin logic: MOVE (start tracking + <code>sMoveBegin</code>), FREEHAND (first point), POLYLINE/SPLINE (set start or continue), STRETCH (record rubber-band origin), all others (snap + set x0/y0).</td></tr>
+              <tr class="highlight-row"><td>onUpdate</td><td class="td-desc">Updates <code>x1SV/y1SV</code> (and <code>coordXSV/Y</code>) for live preview. MOVE updates <code>moveDx/Dy</code>. FREEHAND appends point. STRETCH updates rubber-band. Throttled auto-close/arc HUD updates via bit-masking <code>(fc & 0xF) === 0</code>.</td></tr>
+              <tr class="highlight-row"><td>onEnd</td><td class="td-desc">MOVE: calls <code>sMoveEnd(dx, dy)</code>. FREEHAND: calls <code>sEnd</code>. STRETCH: dispatches to <code>sStretchWindow</code> or <code>sStretchApply</code> based on <code>stretchPhaseSV</code>. POLYLINE/SPLINE arc-mode: commits arc segment. Others: calls <code>sEnd(pt.x, pt.y)</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">tapG — Gesture.Tap() (single)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;">Max duration 250ms. For POLYLINE/SPLINE in arc mode: commits arc segment via <code>sPolySegEnd</code>. Otherwise calls <code>sTap(canvasX, canvasY)</code> which routes to <code>onTapRef.current</code>.</p>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">dblG — Gesture.Tap().numberOfTaps(2)</div>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;">Max duration 400ms, 2 taps. For POLYLINE/SPLINE: calls <code>sFinish()</code> to commit the open polyline. For other tools: calls <code>sDblTap</code> which enters inline edit mode on the tapped shape.</p>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Coordinate Conversion</div>
+        <pre><span class="c">// Screen pixel → canvas unit (applied in every gesture handler)</span>
+<span class="k">const</span> <span class="v">canvasX</span> = (<span class="v">e</span>.x - <span class="v">width</span> / <span class="k">2</span>) / <span class="f">zoomSV</span>.value;
+<span class="k">const</span> <span class="v">canvasY</span> = (<span class="v">e</span>.y - <span class="v">canvasHeight</span> / <span class="k">2</span>) / <span class="f">zoomSV</span>.value;</pre>
+        <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-top:8px;">The canvas origin (0,0) is at the screen center. Skia canvas uses the same transform: <code>translateX: width/2, translateY: canvasHeight/2, scaleX: zoom, scaleY: zoom</code>.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         SUB-COMPONENTS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="sub-components">
+      <div class="section-header">
+        <div class="section-num">14</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Sub-Components</div>
+          <div class="section-desc">All child components rendered by SketchScreen</div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent)"></div>
+          <div class="card-title">Grid</div>
+          <div class="card-type">Skia Canvas</div>
+          <div class="card-desc">Renders dot grid (minor intersections), major grid lines, and axis lines. Paths are cached by <code>buildGridPaths(width, height)</code> and reused until dimensions change.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent)"></div>
+          <div class="card-title">Origin</div>
+          <div class="card-type">Skia Canvas</div>
+          <div class="card-desc">Renders the X (red) and Y (green) axis arrows and the origin crosshair at canvas (0,0).</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent2)"></div>
+          <div class="card-title">LivePreview</div>
+          <div class="card-type">Skia · Reanimated</div>
+          <div class="card-desc">Uses <code>useDerivedValue</code> to call <code>buildLivePath()</code> every frame while dragging. Shows a glow + stroke preview of the shape being drawn. Completely bypasses React rendering.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent2)"></div>
+          <div class="card-title">Crosshair</div>
+          <div class="card-type">Skia · Reanimated</div>
+          <div class="card-desc">Renders a snap-point crosshair at the current cursor position. Derived from <code>x1SV/y1SV</code>. Also shows for POLYLINE tools while drawing.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent3)"></div>
+          <div class="card-title">RenderShape</div>
+          <div class="card-type">Skia · React.memo</div>
+          <div class="card-desc">Renders one committed shape. Memoized by shape identity, selection state, and extrudability. Builds path via <code>buildShapePath()</code> inside <code>React.useMemo</code>. Shows glow + stroke layers. Handles DIMENSION type specially.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent3)"></div>
+          <div class="card-title">MoveGhost</div>
+          <div class="card-type">Skia · Reanimated</div>
+          <div class="card-desc">Shows a ghost outline of the selected shape offset by <code>moveDx/DySV</code> while a MOVE drag is active. Derived completely from shared values — no React re-renders during drag.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent4)"></div>
+          <div class="card-title">PolylineOverlay / PolylineCanvas</div>
+          <div class="card-type">Skia · register pattern</div>
+          <div class="card-desc">Renders committed polyline segments + rubber-band line/arc preview. Uses the <code>registerRef</code> pattern — parent calls <code>polyRegisterRef.current([...pts])</code> to update points without prop drilling. Supports mixed line+arc segments.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent4)"></div>
+          <div class="card-title">ArcSegmentHUD</div>
+          <div class="card-type">RN View overlay</div>
+          <div class="card-desc">Floating info panel shown during arc-mode polyline drawing. Displays live radius + center coordinates. Contains an editable <code>TextInput</code> that sets <code>arcRadiusOverride.current</code> for precise arc sizing.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent5)"></div>
+          <div class="card-title">PropertiesPanel</div>
+          <div class="card-type">RN View (slide-in)</div>
+          <div class="card-desc">Right-side slide-in panel for the selected shape. Shows editable dimension fields, read-only position/property data, meta info (ID, layer), and extrude badge. Uses <code>Animated.spring</code> for the slide animation.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent5)"></div>
+          <div class="card-title">EditOpPanel</div>
+          <div class="card-type">RN View (absolute)</div>
+          <div class="card-desc">Floating HUD for edit tool parameters (rotate angle, scale factor, mirror axis, offset distance, fillet radius, chamfer distance). Only renders for the 10 edit tools when a shape is selected.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent4)"></div>
+          <div class="card-title">ExtrudeButton</div>
+          <div class="card-type">RN Animated</div>
+          <div class="card-desc">Pulsing animated button shown when a closed-geometry shape is selected. Triggers the extrude flow. Only visible when <code>isClosedGeometry(selShape)</code> returns true.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent4)"></div>
+          <div class="card-title">ExtrudeModal</div>
+          <div class="card-type">RN Modal</div>
+          <div class="card-desc">Full modal for configuring extrusion depth and mode (Solid / Shell / Taper). Shows a JSON preview of the shape payload. On confirm, calls <code>navigation.navigate("ToThreeDScreen", { shape2D })</code>.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent)"></div>
+          <div class="card-title">Toolbar</div>
+          <div class="card-type">RN ScrollView (React.memo)</div>
+          <div class="card-desc">Horizontal scrollable toolbar with tool groups, undo/redo/clear, zoom controls, layers and settings buttons. Memoized. Shows a sides strip below the toolbar when POLYGON tool is active.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent2)"></div>
+          <div class="card-title">LayersPanel</div>
+          <div class="card-type">RN Modal</div>
+          <div class="card-desc">Modal panel listing all 4 layers with visibility toggle, lock toggle, and active layer selection.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--accent2)"></div>
+          <div class="card-title">SettingsPanel</div>
+          <div class="card-type">RN Modal</div>
+          <div class="card-desc">Modal panel with toggles for snap, ortho, grid, and theme. Plus default size inputs for width, height, and radius.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--text3)"></div>
+          <div class="card-title">CoordBox</div>
+          <div class="card-type">RN View · rAF poll</div>
+          <div class="card-desc">Displays live X/Y canvas coordinates. Polls <code>coordXSV/coordYSV</code> via <code>requestAnimationFrame</code> — reads shared values on the JS thread without subscribing to React state changes.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--text3)"></div>
+          <div class="card-title">InlineDimOverlays</div>
+          <div class="card-type">RN View (absolute)</div>
+          <div class="card-desc">Renders floating dimension label inputs over the canvas for the selected or double-tapped shape. Position computed from canvas coords → screen coords using zoom transform.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--text3)"></div>
+          <div class="card-title">EditModeOverlay</div>
+          <div class="card-type">RN View (absolute)</div>
+          <div class="card-desc">When edit mode is active, renders delete handles (×) centered on each shape and endpoint handles on selected lines. Tapping a delete handle removes that shape from state.</div>
+        </div>
+        <div class="card">
+          <div class="card-accent" style="background:var(--text3)"></div>
+          <div class="card-title">PolyStatusBar</div>
+          <div class="card-type">RN View · register pattern</div>
+          <div class="card-desc">Status bar items for polyline drawing: point count pill, LINE/ARC mode toggle button, and DONE button. Visible only while a polyline is in progress.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         TOOLS REFERENCE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="tools-ref">
+      <div class="section-header">
+        <div class="section-num">15</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Tools Reference</div>
+          <div class="section-desc">All 34 tools organized by group with keyboard shortcuts</div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">SELECT</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">↖</span> Select <span class="chip-key">S</span></div>
+          <div class="tool-chip"><span class="chip-icon">✥</span> Move <span class="chip-key">M</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">PRIMITIVES</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">╱</span> Line <span class="chip-key">L</span></div>
+          <div class="tool-chip"><span class="chip-icon">▭</span> Rectangle <span class="chip-key">R</span></div>
+          <div class="tool-chip"><span class="chip-icon">○</span> Circle <span class="chip-key">C</span></div>
+          <div class="tool-chip"><span class="chip-icon">⬭</span> Ellipse <span class="chip-key">E</span></div>
+          <div class="tool-chip"><span class="chip-icon">⌒</span> Arc <span class="chip-key">A</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">ADVANCED</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">⬡</span> Polygon <span class="chip-key">P</span></div>
+          <div class="tool-chip"><span class="chip-icon">△</span> Triangle <span class="chip-key">T</span></div>
+          <div class="tool-chip"><span class="chip-icon">★</span> Star <span class="chip-key">K</span></div>
+          <div class="tool-chip"><span class="chip-icon">⬬</span> Slot <span class="chip-key">U</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">CURVES</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">⌇</span> Polyline <span class="chip-key">Q</span></div>
+          <div class="tool-chip"><span class="chip-icon">∿</span> Spline <span class="chip-key">B</span></div>
+          <div class="tool-chip"><span class="chip-icon">✏</span> Freehand <span class="chip-key">F</span></div>
+          <div class="tool-chip"><span class="chip-icon">☁</span> Cloud <span class="chip-key">D</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">ANNOTATE</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">↔</span> Dimension <span class="chip-key">I</span></div>
+          <div class="tool-chip"><span class="chip-icon">✕</span> Eraser <span class="chip-key">X</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <div class="tool-group-title">EDIT</div>
+        <div class="tool-chips">
+          <div class="tool-chip"><span class="chip-icon">⿻</span> Copy <span class="chip-key">O</span></div>
+          <div class="tool-chip"><span class="chip-icon">↻</span> Rotate <span class="chip-key">V</span></div>
+          <div class="tool-chip"><span class="chip-icon">⤢</span> Scale <span class="chip-key">Z</span></div>
+          <div class="tool-chip"><span class="chip-icon">⇔</span> Mirror <span class="chip-key">W</span></div>
+          <div class="tool-chip"><span class="chip-icon">⊡</span> Offset <span class="chip-key">N</span></div>
+          <div class="tool-chip"><span class="chip-icon">✂</span> Trim <span class="chip-key">J</span></div>
+          <div class="tool-chip"><span class="chip-icon">⇥</span> Extend <span class="chip-key">G</span></div>
+          <div class="tool-chip"><span class="chip-icon">⤡</span> Stretch <span class="chip-key">H</span></div>
+          <div class="tool-chip"><span class="chip-icon">⌣</span> Fillet <span class="chip-key">Y</span></div>
+          <div class="tool-chip"><span class="chip-icon">⌁</span> Chamfer <span class="chip-key">;</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         LAYERS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="layers">
+      <div class="section-header">
+        <div class="section-num">16</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Layers System</div>
+          <div class="section-desc">The four default layers and their properties</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Color</th><th>Default State</th></tr></thead>
+          <tbody>
+            <tr><td>L0</td><td class="td-init">Construction</td><td style="color:#4A7FC8">#4A7FC8</td><td class="td-desc">visible: true, locked: false</td></tr>
+            <tr><td>L1</td><td class="td-init">Geometry</td><td style="color:#2AA8F2">#2AA8F2</td><td class="td-desc">visible: true, locked: false — <strong>default active layer</strong></td></tr>
+            <tr><td>L2</td><td class="td-init">Dimensions</td><td style="color:#F7C948">#F7C948</td><td class="td-desc">visible: true, locked: false</td></tr>
+            <tr><td>L3</td><td class="td-init">Annotations</td><td style="color:#00E5A0">#00E5A0</td><td class="td-desc">visible: true, locked: false</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-top:14px;">Each shape stores its layer ID. When rendering, shapes on invisible layers are skipped (<code>if (layer && !layer.visible) return null</code>). The layer color is passed to <code>RenderShape</code> as <code>layerColor</code>, used when the shape is not selected or in edit mode.</p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         THEMES
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="themes">
+      <div class="section-header">
+        <div class="section-num">17</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Theme System</div>
+          <div class="section-desc">Dark and light theme color tokens</div>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠</span>
+        <span class="callout-text">The global <code>T</code> object is mutated via <code>applyTheme(isDark)</code> called synchronously inside the component function on every render. This is an imperative mutation — not a React pattern — but avoids deep prop-drilling of theme tokens into Skia canvas components.</span>
+      </div>
+      <div class="grid2" style="margin-top:16px;">
+        <div>
+          <div class="subsection-title" style="font-size:13px;margin-bottom:10px;">Key Dark Theme Tokens</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Token</th><th>Value</th></tr></thead>
+              <tbody>
+                <tr><td>bg</td><td style="color:#080B10">#080B10</td></tr>
+                <tr><td>canvasBg</td><td style="color:#060810">#060810</td></tr>
+                <tr><td>shapePrimary</td><td style="color:#2AA8F2">#2AA8F2</td></tr>
+                <tr><td>shapeSelected</td><td style="color:#F7C948">#F7C948</td></tr>
+                <tr><td>snapColor</td><td style="color:#00E5A0">#00E5A0</td></tr>
+                <tr><td>extrudeColor</td><td style="color:#A855F7">#A855F7</td></tr>
+                <tr><td>arcColor</td><td style="color:#00E5A0">#00E5A0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="subsection-title" style="font-size:13px;margin-bottom:10px;">Key Light Theme Tokens</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Token</th><th>Value</th></tr></thead>
+              <tbody>
+                <tr><td>bg</td><td style="color:#1877C8">#F2F5FA</td></tr>
+                <tr><td>canvasBg</td><td style="color:#1877C8">#FAFBFE</td></tr>
+                <tr><td>shapePrimary</td><td style="color:#1877C8">#1877C8</td></tr>
+                <tr><td>shapeSelected</td><td style="color:#C4820A">#C4820A</td></tr>
+                <tr><td>snapColor</td><td style="color:#007A50">#007A50</td></tr>
+                <tr><td>extrudeColor</td><td style="color:#7C3AED">#7C3AED</td></tr>
+                <tr><td>arcColor</td><td style="color:#007A50">#007A50</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         USE EFFECTS
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="effects">
+      <div class="section-header">
+        <div class="section-num">18</div>
+        <div class="section-title-wrap">
+          <div class="section-title">useEffect Hooks</div>
+          <div class="section-desc">All side effects that sync state between React, shared values, and child components</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Deps</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td>[selectedId]</td><td class="td-desc">Syncs <code>selectedIdSV</code> and <code>selectedShapeSV</code> (JSON deep copy) for worklet access.</td></tr>
+            <tr><td>[activeTool]</td><td class="td-desc">Syncs <code>toolSV.value = activeTool</code>.</td></tr>
+            <tr><td>[polygonSides]</td><td class="td-desc">Syncs <code>sidesSV.value = polygonSides</code>.</td></tr>
+            <tr><td>[snapEnabled]</td><td class="td-desc">Syncs <code>snapOnSV.value = snapEnabled</code>.</td></tr>
+            <tr><td>[zoom]</td><td class="td-desc">Syncs <code>zoomSV.value = zoom</code>.</td></tr>
+            <tr><td>[stretchPhase]</td><td class="td-desc">Syncs <code>stretchPhaseSV.value = stretchPhase</code>.</td></tr>
+            <tr><td>[polySegMode]</td><td class="td-desc">Syncs <code>segModeSV2.value = polySegMode</code>. Clears <code>arcLiveInfo</code> when switching to line mode.</td></tr>
+            <tr><td>[shapes, selectedId]</td><td class="td-desc">Updates <code>kpSV</code> (flat keypoint array), <code>selectedShapeSV</code>, <code>shapeCount</code>. Schedules debounced <code>findCoincidentPairs</code> (150ms).</td></tr>
+            <tr><td>[activeTool, defaultGeomCreated, defaultSize, polygonSides]</td><td class="td-desc">Injects a default preview shape for drawable tools when the tool is first selected and no preview exists yet.</td></tr>
+            <tr><td>[activeTool]</td><td class="td-desc">Disables edit mode if a non-SELECT/MOVE tool is activated.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         DATA FLOW
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="data-flow">
+      <div class="section-header">
+        <div class="section-num">19</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Data Flow</div>
+          <div class="section-desc">How a shape goes from touch to committed state</div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Drawing a LINE — full lifecycle</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent3)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Tool selected</div><div class="flow-desc"><code>selectTool("LINE")</code> → sets <code>activeTool</code>, syncs <code>toolSV</code>, resets poly state, injects default LINE preview shape.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Finger down (panG.onBegin)</div><div class="flow-desc">Worklet thread: screen → canvas → snap. Sets <code>x0SV, y0SV, x1SV, y1SV</code>. Sets <code>draggingSV = true</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Finger move (panG.onUpdate)</div><div class="flow-desc">Worklet: snaps cursor, updates <code>x1SV, y1SV</code>. <code>LivePreview useDerivedValue</code> rebuilds line path → GPU renders instantly. Throttled auto-close check.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent2)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">Finger up (panG.onEnd)</div><div class="flow-desc">Worklet: snaps final point. Calls <code>runOnJS(sEnd)(pt.x, pt.y)</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">sEnd → onEndRef.current</div><div class="flow-desc">JS thread: reads <code>x0SV.value</code> for start, applies ortho constraint if needed, checks minimum size (d &lt; 4). Calls <code>commit({ type:"LINE", p1, p2 })</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent5)"></div></div><div class="flow-body"><div class="flow-title">commit()</div><div class="flow-desc">Assigns ID, adds to <code>shapes</code> (replacing DEFAULT_ preview), sets <code>selectedId</code>. React re-renders → <code>RenderShape</code> renders the final shape. <code>kpSV</code> updated for future snap targets.</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         EXTRUDE PIPELINE
+    ══════════════════════════════════════════════════ -->
+    <section class="section" id="extrude">
+      <div class="section-header">
+        <div class="section-num">20</div>
+        <div class="section-title-wrap">
+          <div class="section-title">Extrude Pipeline</div>
+          <div class="section-desc">How a 2D shape becomes a 3D extrusion payload</div>
+        </div>
+      </div>
+
+      <div class="callout callout-tip">
+        <span class="callout-icon">◈</span>
+        <span class="callout-text">The extrude button only appears when <code>isClosedGeometry(selectedShape)</code> returns <code>true</code>. Extrudable types: RECTANGLE, CIRCLE, ELLIPSE, POLYGON, TRIANGLE, STAR, SLOT, and closed POLYLINE/SPLINE.</span>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">Extrude Flow</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">ExtrudeButton pressed</div><div class="flow-desc"><code>handleExtrudePress(shape)</code> → sets <code>extrudeShape</code> state → shows <code>ExtrudeModal</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">User configures in ExtrudeModal</div><div class="flow-desc">Selects mode (Solid/Shell/Taper), sets depth (mm), previews JSON payload.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div><div class="flow-line"></div></div><div class="flow-body"><div class="flow-title">"Send to 3D" pressed</div><div class="flow-desc"><code>handleExtrudeConfirm(shape, depth, mode)</code> builds <code>shape2D</code> payload via <code>getShapePayload(shape)</code>.</div></div></div>
+          <div class="flow-step"><div class="flow-left"><div class="flow-dot" style="border-color:var(--accent4)"></div></div><div class="flow-body"><div class="flow-title">Navigation</div><div class="flow-desc"><code>navigation.navigate("ToThreeDScreen", { shape2D })</code>. If navigation is unavailable, logs to console + shows alert (dev fallback).</div></div></div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <div class="subsection-title">shape2D Payload Structure</div>
+        <pre>{
+  <span class="k">id</span>: <span class="s">"shape_123_abc"</span>,
+  <span class="k">type</span>: <span class="s">"CIRCLE"</span>,
+  <span class="k">layer</span>: <span class="s">"L1"</span>,
+  <span class="c">// ...type-specific geometry from getShapePayload()</span>
+  <span class="k">center</span>: { x: <span class="v">0</span>, y: <span class="v">0</span> },
+  <span class="k">radius</span>: <span class="v">50</span>,
+  <span class="c">// extrusion parameters</span>
+  <span class="k">extrudeDepth</span>: <span class="v">20</span>,
+  <span class="k">extrudeMode</span>: <span class="s">"solid"</span>,
+  <span class="k">label</span>: <span class="s">"⌀ 100.0 mm"</span>,
+  <span class="k">timestamp</span>: <span class="v">1700000000000</span>
+}</pre>
+      </div>
+    </section>
+
+  </div><!-- /content -->
+</main>
+
+<script>
+  // Sidebar active link highlighting
+  const links = document.querySelectorAll('.nav-link');
+  const sections = document.querySelectorAll('.section');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+        if (match) match.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(link.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+<script>
+  const moonSVG = `<path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/>`;
+  const sunSVG  = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+
+  function toggleTheme() {
+    const isLight = document.body.classList.toggle('light');
+    const icon = document.getElementById('toggleIcon');
+    icon.innerHTML = isLight ? sunSVG : moonSVG;
+    document.getElementById('toggleLabel').textContent = isLight ? 'Light' : 'Dark';
+  }
+</script>
+</body>
+</html>

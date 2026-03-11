@@ -1,51 +1,45 @@
+import React,{useEffect} from 'react';
 import { useLoader } from '@react-three/fiber/native'
 import * as THREE from 'three'
 
-export function useTextureLoader(type='steel') {
-    let texturePath;
-    switch (type) {
-        case 'steel':
-            texturePath = require('./steel.jpg');
-            break;
-        case 'aluminium':
-            texturePath = require('./aluminium.jpg');
-            break;
-        case 'copper':
-            texturePath = require('./copper.jpg');
-            break;
-        case 'brass':
-            texturePath = require('./brass.jpg');
-            break;
-        case 'knurl':
-            texturePath = require('./knurl.png');
-            break;
-        case 'wood':
-            texturePath = require('./woodTextures.jpg');
-            break;
-        case 'marble':
-            texturePath = require('./marbels.jpg');
-            break;
-        case 'wall':
-            texturePath = require('./wall.jpg');
-            break;
-        case 'plastic':
-            texturePath = require('./plastic.jpg');
-            break;
-        default:
-            texturePath = require('./sheet.jpg');
-    }
-  const texture = useLoader(
-    THREE.TextureLoader,
-    texturePath
-  )
+export const Textures = [
+  { name: 'steel',     image: require('./steel.jpg') },
+  { name: 'aluminium', image: require('./aluminium.jpg') },
+  { name: 'copper',    image: require('./copper.jpg') },
+  { name: 'brass',     image: require('./brass.jpg') },
+  { name: 'knurl',     image: require('./knurl.png') },
+  { name: 'wood',      image: require('./woodTextures.jpg') },
+  { name: 'marble',    image: require('./marbels.jpg') },
+  { name: 'wall',      image: require('./wall.jpg') },
+  { name: 'plastic',   image: require('./plastic.jpg') },
+  { name: 'default',   image: require('./sheet.jpg') },
+];
 
-  texture.flipY = true
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(2, 1)
-  texture.needsUpdate = true
+const FALLBACK = require('./sheet.jpg');
 
-  return texture
+const getTexture = (type) => {
+  if (!type) return FALLBACK;
+  const found = Textures.find(t => t.name === type);
+  return found ? found.image : FALLBACK;
+};
+
+export function useTextureLoader(type = 'default', width = 100, height = 100) {
+  const texturePath = getTexture(type); // always a valid require()
+  
+  const texture = useLoader(THREE.TextureLoader, texturePath);
+  
+  useEffect(() => {
+    texture.flipY = true;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    const repeatX = Math.max(10, Math.round(width / 50));
+    const repeatY = Math.max(10, Math.round(height / 50));
+    texture.repeat.set(.008, .0001);
+    texture.needsUpdate = true;
+  }, [texture, width, height]);
+
+  return texture;
 }
+
 //knurl texture 
 export function useKnurlTextureLoader() {
   const texture = useLoader(

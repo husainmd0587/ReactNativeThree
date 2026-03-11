@@ -1,66 +1,116 @@
-import { StyleSheet, Text, View,TouchableOpacity, NativeModules } from 'react-native'
-import React,{useEffect} from 'react'
-import AppProvider from './provider'
-import CncRouterBetweenSpindles from './components/turning/cncTurningDemo'
-import './utils/config/bvh_setup/three_bvh_setup.js'
-import CNCSimulatorNative from './components/turning/operations/tseting/testing'
-import BvhTest from './components/turning/operations/tseting/bvhTest.js'
-import CreateLatheMeshFromC from './components/turning/operations/fromc++/stepTurning.js'
-import StepWithCsg from './components/turning/operations/stepWithCSGTurning/stepCsg.js'
-import StepTurningCSG from './components/turning/operations/stepWithCSGTurning/stepTurningCSG.js'
-import {   
-  Example1_BasicCylindricalTurning,
-  Example2_ComplexShaft,
-  Example3_TaperedPart,
-  Example4_CustomLatheProfile,
-  Example5_ThreadingAndKnurling,
-  Example6_OffCenterDrilling,
-  Example7_PartingOperation,
-  Example8_DynamicControl 
-} from './components/turning/operations/tseting/examples.js'
-import { DrilledCylinder,PocketedBlock,TurnedRook,GearBlank,ConfigurablePart,
-BoltAssembly,ThorHammer,LensSlugs,SquareGear,HollowPipe
- } from './components/turning/operations/stepWithCSGTurning/stepTurningCSGExamples.js'
-import { M6Bolt,M12Bolt,LeadScrew,ButtressScrew,SquareScrew,TrapezoidalScrew,KnuckleScrew ,M6Nut}
-from './components/turning/operations/stepWithCSGTurning/others/thread.js'
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar
+} from 'react-native'
+import React from 'react'
+import { NavigationContainer } from '@react-navigation/native'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import Create2D from './create3D/2d/create2D'
+import CylinderFaceSketch from './create3D/2d/clickToSelectSurface'
+import Sketch2D from './create3D/2d/2dShapes/Sketch2D'
+import ToThreeDScreen from './create3D/2d/2dShapes/threeD'
 
-const Home = () => {
+export const NavigationMain = ({ navigation }) => {
   return (
-    <AppProvider>
-      {/* <CncRouterBetweenSpindles/> */}
-      {/* <BvhTest/> */}
-      {/* <Example1_BasicCylindricalTurning/> */}
-      {/* <Example2_ComplexShaft/> */}
-      {/* <Example3_TaperedPart/>  */}
-      {/* <Example4_CustomLatheProfile/> */}
-      {/* <Example5_ThreadingAndKnurling/> */}
-      {/* <Example6_OffCenterDrilling/>   */}
-      {/* <Example7_PartingOperation/> */}
-      {/* <Example8_DynamicControl/> */}
-      {/* <StepWithCsg/> */}
-      {/* <CreateLatheMeshFromC/> */}
-      {/* <DrilledCylinder/> */}
-      {/* <PocketedBlock/> */}
-      {/* <TurnedRook/> */}
-      <GearBlank/>
-      
-      {/* <BoltAssembly/> */}
-      {/* <ThorHammer/>   */}
-      {/* <M6Bolt/> */}
-      {/* <M12Bolt/> */}
-      {/* <LeadScrew/> */}
-     
-      {/* <SquareScrew/> */}
-      {/* <KnuckleScrew/> */}
-      {/* <TrapezoidalScrew/> */}
-      {/* <M6Nut/> */}
-      {/* <LensSlugs/> */}
-      {/* <SquareGear/> */}
-      {/* <HollowPipe/> */}
-    </AppProvider>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <Text style={styles.title}>3D CAD Studio</Text>
+        <Text style={styles.subtitle}>Build • Design • Create</Text>
+      </View>
+      <View style={styles.cardContainer}>
+        {
+          AllScreens
+            .filter(s => s.showInMenu !== false)
+            .map(screen => (
+              <TouchableOpacity
+                key={screen.name}
+                activeOpacity={0.85}
+                style={styles.card}
+                onPress={() => navigation.navigate(screen.name)}
+              >
+                <Text style={styles.cardText}>
+                  {screen.name}
+                </Text>
+              </TouchableOpacity>
+            ))
+        }
+      </View>
+    </SafeAreaView>
   )
 }
-  
+
+const AllScreens = [
+  { name:'Main', component: NavigationMain ,showInMenu:false},
+  { name: 'Sketch2D', component: Sketch2D },
+  { name: 'Create2D', component: Create2D },
+  { name: 'ToThreeDScreen', component: ToThreeDScreen ,showInMenu:false},
+  { name: 'CylinderFaceSketch', component: CylinderFaceSketch },
+]
+
+const Stack = createNativeStackNavigator()
+const Home = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+         {AllScreens.map(screen => (<Stack.Screen  key={screen.name}  name={screen.name}  component={screen.component}  options={{headerShown:false}} /> ))}    
+      </Stack.Navigator>
+    </NavigationContainer>
+  )
+}
+
 export default Home
 
-const styles = StyleSheet.create({}) 
+
+
+
+const styles = StyleSheet.create({
+
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 20
+  },
+
+  header: {
+    marginTop: 40,
+    marginBottom: 30
+  },
+
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 1
+  },
+
+  subtitle: {
+    fontSize: 16,
+    color: '#94a3b8',
+    marginTop: 5
+  },
+
+  cardContainer: {
+    flex: 1
+  },
+
+  card: {
+    backgroundColor: '#1e293b',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    marginBottom: 15,
+    elevation: 6, // Android shadow
+  },
+
+  cardText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#38bdf8'
+  }
+
+})

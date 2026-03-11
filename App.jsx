@@ -1,3 +1,4 @@
+//React native Related provider
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -12,8 +13,7 @@ const App = () => {
       <Provider store={store}>
            <Home/> 
       </Provider>
-      <View style={{flex:0,backgroundColor:'#fff',borderRadius:20,borderWidth:0}}>   
-      </View>
+   
     </GestureHandlerRootView> 
    
   )
