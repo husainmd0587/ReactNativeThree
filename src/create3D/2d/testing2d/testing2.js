@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View,Dimensions } from 'react-native'
 import React,{useEffect} from 'react'
-import {Canvas, Path, Circle,Skia} from "@shopify/react-native-skia";    
+import {Canvas, Path, Circle,Skia,Group} from "@shopify/react-native-skia";    
 
 const { width, height } = Dimensions.get('window');
 
@@ -9,8 +9,8 @@ const canvasHeight = 300;
 const centerX = width / 2;
 const centerY = canvasHeight / 2;
 const points=[
-    {x:centerX,y:centerY},
-    {x:150,y:50}
+    {x:0,y:0},
+    {x:10,y:-10}
   ]
 const path = Skia.Path.Make();
 useEffect(()=>{
@@ -21,9 +21,11 @@ useEffect(()=>{
 },[])
   return (
     <View style={{ flex: 1, alignItems: 'center' }}>
-      <Text>Testing2</Text>
+      <Text>Testing</Text>
         <Canvas style={{ width: width, height: 300, backgroundColor: '#92a0f0' }}>  
-            <Path path={path} color="#ff0037" style="stroke" strokeWidth={6} />
+              <Group transform={[{ translateX: centerX }, { translateY: centerY }]}>
+          <Path path={path} color="#ff0037" style="stroke" strokeWidth={6} />
+        </Group>
         </Canvas>
     </View>
   )
