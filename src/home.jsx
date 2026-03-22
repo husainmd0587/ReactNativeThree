@@ -13,6 +13,8 @@ import Create2D from './create3D/2d/create2D'
 import CylinderFaceSketch from './create3D/2d/clickToSelectSurface'
 import Sketch2D from './create3D/2d/2dShapes/Sketch2D'
 import ToThreeDScreen from './create3D/2d/2dShapes/threeD'
+import TrimmingTesting from './create3D/2d/testing2d/testing2D'
+import Testing2 from './create3D/2d/testing2d/testing2'
 
 export const NavigationMain = ({ navigation }) => {
   return (
@@ -50,6 +52,8 @@ const AllScreens = [
   { name: 'Create2D', component: Create2D },
   { name: 'ToThreeDScreen', component: ToThreeDScreen ,showInMenu:false},
   { name: 'CylinderFaceSketch', component: CylinderFaceSketch },
+  { name: 'Testing2', component: Testing2 },
+  { name: 'TrimmingTesting', component: TrimmingTesting },
 ]
 
 const Stack = createNativeStackNavigator()
