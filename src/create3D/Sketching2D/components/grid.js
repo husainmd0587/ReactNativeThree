@@ -1,5 +1,7 @@
 import { Skia } from "@shopify/react-native-skia";
 import { useState, useMemo } from "react";
+import { Path } from "@shopify/react-native-skia";
+
 
 export const createGrid = (minor = 20, major = 100, extent = 1000) => {
   const minorPath = Skia.Path.Make();
@@ -36,8 +38,7 @@ export const createGrid = (minor = 20, major = 100, extent = 1000) => {
 });
   return { minorPath, majorPath, xAxisPath, yAxisPath ,bgRect};
 };
-import { Path } from "@shopify/react-native-skia";
-import { exp } from "three/webgpu";
+
 
  const Grid = ({
   minor = 20,
@@ -86,3 +87,59 @@ export const Crosshair = ({ size = 10, color = "red", strokeWidth = 2.5 ,transfo
   />;
 }
 
+
+// components/grid.js
+
+/**
+ * Decide active grid size based on zoom level.
+ * When minor grid lines are closer than 8px on screen → switch to major.
+ *
+ * @param {number} scale      current viewport scale (from scale.value)
+ * @param {number} minor      minor grid spacing (default 20)
+ * @param {number} major      major grid spacing (default 100)
+ * @returns {number}          active grid size in world units
+ */
+export function getActiveGridSize(scale, minor = 20, major = 100) {
+  const minorScreenSize = minor * scale;
+  if (minorScreenSize < 8) return major;
+  return minor;
+}
+// Add this to the bottom of your grid.js file
+
+/**
+ * Resolves the final snap point combining OSNAP and grid snap.
+ * @param {number} wx - world x
+ * @param {number} wy - world y
+ * @param {object|null} osnapResult - result from findSnapPoint (or null)
+ * @param {number} activeGrid - current active grid size
+ * @param {number} gridThreshold - max world-unit distance for grid snap
+ * @param {boolean} gridSnapEnabled - whether grid snap is on
+ * @returns {{ x, y, snapType: 'osnap'|'grid'|null }}
+ */
+export function resolveSnap(wx, wy, osnapResult, activeGrid, gridThreshold, gridSnapEnabled) {
+  // OSNAP wins over grid snap
+  if (osnapResult) {
+    return { x: osnapResult.x, y: osnapResult.y, snapType: 'osnap' };
+  }
+
+  if (gridSnapEnabled) {
+    const snappedX = Math.round(wx / activeGrid) * activeGrid;
+    const snappedY = Math.round(wy / activeGrid) * activeGrid;
+    const dist = Math.hypot(wx - snappedX, wy - snappedY);
+    if (dist <= gridThreshold) {
+      return { x: snappedX, y: snappedY, snapType: 'grid' };
+    }
+  }
+
+  return { x: wx, y: wy, snapType: null };
+}
+
+/**
+ * Snaps a world coordinate to the nearest grid point.
+ */
+export function snapToGrid(wx, wy, gridSize) {
+  return {
+    x: Math.round(wx / gridSize) * gridSize,
+    y: Math.round(wy / gridSize) * gridSize,
+  };
+}

@@ -1,14 +1,10 @@
 import {  View,Text,StyleSheet, TouchableOpacity,SafeAreaView,  StatusBar} from 'react-native'
 import React from 'react'
-import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import Create2D from './create3D/2d_Old/create2D'
-import CylinderFaceSketch from './create3D/2d_Old/clickToSelectSurface'
-import Sketch2D from './create3D/2d_Old/2dShapes/Sketch2D'
-import ToThreeDScreen from './create3D/2d_Old/2dShapes/threeD'
-import TrimmingTesting from './create3D/2d_Old/testing2d/testing2D'
-import Testing2 from './create3D/2d_Old/testing2d/testing2'
-import Sketching2D from './create3D/Sketching2D/main'
+import Sketch2D from './2d_Old/2dShapes/Sketch2D'
+import ToThreeDScreen from './2d_Old/2dShapes/threeD'
+import Sketching2D from './Sketching2D/main'
+
 
 export const NavigationMain = ({ navigation }) => {
   return (
@@ -44,25 +40,22 @@ const AllScreens = [
   { name:'Main', component: NavigationMain ,showInMenu:false},
   { name: 'Sketching2D', component: Sketching2D },
   { name: 'Sketch2D', component: Sketch2D },
-  { name: 'Create2D', component: Create2D },
   { name: 'ToThreeDScreen', component: ToThreeDScreen ,showInMenu:false},
-  { name: 'CylinderFaceSketch', component: CylinderFaceSketch },
-  { name: 'Testing2', component: Testing2 },
-  { name: 'TrimmingTesting', component: TrimmingTesting },
+  
 ]
 
 const Stack = createNativeStackNavigator()
-const Home = () => {
+const HomeCad = () => {
   return (
-    <NavigationContainer>
+  
       <Stack.Navigator>
          {AllScreens.map(screen => (<Stack.Screen  key={screen.name}  name={screen.name}  component={screen.component}  options={{headerShown:false}} /> ))}    
       </Stack.Navigator>
-    </NavigationContainer>
+
   )
 }
 
-export default Home
+export default HomeCad
 
 
 const styles = StyleSheet.create({

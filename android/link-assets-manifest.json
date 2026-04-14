@@ -1,0 +1,37 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "src/assets/fonts/dancing.ttf",
+      "sha1": "a6c3a9b286cacd1efeef62942fff748cfd8b9722"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-Bold.ttf",
+      "sha1": "0fe7815dc9fe639677f6ddda70ca3a88dd1a09d5"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-ExtraLight.ttf",
+      "sha1": "ecf39a80b61fe7f97dd0fa1b26bd35facaed6058"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-Light.ttf",
+      "sha1": "0d9835aaf684a043f75da67c26fca21435e6323e"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-Medium.ttf",
+      "sha1": "13a3fe5dfa22b7a7d527bcc911fa6514bd1abc83"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-Regular.ttf",
+      "sha1": "10599ee4b500dead0a5fa3ef70bbbeb568c16c11"
+    },
+    {
+      "path": "src/assets/fonts/Oswald-SemiBold.ttf",
+      "sha1": "be4f51edf0351e7a6b863375e1ef9adf7ed98887"
+    },
+    {
+      "path": "src/assets/fonts/roboto.ttf",
+      "sha1": "eb51d6042f676b736a552744a77dc352d92a08e1"
+    }
+  ]
+}

@@ -206,11 +206,11 @@ function CameraPositionTracker({ onChange }) {
 }
 
 // ─── Main Provider ────────────────────────────────────────────────────────────
-const CanvaProvider = ({ children, style = { flex: 1 } }) => {
+const CanvaProvider = ({ children, style = { flex: 1 },camPosition=[0, 0, 100] }) => {
   const [customGesture, setCustomGesture] = useState(false);
   const [sound, setSound]                 = useState(true);
   const [activeView, setActiveView]       = useState('xy');
-  const [camPos, setCamPos]               = useState([0, 0, 100]);
+  const [camPos, setCamPos]               = useState(camPosition);
   const [panelOpen, setPanelOpen]         = useState(false);
   
   const { width, height } = useWindowDimensions();
@@ -220,7 +220,7 @@ const CanvaProvider = ({ children, style = { flex: 1 } }) => {
 
   const camera = useMemo(() => {
     const cam = new PerspectiveCamera(75, width / height, 0.1, 1000);
-    cam.position.set(0, 0, 100);
+    cam.position.set(...camPosition);
     cam.lookAt(0, 0, 0);
     return cam;
   }, [width, height]);

@@ -21,7 +21,7 @@ import StepWithCsg from './operations/stepWithCSGTurning/stepCsg'
 export default function CncRouterBetweenSpindles() {
   return (
     <group>
-      {/* <CncFrame /> */}
+      <CncFrame />
       {/* <RotatingSpindleGroup speed={0.05} /> */}
       {/* <CuttingTool/> */}
       {/* <SegmentedBar/> */}
