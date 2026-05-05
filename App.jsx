@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Provider } from 'react-redux';
 import { store } from './src/utils/store/store';
 import MainStack from './src/navigations';
+import { Worker } from './src/all_glb/worker';
 
 const App = () => {
     
@@ -13,7 +14,6 @@ const App = () => {
       <Provider store={store}>
         <MainStack />
       </Provider>
-   
     </GestureHandlerRootView> 
    
   )

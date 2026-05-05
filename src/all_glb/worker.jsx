@@ -1,9 +1,100 @@
+import React from 'react'
+import { useLoader } from '@react-three/fiber/native'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
 
-import React, { useRef,useEffect } from 'react'
-import { useGLTF, useAnimations } from '@react-three/drei/native'
-import { useFrame } from '@react-three/fiber';
-import useControls from 'r3f-native-orbitcontrols';
+export function Cubes() {
 
+  const source = require('./cubes.glb')
+  const gltf = useLoader(
+    GLTFLoader,
+    source.uri || source, // ✅ important fix
+    (loader) => {
+      const draco = new DRACOLoader()
+      draco.setDecoderPath(
+        'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
+      )
+      loader.setDRACOLoader(draco)
+    }
+  )
+
+  const { nodes, materials } = gltf
+
+  return (
+    <group dispose={null}>
+      <mesh
+        geometry={nodes?.Cube?.geometry}
+        material={materials?.['Material.003']}
+      />
+    </group>
+  )
+}
+
+
+export function FirstObj(props) {
+  const ur=require('./firstObj.glb')
+  const { nodes, materials } = useGLTF(ur)
+  return (
+    <group {...props} dispose={null}>
+      {/* <mesh castShadow receiveShadow geometry={nodes.Cube.geometry} material={materials.Material} /> */}
+      <mesh
+        castShadow
+        receiveShadow
+        geometry={nodes.Cube001.geometry}
+       material={customMaterial} 
+        position={[0, 0, 0]}
+      />
+    </group>
+  )
+}
+export function Table(props) {
+  const ur=require('./table.glb')
+  const { nodes, materials } = useGLTF(ur)
+  return (
+    <group {...props} dispose={null}>
+      <mesh
+        castShadow
+        receiveShadow
+        geometry={nodes.Cylinder_1.geometry}
+        material={materials['Wood 5']}
+      />
+      <mesh
+        castShadow
+        receiveShadow
+        geometry={nodes.Cylinder_2.geometry}
+        material={materials['Porcelain - Teal']}
+      />
+      <mesh
+        castShadow
+        receiveShadow
+        geometry={nodes.Cylinder_3.geometry}
+        material={materials.OldYellowMetals}
+      />
+    </group>
+  )
+}
+export function CasteIronPart(props) {
+  const ur=require('./casteIronPart.glb')
+  const { nodes, materials } = useGLTF(ur)
+  return (
+    <group {...props} dispose={null}>
+      <group position={[-5, 0, 0]}>
+        <mesh
+          castShadow
+          receiveShadow
+          geometry={nodes.Cube_1.geometry}
+          material={materials.Material}
+        />
+        <mesh
+          castShadow
+          receiveShadow
+          geometry={nodes.Cube_2.geometry}
+          material={nodes.Cube_2.material}
+        />
+      </group>
+    </group>
+  )
+}
 export  function Worker() {
   const ur=require('./worker.glb') 
   const { nodes, materials } = useGLTF(ur)
@@ -21,6 +112,9 @@ export  function Worker() {
     </group>
   )
 }
+
+
+
 export function Bed(props) {
     const groupRef=useRef()
     const ur=require('./bed.glb')
@@ -366,6 +460,9 @@ export function Motor(props) {
 
 
 
+
+// convert glb to jsx-- https://gltf.pmnd.rs/
+// https://optimizeglb.com/
+// https://www.3dpea.com/en/view-DRACO-online
   
 
-  

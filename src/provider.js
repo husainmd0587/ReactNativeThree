@@ -301,8 +301,7 @@ const changePlane = useCallback((pos, id) => {
           <View style={S.gridV} />
         </View>
 
-        {/* ── Coordinate Badge ── */}
-        <CoordBadge pos={camPos} />
+      
 
         {/* ── Sliding Feature Panel + Toggle Tab ── */}
         <FeaturePanel
@@ -321,13 +320,15 @@ const changePlane = useCallback((pos, id) => {
         />
 
         {/* ── Bottom status strip ── */}
-        <View style={S.statusStrip} pointerEvents="none">
+        <View style={[S.statusStrip,{display:'none'}]} pointerEvents="none" >
           <View style={S.statusDot} />
           <Text style={S.statusTxt}>
-            {customGesture ? 'GESTURE MODE' : 'ORBIT MODE'}
-            {'  ·  '}
+            {/* {customGesture ? 'GESTURE MODE' : 'ORBIT MODE'} */}
+            {/* {'  ·  '} */}
             {VIEW_PRESETS.find(v => v.id === activeView)?.hint ?? ''} VIEW
           </Text>
+            {/* ── Coordinate Badge ── */}
+           <CoordBadge pos={camPos} />
         </View>
 
       </View>
@@ -375,14 +376,6 @@ const S = StyleSheet.create({
 
   // ── Coordinate badge
   coordBadge: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    borderBottomWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
   },
   coordText: {
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
@@ -501,16 +494,16 @@ railItem: {
   // ── Status strip
   statusStrip: {
     position: 'absolute',
-    top: 10,
-    right: 0,
+    top: -8,
+    left: 0,
     height: 26,
-    // backgroundColor: SURFACE,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    // borderBottomWidth: StyleSheet.hairlineWidth,
+    // borderBottomColor: BORDER,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     gap: 8,
+   
   },
   statusDot: {
     width: 5,

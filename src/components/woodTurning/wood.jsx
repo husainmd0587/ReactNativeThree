@@ -9,8 +9,7 @@ import GroupsMesh from '../three3d_Objects/groupsMesh';
 
 import { PerspectiveCamera} from 'three';
 
-const Wood = () => {
-    
+const Wood = () => {  
   const {height, width} = useWindowDimensions();
   const [OrbitControls, events] = useControls();
    const camera = new PerspectiveCamera(75, width/height,1, 1000);   
@@ -25,9 +24,6 @@ const Wood = () => {
       <Canvas camera={camera} gl={{ physicallyCorrectLights: true }} onCreated={CanvaOnCreated} shadows={true}  fallback={Fallback}  >
         <Suspense fallback={null}>
         <GroupsMesh rotate={{x:0,y:0,z:0}}/>
-
-     
-
         </Suspense><color attach="background" args={['#87CEEB']} />
         <Lightings />
         <OrbitControls/>

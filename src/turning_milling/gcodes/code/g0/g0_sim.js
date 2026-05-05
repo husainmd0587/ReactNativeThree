@@ -5,6 +5,8 @@ import {
 } from 'react-native'
 import { useFrame } from '@react-three/fiber'
 import CanvaProvider from '../../../../provider'
+import CncFrameTurning from '../../../components/machines/turning'
+
 
 const { height } = Dimensions.get('window')
 
@@ -164,7 +166,6 @@ function CncFrame({ machineState }) {
       <directionalLight position={[-6, 4, -2]} intensity={0.5} color="#a0b8d0" />
       <pointLight position={[0, 3, 2]} intensity={spindleOn ? 1.2 : 0.3} color="#38bdf8" distance={6} />
       <pointLight position={[0, -1, 1]} intensity={0.4} color="#ffaa44" distance={4} />
-
       <Turret machX={x} machZ={z} spindleOn={spindleOn} spindleSpeed={spindleSpeed} isCutting={isCutting} />
 
       {/* Bed */}
@@ -270,6 +271,7 @@ export default function SimScreen({ route, navigation }) {
   const [machineState, setMachineState] = useState({
     x: 0, y: 0, z: 5, spindleOn: false, spindleSpeed: 0,
     isCutting: false, pathPoints: [], feed: 0,
+    gateOpen: false,
   })
 
   const stateRef    = useRef({ x: 0, y: 0, z: 5, spindleOn: false, isCutting: false, pathPoints: [] })
@@ -376,18 +378,14 @@ export default function SimScreen({ route, navigation }) {
         <TouchableOpacity style={s2.backBtn} onPress={() => navigation.goBack()}>
           <Text style={s2.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={s2.topTitle}>{command?.name ?? 'G00'} — Simulation</Text>
-        {machineState.spindleOn && (
-          <View style={s2.rpmBadge}>
-            <Text style={s2.rpmText}>⟳ 2500</Text>
-          </View>
-        )}
+        <Text style={s2.topTitle}>{command?.name ?? 'G00'} code running example</Text>
+    
       </View>
 
       {/* Canvas — 52% height */}
       <View style={s2.canvasArea}>
         <CanvaProvider style={s2.canvas} camPosition={[0, 2.5, 10]}>
-          <CncFrame machineState={machineState} />
+          <CncFrameTurning machineState={machineState} />
         </CanvaProvider>
         <View style={s2.axisOverlay}>
           {[['X', machineState.x, '#4a9eff'], ['Y', machineState.y, '#22c55e'], ['Z', machineState.z, '#f59e0b']].map(([ax, val, col]) => (
@@ -399,6 +397,12 @@ export default function SimScreen({ route, navigation }) {
           <View style={s2.axisChip}>
             <Text style={[s2.axisLbl, { color: machineState.feed === 'RAPID' ? '#f59e0b' : '#94a3b8' }]}>F</Text>
             <Text style={s2.axisNum}>{machineState.feed === 'RAPID' ? 'RPN' : `${machineState.feed || 0}`}</Text>
+          </View>
+          <View style={s2.axisChip}>
+             <View style={s2.rpmBadge}>
+                <Text style={[s2.axisLbl, { color: '#f59e0b' }]}>rpm</Text>
+                <Text style={s2.axisNum}>{machineState.spindleSpeed || 0}</Text>
+             </View>
           </View>
         </View>
       </View>
@@ -463,17 +467,17 @@ export default function SimScreen({ route, navigation }) {
 const s2 = StyleSheet.create({
   container:         { flex: 1, backgroundColor: '#000000' },
   topBar:            { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111', gap: 10 },
-  backBtn:           { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#222' },
-  backText:          { color: '#64748b', fontSize: 12 },
-  topTitle:          { flex: 1, fontSize: 13, color: '#94a3b8', fontFamily: 'monospace' },
-  rpmBadge:          { backgroundColor: '#0a2535', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#1a5070' },
+  backBtn:           { paddingHorizontal: 8, backgroundColor: '#ffee',paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#ee1111' },
+  backText:          { color: '#64748b', fontSize: 12,fontWeight: '600' },
+  topTitle:          { flex: 1, fontSize: 13, color: '#94a3b8', fontFamily: 'Oswald-Bold' },
+  rpmBadge:          {  },
   rpmText:           { color: '#38bdf8', fontSize: 10, fontWeight: '600' },
-  canvasArea:        { height: height * 0.52, backgroundColor: '#050a10', position: 'relative' },
+  canvasArea:        { height: height * 0.70, backgroundColor: '#050a10', position: 'relative' },
   canvas:            { flex: 1 },
-  axisOverlay:       { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', gap: 6 },
-  axisChip:          { backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 6, borderWidth: 1, borderColor: '#1e2d3d', paddingHorizontal: 7, paddingVertical: 3, alignItems: 'center' },
+  axisOverlay:       { position: 'absolute',flexDirection:'row', top: 0, left: 8},
+  axisChip:          { width:40, alignItems: 'center' },
   axisLbl:           { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  axisNum:           { fontSize: 11, color: '#ffffff', fontFamily: 'monospace', marginTop: 1 },
+  axisNum:           { fontSize: 11, color: '#000', fontFamily: 'monospace', marginTop: 1,width:'100%',textAlign:'center' },
   bottomArea:        { flex: 1, backgroundColor: '#000000', borderTopWidth: 1, borderTopColor: '#1a1a1a' },
   ctrlRow:           { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#111' },
   btn:               { paddingVertical: 7, paddingHorizontal: 16, borderRadius: 7, borderWidth: 1 },

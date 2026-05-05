@@ -1,15 +1,13 @@
 // MainStack.js
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, StatusBar, Image, Animated,ScrollView,ImageBackground
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity,SafeAreaView, StatusBar, Image, Animated,ScrollView,ImageBackground } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeCad from './create3D/home';
 import HomeTurningMilling from './turning_milling/home';
 import AllMeasuringTools from './mechanical_engineering/measurings/allmeasuringTools';
 import MetalWeightCalculator from './mechanical_engineering/calculator/home';
+import ShowGlb3D from './all_glb/showGlb3D';
 
 const Stack = createNativeStackNavigator();
 
@@ -181,7 +179,11 @@ const AllScreens = [
   ,{
     name:'Calculator',
     component: MetalWeightCalculator,
-  showInMenu: false}
+  showInMenu: false},
+  {
+    name:'ShowGlb3D',
+    component: ShowGlb3D, 
+  }
 ];
 
 // ── Main Stack ─────────────────────────────────────────────────────────────
