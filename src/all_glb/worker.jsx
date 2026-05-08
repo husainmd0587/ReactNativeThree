@@ -1,35 +1,7 @@
-import React from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { useLoader } from '@react-three/fiber/native'
+import { useGLTF } from '@react-three/drei'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
-
-export function Cubes() {
-
-  const source = require('./cubes.glb')
-  const gltf = useLoader(
-    GLTFLoader,
-    source.uri || source, // ✅ important fix
-    (loader) => {
-      const draco = new DRACOLoader()
-      draco.setDecoderPath(
-        'https://www.gstatic.com/draco/versioned/decoders/1.5.6/'
-      )
-      loader.setDRACOLoader(draco)
-    }
-  )
-
-  const { nodes, materials } = gltf
-
-  return (
-    <group dispose={null}>
-      <mesh
-        geometry={nodes?.Cube?.geometry}
-        material={materials?.['Material.003']}
-      />
-    </group>
-  )
-}
-
 
 export function FirstObj(props) {
   const ur=require('./firstObj.glb')
@@ -73,28 +45,42 @@ export function Table(props) {
     </group>
   )
 }
+
 export function CasteIronPart(props) {
-  const ur=require('./casteIronPart.glb')
-  const { nodes, materials } = useGLTF(ur)
+  const [gltf, setGltf] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch(
+        'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/glb/testing/casteIronPart.glb'
+      )
+    console.log('fetching glb from url...', res)
+      const buffer = await res.arrayBuffer()
+
+      const loader = new GLTFLoader()
+      // loader.setMeshoptDecoder(MeshoptDecoder)
+
+      loader.parse(buffer, '', (gltf) => {
+        setGltf(gltf)
+      })
+    }
+
+    load()
+  }, [])
+
+  if (!gltf) return null
+
+  const { nodes, materials } = gltf
+
   return (
-    <group {...props} dispose={null}>
-      <group position={[-5, 0, 0]}>
-        <mesh
-          castShadow
-          receiveShadow
-          geometry={nodes.Cube_1.geometry}
-          material={materials.Material}
-        />
-        <mesh
-          castShadow
-          receiveShadow
-          geometry={nodes.Cube_2.geometry}
-          material={nodes.Cube_2.material}
-        />
-      </group>
+    <group {...props}>
+      <mesh geometry={nodes.Cube_1.geometry} material={materials.Material} />
+      <mesh geometry={nodes.Cube_2.geometry} material={nodes.Cube_2.material} />
     </group>
   )
 }
+
+
 export  function Worker() {
   const ur=require('./worker.glb') 
   const { nodes, materials } = useGLTF(ur)
@@ -112,8 +98,6 @@ export  function Worker() {
     </group>
   )
 }
-
-
 
 export function Bed(props) {
     const groupRef=useRef()
@@ -327,10 +311,6 @@ export function PunchingMan(props) {
       </group>
     )
   }
-
-
-
-
 export function Motor(props) {
   const group = useRef()
   const ur=require('./motor.glb')

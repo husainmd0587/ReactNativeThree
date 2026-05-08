@@ -1,11 +1,17 @@
 import CanvaProvider from "../provider";
-import {FirstObj, Worker,Cubes,CasteIronPart,Table } from "./worker";
+import {FirstObj, Worker,Table} from "./worker";
+import { CastIronPart } from './dracoObj'
+import {Online_CastIronPart} from "./online_glb";
+import { Cubes125 } from "./meshoptGlb";
+
  const ShowGlb3D = () => {
     return (
         <CanvaProvider >
             {/* <FirstObj /> */}
-            <Cubes/>
-            {/* <CasteIronPart/> */}
+            {/* <Cubes/> */}
+            {/* <CastIronPart/> */}
+                <Cubes125/>
+            {/* <Online_CastIronPart/> */}
             {/* <Table/> */}
         </CanvaProvider>
     )

@@ -1,4 +1,9 @@
 {
   "name": "threeapp",
-  "displayName": "threeapp"
+  "displayName": "threeapp",
+    "expo": {
+    "assetBundlePatterns": [
+      "assets/**"
+    ]
+  }
 }
