@@ -3,19 +3,19 @@ import { useLoader } from '@react-three/fiber/native'
 import * as THREE from 'three'
 
 export const Textures = [
-  { name: 'steel',     image: require('./steel.jpg') },
-  { name: 'aluminium', image: require('./aluminium.jpg') },
-  { name: 'copper',    image: require('./copper.jpg') },
-  { name: 'brass',     image: require('./brass.jpg') },
-  { name: 'knurl',     image: require('./knurl.png') },
-  { name: 'wood',      image: require('./woodTextures.jpg') },
-  { name: 'marble',    image: require('./marbels.jpg') },
-  { name: 'wall',      image: require('./wall.jpg') },
-  { name: 'plastic',   image: require('./plastic.jpg') },
-  { name: 'default',   image: require('./sheet.jpg') },
+  { name: 'steel',     image: require('../../assets/images/textures/steel.jpg') },
+  { name: 'aluminium', image: require('../../assets/images/textures/aluminium.jpg') },
+  { name: 'copper',    image: require('../../assets/images/textures/copper.jpg') },
+  { name: 'brass',     image: require('../../assets/images/textures/brass.jpg') },
+  { name: 'knurl',     image: require('../../assets/images/textures/knurl.png') },
+  { name: 'wood',      image: require('../../assets/images/textures/woodTextures.jpg') },
+  { name: 'marble',    image: require('../../assets/images/textures/marbels.jpg') },
+  { name: 'wall',      image: require('../../assets/images/textures/wall.jpg') },
+  { name: 'plastic',   image: require('../../assets/images/textures/plastic.jpg') },
+  { name: 'default',   image: require('../../assets/images/textures/sheet.jpg') },
 ];
 
-const FALLBACK = require('./sheet.jpg');
+const FALLBACK = require('../../assets/images/textures/sheet.jpg');
 
 const getTexture = (type) => {
   if (!type) return FALLBACK;
@@ -44,7 +44,7 @@ export function useTextureLoader(type = 'default', width = 100, height = 100) {
 export function useKnurlTextureLoader() {
   const texture = useLoader(
     THREE.TextureLoader,
-     require('./knurl.png')
+     require('../../assets/images/textures/knurl.png')
   )
 
   texture.flipY = true

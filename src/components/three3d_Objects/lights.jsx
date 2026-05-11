@@ -3,17 +3,17 @@ import React from 'react';
 export const Lightings = () => {
   return (
     <>
-      <ambientLight intensity={0.7} />
+      <ambientLight intensity={1} />
 
       <directionalLight
         position={[10, 10, 10]}
-        intensity={1.2}
+        intensity={10}
         castShadow
       />
 
       <directionalLight
         position={[-10, 5, -10]}
-        intensity={0.6}
+        intensity={10}
       />
 
       <axesHelper args={[5]} />

@@ -7,7 +7,7 @@ import HomeCad from './create3D/home';
 import HomeTurningMilling from './turning_milling/home';
 import AllMeasuringTools from './mechanical_engineering/measurings/allmeasuringTools';
 import MetalWeightCalculator from './mechanical_engineering/calculator/home';
-import ShowGlb3D from './all_glb/showGlb3D';
+import AllGears from './mechanical_engineering/modals/gears/allGears';
 
 const Stack = createNativeStackNavigator();
 
@@ -181,8 +181,8 @@ const AllScreens = [
     component: MetalWeightCalculator,
   showInMenu: false},
   {
-    name:'ShowGlb3D',
-    component: ShowGlb3D, 
+    name:'All Gears',
+    component: AllGears, 
   }
 ];
 

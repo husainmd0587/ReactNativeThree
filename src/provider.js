@@ -287,7 +287,7 @@ const changePlane = useCallback((pos, id) => {
             />
             {children}
           </Suspense>
-          <color attach="background" args={['#f0f2f5']} />
+          <color attach="background" args={['#434344']} />
           <Lightings />
             {!customGesture && ( <OrbitControls enabled={!isScrolling} />)}
           <CameraPositionTracker onChange={setCamPos} />
@@ -352,7 +352,7 @@ const S = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: BG,
-    overflow: 'hidden',
+    overflow: 'hidden', 
   },
 
   // ── Grid cross-hair overlay

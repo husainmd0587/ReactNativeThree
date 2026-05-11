@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { ToolHolder } from "./machineComponents";
-import { useTextureLoader } from "../../../assets/all_textures";
+import { useTextureLoader } from "../../../utils/materials/textures";
 
 function CncFrameTurning({ machineState }) {
   const { x, z, spindleOn, spindleSpeed, isCutting, gateOpen } = machineState;
