@@ -275,7 +275,7 @@ const changePlane = useCallback((pos, id) => {
           camera={camera}
           shadows
           dpr={[1, 2]}
-          gl={{ physicallyCorrectLights: true }}
+          gl={{ physicallyCorrectLights: true, antialias: false  }}
           onCreated={CanvaOnCreated}
           fallback={Fallback}
         >

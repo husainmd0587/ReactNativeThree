@@ -1,192 +1,240 @@
-// MainStack.js
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity,SafeAreaView, StatusBar, Image, Animated,ScrollView,ImageBackground } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  StatusBar, ScrollView, Animated,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 import HomeCad from './create3D/home';
 import HomeTurningMilling from './turning_milling/home';
 import AllMeasuringTools from './mechanical_engineering/measurings/allmeasuringTools';
 import MetalWeightCalculator from './mechanical_engineering/calculator/home';
-import AllGears from './mechanical_engineering/modals/gears/allGears';
+import MachineElements from './mechanical_engineering/machine_elements/machineElements';
+import Robots from './mechanical_engineering/robots/robotsHome';
+import ProductionManagement from './mechanical_engineering/management/management';
 
 const Stack = createNativeStackNavigator();
 
+// ── Animated slogan ────────────────────────────────────────────────────────
 const AnimatedSlogan = ({ slogans, delay = 0 }) => {
   const [index, setIndex] = useState(0);
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
-    // initial delay before starting loop
     const timeout = setTimeout(() => {
-
-      // first animation IN
       Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
       ]).start();
 
-      // loop
       const interval = setInterval(() => {
         Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: -20,
-            duration: 400,
-            useNativeDriver: true,
-          }),
+          Animated.timing(fadeAnim,  { toValue: 0, duration: 350, useNativeDriver: true }),
+          Animated.timing(slideAnim, { toValue: -10, duration: 350, useNativeDriver: true }),
         ]).start(() => {
           setIndex(prev => (prev + 1) % slogans.length);
-          slideAnim.setValue(20);
-
+          slideAnim.setValue(10);
           Animated.parallel([
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 400,
-              useNativeDriver: true,
-            }),
-            Animated.timing(slideAnim, {
-              toValue: 0,
-              duration: 400,
-              useNativeDriver: true,
-            }),
+            Animated.timing(fadeAnim,  { toValue: 1, duration: 350, useNativeDriver: true }),
+            Animated.timing(slideAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
           ]).start();
         });
       }, 3000);
 
-      // cleanup interval
       return () => clearInterval(interval);
-
     }, delay);
 
     return () => clearTimeout(timeout);
   }, []);
 
   return (
-    <Animated.Text
-      style={[
-        styles.sloganText,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
+    <Animated.Text style={[s.slogan, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       {slogans[index]}
     </Animated.Text>
   );
 };
 
+// ── Module card (square, for 2-col grid) ──────────────────────────────────
+const ModuleCard = ({ screen, onPress, wide = false }) => (
+  <TouchableOpacity
+    style={[s.card, wide && s.cardWide]}
+    onPress={onPress}
+    activeOpacity={0.82}
+  >
+    {/* Coloured image / illustration area */}
+    <View style={[s.cardImg, { backgroundColor: screen.accentBg }, wide && s.cardImgWide]}>
+      <Text style={s.cardEmoji}>{screen.emoji}</Text>
+      <View style={[s.colorBar, { backgroundColor: screen.accent }]} />
+      {screen.slogen && (
+        <View style={s.sloganWrap}>
+          <AnimatedSlogan slogans={screen.slogen} delay={screen.delay ?? 0} />
+        </View>
+      )}
+    </View>
 
-// ── Navigation Main ────────────────────────────────────────────────────────
+    {/* Text body */}
+    <View style={[s.cardBody, wide && s.cardBodyWide]}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.cardName}>{screen.label}</Text>
+        <Text style={s.cardDesc}>{screen.desc}</Text>
+      </View>
+      <Text style={[s.cardArrow, { color: screen.accent }]}>→</Text>
+    </View>
+  </TouchableOpacity>
+);
+
+// ── Navigation main ────────────────────────────────────────────────────────
 const NavigationMain = ({ navigation }) => {
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <Text style={styles.title}>Mechanical Engineering</Text>
-        <Text style={styles.subtitle}>Build • Design • Create</Text>
-      </View>
-      <View style={styles.cardContainer}>
-        {AllScreens
-          .filter(s => s.showInMenu !== false)
-          .map((screen, i) => (
-            <TouchableOpacity
-              key={screen.name}
-              activeOpacity={0.85}
-              style={styles.card}
-              onPress={() => navigation.navigate(screen.name)}
-            >
-              {screen.image && (
-                <Image
-                  source={screen.image}
-                  style={styles.cardImage}
-                  resizeMode="cover"
-                />
-              )}
-              <View style={styles.cardOverlay}>
-                {/* ── Show animated slogan if available, else screen name ── */}
-                {screen.slogen ? (
-                  <AnimatedSlogan slogans={screen.slogen} delay={i * 600}/>
-                ) : (
-                  <Text style={styles.cardText}>{screen.name}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-      </View>
-      <View style={[styles.cardContainer,{backgroundColor:'#ffffa0',marginVertical:20,padding:10}]}>
-        <Text style={styles.subtitle}>some tools that help you in your engineering journey</Text>
+  const modules = AllScreens.filter(s => s.showInMenu !== false && s.name !== 'Calculator');
+  const mainModules = modules.filter(s => !s.wide);
+  const wideModules = modules.filter(s => s.wide);
 
-          <TouchableOpacity style={[styles.card,{backgroundColor:'#fff',width:'45%',height:120}]}
-          onPress={() => navigation.navigate('Calculator')}>
-            
-            <ImageBackground  style={styles.toolsImage} resizeMode='contain'
-            source={require('./assets/images/navigations/calculator.jpg')}>
-             <Text style={styles.cardText}>metal weight calculator</Text>
-            </ImageBackground>
-          </TouchableOpacity>
+  return (
+    <SafeAreaView style={s.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* Header */}
+      <View style={s.header}>
+        <View style={s.headerRow}>
+          <View>
+            <Text style={s.title}>ME Studio</Text>
+            <Text style={s.subtitle}>Mechanical Engineering · Learn Easily</Text>
+          </View>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>ME</Text>
+          </View>
+        </View>
       </View>
-    </ScrollView>
+
+      <ScrollView style={s.scroll} contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+
+        {/* Modules 2-col grid */}
+        <Text style={s.sectionLabel}>MODULES</Text>
+        <View style={s.grid}>
+          {mainModules.map((screen, i) => (
+            <ModuleCard
+              key={screen.name}
+              screen={{ ...screen, delay: i * 500 }}
+              onPress={() => navigation.navigate(screen.name)}
+            />
+          ))}
+        </View>
+
+        {/* Wide (full-width) modules */}
+        {wideModules.map(screen => (
+          <ModuleCard
+            key={screen.name}
+            screen={screen}
+            onPress={() => navigation.navigate(screen.name)}
+            wide
+          />
+        ))}
+
+        {/* Tools section */}
+        <Text style={[s.sectionLabel, { marginTop: 20 }]}>TOOLS</Text>
+        <TouchableOpacity
+          style={s.toolRow}
+          onPress={() => navigation.navigate('Calculator')}
+          activeOpacity={0.82}
+        >
+          <View style={s.toolIconBox}>
+            <Text style={{ fontSize: 20 }}>🧮</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.toolName}>Metal weight calculator</Text>
+            <Text style={s.toolSub}>Steel, aluminium, brass & more</Text>
+          </View>
+          <View style={s.toolChip}>
+            <Text style={s.toolChipText}>FREE</Text>
+          </View>
+        </TouchableOpacity>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-// ── Screens Config ─────────────────────────────────────────────────────────
+// ── Screens config ─────────────────────────────────────────────────────────
 const AllScreens = [
   { name: 'Main', component: NavigationMain, showInMenu: false },
   {
     name: 'HomeCad',
+    label: 'CAD Design',
+    desc: 'Sketch, model and export 2D/3D parts',
     component: HomeCad,
-    image: require('./assets/images/navigations/drawing_cad.png'),
+    emoji: '✏️',
+    accent: '#7F77DD', accentBg: '#EEEDFE',
     slogen: [
-      'Unleash Your Creativity with Our CAD App!',
-      'Design, Build, Innovate - Your CAD Journey Starts Here!',
-      'From Concept to Creation: Experience the Power of Our CAD App!',
+      'Unleash your creativity!',
+      'Design, build, innovate.',
+      'Concept to creation.',
     ],
   },
   {
     name: 'HomeTurningMilling',
+    label: 'Turning & Milling',
+    desc: 'Simulate CNC turning programs',
     component: HomeTurningMilling,
-    image: require('./assets/images/navigations/turning.gif'),
+    emoji: '⚙️',
+    accent: '#1D9E75', accentBg: '#E1F5EE',
     slogen: [
-      'Learn CNC G-Code Programming with Our Interactive Turning App!',
-      'Direct Test Your CNC G-Code in a Virtual Turning Environment!',
-      'Transform Raw Materials into Precision Components!',
-      'Experience the Art of Precision Turning!',
-    ]},
+      'G-Code made easy.',
+      'Test CNC programs virtually.',
+      'Precision turning, simulated.',
+    ],
+  },
   {
-    name:'Mechanical measuring tools',
+    name: 'Mechanical measuring tools',
+    label: 'Measuring Tools',
+    desc: 'Calipers, micrometers & gauges',
     component: AllMeasuringTools,
-    image: require('./assets/images/navigations/measuring.png'),
-      slogen: [
-        'Master the Art of Precision with Our Mechanical Measuring Tools App!',
-        'From Micrometers to Calipers: Your Ultimate Guide to Mechanical Measurement!',
-        'Measure Twice, Cut Once - Learn with Our Mechanical Measuring Tools App!',
-      ],
-  }
-  ,{
-    name:'Calculator',
-    component: MetalWeightCalculator,
-  showInMenu: false},
+    emoji: '📏',
+    accent: '#D85A30', accentBg: '#FAECE7',
+    slogen: [
+      'Measure twice, cut once.',
+      'Master precision measurement.',
+    ],
+  },
   {
-    name:'All Gears',
-    component: AllGears, 
+    name: 'Machine Elements',
+    label: 'Machine Elements',
+    desc: 'Gears, shafts, fasteners & bearings',
+    component: MachineElements,
+    emoji: '🔩',
+    accent: '#378ADD', accentBg: '#E6F1FB',
+    slogen: [
+      'Gears, bearings & more.',
+      'Explore mechanical design.',
+    ],
+  },
+  {
+    name: 'robots',
+    label: 'Robotics',
+    desc: 'Kinematics, arms and automation systems',
+    component: Robots,
+    emoji: '🤖',
+    accent: '#D4537E', accentBg: '#FBEAF0',
+    slogen: ['Automate the future.', 'Explore robot kinematics.'],
+  },
+  {
+    name: 'Calculator',
+    component: MetalWeightCalculator,
+    showInMenu: false,
+  },
+  {
+    name: 'Management',
+    label: 'Production management',
+    component: ProductionManagement,
+    emoji: '📋',
+    wide: true,
+    accent: '#854F0B', accentBg: '#FAEEDA',
+    slogen: ['5S, Kaizen & more.', 'Streamline your workflow.'],
   }
 ];
 
-// ── Main Stack ─────────────────────────────────────────────────────────────
+// ── Main stack ─────────────────────────────────────────────────────────────
 export default function MainStack() {
   return (
     <NavigationContainer>
@@ -205,64 +253,44 @@ export default function MainStack() {
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#c0a7e7',
-    paddingHorizontal: 20,
-  },
-  header: {
-    marginTop: 40,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: '#1e293b',
-    letterSpacing: 1,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#94a3b8',
-    marginTop: 5,
-  },
-  cardContainer: {
-    flex: 1,
-  },
-  card: {
-    height: 250,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 15,
-    overflow: 'hidden',
-    elevation: 6,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-  },
-  cardOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: 14,
-    // backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  cardText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-  },
-  toolsImage: {
-    width: '100%',
-    height: '100%',
-  },
-  sloganText: {
-    fontSize: 16,
-    color: '#000',
-    fontWeight:'700',
-    fontStyle:'italic',
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    paddingHorizontal: 5,
-    paddingVertical: 4,
-  },
+const s = StyleSheet.create({
+  safe:       { flex: 1, backgroundColor: '#FFFFFF' },
+  scroll:     { flex: 1, backgroundColor: '#F4F3F8' },
+  body:       { padding: 14, paddingBottom: 32 },
+
+  // header
+  header:     { backgroundColor: '#FFFFFF', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 14, borderBottomWidth: 0.5, borderBottomColor: '#EBEBEB' },
+  headerRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title:      { fontSize: 22, fontWeight: '700', color: '#1A1A2E', letterSpacing: -0.3 },
+  subtitle:   { fontSize: 12, color: '#7F77DD', fontWeight: '500', marginTop: 2 },
+  avatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: '#EEEDFE', borderWidth: 1.5, borderColor: '#AFA9EC', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 13, fontWeight: '700', color: '#534AB7' },
+
+  sectionLabel: { fontSize: 10, fontWeight: '700', color: '#AAAAAA', letterSpacing: 1.4, marginBottom: 10, paddingLeft: 2 },
+
+  // 2-col grid
+  grid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
+
+  // card
+  card:         { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 0.5, borderColor: '#E8E6F0', overflow: 'hidden' },
+  cardWide:     { width: '100%', flexDirection: 'row', marginBottom: 20 },
+  cardImg:      { height: 90, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  cardImgWide:  { width: 110, height: 'auto', flexShrink: 0 },
+  cardEmoji:    { fontSize: 30 },
+  colorBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3 },
+  sloganWrap:   { position: 'absolute', bottom: 8, left: 6, right: 6 },
+  slogan:       { fontSize: 9, fontWeight: '700', fontStyle: 'italic', color: '#1A1A2E', backgroundColor: 'rgba(255,255,255,0.82)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 5, textAlign: 'center' },
+  cardBody:     { padding: 10 },
+  cardBodyWide: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14 },
+  cardName:     { fontSize: 13, fontWeight: '700', color: '#1A1A2E', marginBottom: 3 },
+  cardDesc:     { fontSize: 10, color: '#9898AA', lineHeight: 14 },
+  cardArrow:    { fontSize: 18, marginTop: 6 },
+
+  // tool row
+  toolRow:      { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 0.5, borderColor: '#E8E6F0', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  toolIconBox:  { width: 42, height: 42, borderRadius: 10, backgroundColor: '#FFF8EC', borderWidth: 1, borderColor: '#F5C96A', alignItems: 'center', justifyContent: 'center' },
+  toolName:     { fontSize: 13, fontWeight: '700', color: '#1A1A2E', marginBottom: 2 },
+  toolSub:      { fontSize: 11, color: '#9898AA' },
+  toolChip:     { backgroundColor: '#FFF8EC', borderWidth: 1, borderColor: '#F5C96A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  toolChipText: { fontSize: 10, color: '#854F0B', fontWeight: '600' },
 });
