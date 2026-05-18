@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
-  StatusBar, ScrollView, Animated,
-} from 'react-native';
+import {  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,  StatusBar, ScrollView, Animated, } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -12,10 +9,11 @@ import AllMeasuringTools from './mechanical_engineering/measurings/allmeasuringT
 import MetalWeightCalculator from './mechanical_engineering/calculator/home';
 import MachineElements from './mechanical_engineering/machine_elements/machineElements';
 import Robots from './mechanical_engineering/robots/robotsHome';
+import Workshop from './mechanical_engineering/workshop/workshop';
 import ProductionManagement from './mechanical_engineering/management/management';
 
-const Stack = createNativeStackNavigator();
 
+const Stack = createNativeStackNavigator();
 // ── Animated slogan ────────────────────────────────────────────────────────
 const AnimatedSlogan = ({ slogans, delay = 0 }) => {
   const [index, setIndex] = useState(0);
@@ -132,25 +130,6 @@ const NavigationMain = ({ navigation }) => {
           />
         ))}
 
-        {/* Tools section */}
-        <Text style={[s.sectionLabel, { marginTop: 20 }]}>TOOLS</Text>
-        <TouchableOpacity
-          style={s.toolRow}
-          onPress={() => navigation.navigate('Calculator')}
-          activeOpacity={0.82}
-        >
-          <View style={s.toolIconBox}>
-            <Text style={{ fontSize: 20 }}>🧮</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.toolName}>Metal weight calculator</Text>
-            <Text style={s.toolSub}>Steel, aluminium, brass & more</Text>
-          </View>
-          <View style={s.toolChip}>
-            <Text style={s.toolChipText}>FREE</Text>
-          </View>
-        </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -158,7 +137,6 @@ const NavigationMain = ({ navigation }) => {
 
 // ── Screens config ─────────────────────────────────────────────────────────
 const AllScreens = [
-  { name: 'Main', component: NavigationMain, showInMenu: false },
   {
     name: 'HomeCad',
     label: 'CAD Design',
@@ -219,9 +197,18 @@ const AllScreens = [
     slogen: ['Automate the future.', 'Explore robot kinematics.'],
   },
   {
-    name: 'Calculator',
+    name: 'Engineering calculators',
     component: MetalWeightCalculator,
-    showInMenu: false,
+    label: 'Calculators',
+    desc: 'Material weight & more',
+    emoji: '🧮',
+    accent: '#FFA500', accentBg: '#FFF5E6',
+    slogen: ['Quick calculations.', 'Material weight & more.'],
+  },
+  {
+    name:'Workshop',
+    component:Workshop,
+    label:'Engineering Workshop'
   },
   {
     name: 'Management',
@@ -239,12 +226,13 @@ export default function MainStack() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
+        <Stack.Screen name="Home_Main" component={NavigationMain} options={{ headerShown: false }} />
         {AllScreens.map(screen => (
           <Stack.Screen
             key={screen.name}
             name={screen.name}
             component={screen.component}
-            options={{ headerShown: false }}
+            options={{ headerShown:false }}
           />
         ))}
       </Stack.Navigator>
@@ -285,7 +273,6 @@ const s = StyleSheet.create({
   cardName:     { fontSize: 13, fontWeight: '700', color: '#1A1A2E', marginBottom: 3 },
   cardDesc:     { fontSize: 10, color: '#9898AA', lineHeight: 14 },
   cardArrow:    { fontSize: 18, marginTop: 6 },
-
   // tool row
   toolRow:      { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 0.5, borderColor: '#E8E6F0', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   toolIconBox:  { width: 42, height: 42, borderRadius: 10, backgroundColor: '#FFF8EC', borderWidth: 1, borderColor: '#F5C96A', alignItems: 'center', justifyContent: 'center' },

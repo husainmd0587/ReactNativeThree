@@ -3,58 +3,33 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-
-import AllGears from './gears/allGears'
-import EngineHome from './engine/engineHome'
-import CNCHome from './cnc/cncHome'
-import AllBearings from './bearings/allbearings'
-
+import Welding from "./welding/welding";
+import BlackSmithy from './blacksmithy/blacksmithy';
+import Carpentry from './carpentry/carpentry';
+import ElectricalWiring from './electrical_wiring/electrical_wiring';
+import Fitting from './fitting/fitting';
 
 
 const Stack = createNativeStackNavigator()
 const MODULES = [
-  {
-    name: 'AllGears',
-    label: 'All gears',
-    screen: AllGears,
-    description: 'Spur, helical, bevel & worm gear design and calculations.',
-    badge: 'Gears',
-    icon: '⚙️',
-    accent: '#534AB7',
-    accentBg: '#EEEDFE',
-  },
-  {
-    name: 'AllBearings',
-    label: 'All bearings',
-    screen: AllBearings,
-    description: 'Ball, roller, thrust, tapered, and spherical bearing types.',
-    badge: 'Bearings',
-    icon: '🛞',
-    accent: '#B73E3E',
-    accentBg: '#FDEDED',
-  },
-  {
-    name: 'EngineHome',
-    label: 'Engine',
-    screen: EngineHome,
-    description: 'Piston, bore, stroke, and thermodynamic engine parameters.',
-    badge: 'Engine',
-    icon: '🔩',
-    accent: '#0F6E56',
-    accentBg: '#E1F5EE',
-  },
-  {
-    name: 'CNCHome',
-    label: 'CNC',
-    screen: CNCHome,
-    description: 'Feed rate, spindle speed, G-code toolpaths, and machining ops.',
-    badge: 'CNC',
-    icon: '🛠️',
-    accent: '#854F0B',
-    accentBg: '#FAEEDA',
-  },
+{
+      name: 'WeldingGuide',
+  label: 'Welding Guide',
+  screen: Welding,
+  description: 'Reference for welding techniques and parameters.',
+  badge: 'Weld',
+  icon: '🔧',
+  accent: '#D9534F',
+  accentBg: '#FFECEF',
+},
+ {
+    name:'BlackSmithy',
+    label:'BlackSmithy',
+    screen:BlackSmithy
+ }
 
 ]
+
 
 const ModuleCard = ({ item, onPress }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
@@ -70,11 +45,11 @@ const ModuleCard = ({ item, onPress }) => (
   </TouchableOpacity>
 )
 
-const MAinScreen = ({ navigation }) => (
+const MainScreen = ({ navigation }) => (
   <SafeAreaView style={styles.screen}>
     <View style={styles.header}>
-      <Text style={styles.heading}>Machine elements</Text>
-      <Text style={styles.subheading}>Select a module to get started</Text>
+      <Text style={styles.heading}>Workshop Tools</Text>
+      <Text style={styles.subheading}>Pick a tool or reference</Text>
     </View>
     <FlatList
       data={MODULES}
@@ -95,7 +70,7 @@ const MAinScreen = ({ navigation }) => (
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F4F4F6',
+    backgroundColor: '#F7FBFF',
   },
   header: {
     paddingHorizontal: 20,
@@ -103,14 +78,14 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   heading: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0B3A66',
   },
   subheading: {
     fontSize: 13,
-    color: '#888',
-    marginTop: 3,
+    color: '#4B6B88',
+    marginTop: 4,
   },
   grid: {
     paddingHorizontal: 14,
@@ -119,14 +94,16 @@ const styles = StyleSheet.create({
   row: {
     gap: 12,
     marginBottom: 12,
+    justifyContent: 'space-between',
   },
   card: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-    padding: 16,
+    flex: 0,
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 0,
+    elevation: 2,
+    padding: 14,
     gap: 8,
   },
   iconBox: {
@@ -137,7 +114,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconText: {
-    fontSize: 20,
+    fontSize: 18,
   },
   cardTitle: {
     fontSize: 15,
@@ -152,37 +129,37 @@ const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 999,
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   arrow: {
     alignSelf: 'flex-end',
     fontSize: 16,
-    color: '#aaa',
+    color: '#9AB0CC',
     marginTop: 4,
   },
 })
 
-const MachineElements = () => (
-  <Stack.Navigator>
+const Workshop = () => (
+  <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#F7FBFF' } }}>
     <Stack.Screen
-      name="MAinScreen"
-      component={MAinScreen}
-      options={{ title: 'Machine Elements', headerShown:true }}
+      name="WorkshopHome"
+      component={MainScreen}
+      options={{ title: 'Workshop', headerShown: true }}
     />
     {MODULES.map((mod) => (
       <Stack.Screen
         key={mod.name}
         name={mod.name}
         component={mod.screen}
-        options={{ title: mod.label,headerShown: false }}
+        options={{ title: mod.label, headerShown: false }}
       />
     ))}
   </Stack.Navigator>
 )
 
-export default MachineElements
+export default Workshop

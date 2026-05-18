@@ -4,10 +4,10 @@ import {
   FlatList, SafeAreaView, StatusBar,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-
-
 import FiveSScreen from './5s'
-
+import SixSigmaScreen from './six_sigma'
+import { KaizenScreen,QualityAssuranceScreen,QualityControlScreen,TQMScreen } from './kaizen_and_others'
+import Safety from './safety'
 const Stack = createNativeStackNavigator()
 
 const MODULES = [
@@ -22,6 +22,73 @@ const MODULES = [
     accentBg: '#FBEAF0',
     badgeText: '#993556',
   },
+  {
+    name: 'Safety',
+    label: 'Safety',
+    screen: Safety,
+    description: 'Workplace safety protocols and best practices.',
+    badge: 'Safety',
+    emoji: '⚠️',
+    accent: '#FF5722',
+    accentBg: '#FBE9E7',
+    badgeText: '#D32F2F',
+  },
+  {
+    name: 'SixSigma',
+    label: 'Six Sigma',
+    screen: SixSigmaScreen,
+    description: 'A data-driven approach to eliminate defects and improve processes.',
+    badge: 'Quality',
+    emoji: '🎯',
+    accent: '#4A90E2',
+    accentBg: '#E1F0FA',
+    badgeText: '#2C5DA0',
+  },
+  {
+    name: 'Kaizen',
+    label: 'Kaizen',
+    screen: KaizenScreen,
+    description: 'Continuous improvement methodology.',
+    badge: 'Lean',
+    emoji: '🌱',
+    accent: '#7CB342',
+    accentBg: '#E8F5E9',
+    badgeText: '#388E3C',
+  },
+  {
+    name: 'QualityAssurance',
+    label: 'Quality Assurance',
+    screen: QualityAssuranceScreen,
+    description: 'Ensuring products meet specified requirements.',
+    badge: 'Quality',
+    emoji: '✅',
+    accent: '#50C878',
+    accentBg: '#E8F5E9',
+    badgeText: '#388E3C',
+  },
+  {
+    name: 'QualityControl',
+    label: 'Quality Control',
+    screen: QualityControlScreen,
+    description: 'Monitoring and testing products to ensure they meet quality standards.',
+    badge: 'Quality',
+    emoji: '🔍',
+    accent: '#FFA07A',
+    accentBg: '#FFF5F0',
+    badgeText: '#D32F2F',
+  },
+  {
+    name: 'TQM',
+    label: 'Total Quality Management',
+    screen: TQMScreen,
+    description: 'A comprehensive approach to quality management across the entire organization.',
+    badge: 'Quality',
+    emoji: '📊',
+    accent: '#9C27B0',
+    accentBg: '#F3E5F5',
+    badgeText: '#7B1FA2',
+  }
+
 ]
 
 // ── Row card — full width, compact height ──────────────────────────────────
@@ -58,7 +125,7 @@ const MAinScreen = ({ navigation }) => (
 
     <View style={s.header}>
       <View>
-        <Text style={s.heading}>Machine elements</Text>
+        <Text style={s.heading}>production management</Text>
         <Text style={s.subheading}>Select a module to get started</Text>
       </View>
       <View style={s.headerIcon}>
@@ -94,7 +161,7 @@ const ProductionManagement = () => (
         key={mod.name}
         name={mod.name}
         component={mod.screen}
-        options={{ title: mod.label }}
+         options={{ headerShown: false }}
       />
     ))}
   </Stack.Navigator>

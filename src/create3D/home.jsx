@@ -5,7 +5,6 @@ import Sketch2D from './2d_Old/2dShapes/Sketch2D'
 import ToThreeDScreen from './2d_Old/2dShapes/threeD'
 import Sketching2D from './Sketching2D/main'
 
-
 export const NavigationMain = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
@@ -38,7 +37,7 @@ export const NavigationMain = ({ navigation }) => {
 
 const AllScreens = [
   { name:'Main', component: NavigationMain ,showInMenu:false},
-  { name: 'Sketching2D', component: Sketching2D },
+  { name: 'Sketching2D', component: Sketching2D }, //this is the main sketching screen with all features
   { name: 'Sketch2D', component: Sketch2D },
   { name: 'ToThreeDScreen', component: ToThreeDScreen ,showInMenu:false},
   

@@ -2,13 +2,22 @@ import {  View,Text,StyleSheet, TouchableOpacity,SafeAreaView,  StatusBar,Scroll
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { AllGcodeMcode } from './components/data'
-import { AllScreens } from './NavData'
+import G0 from "./gcodes/code/g0/g0";
+import G0_sim from "./gcodes/code/g0/g0_sim";
+import Turning from './turning/cncTurningDemo'
+
+export const AllScreens = [
+  { name:'G0', component: G0},
+  { name:'G0_Sim', component: G0_sim},
+  { name:'CNCTurning', component: Turning},
+]
 
 
 const Stack = createNativeStackNavigator()
 const HomeTurningMilling = () => {
   return (
       <Stack.Navigator>
+        <Stack.Screen name='Home' component={Home} options={{headerShown:false}} />
          {AllScreens.map(screen => (<Stack.Screen  key={screen.name}  name={screen.name} 
           component={screen.component}  options={{headerShown:false}} /> ))}    
       </Stack.Navigator>
@@ -18,7 +27,7 @@ const HomeTurningMilling = () => {
 
 export default HomeTurningMilling
 //****************** Main home screen ************************** */
-export const NavigationMain = ({ navigation }) => {
+export const Home = ({ navigation }) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -32,8 +41,8 @@ export const NavigationMain = ({ navigation }) => {
         </ScrollView>
       </View>
       <View style={[styles.cardContainer,{backgroundColor:'#9596f7',marginBottom:20}]}>
-         <TouchableOpacity style={[styles.card,{backgroundColor:'#f0cf62',width:'100%'}]} 
-         >
+         <TouchableOpacity onPress={() => navigation.navigate('CNCTurning')}
+         style={[styles.card,{backgroundColor:'#f0cf62',width:'100%'}]} >
            <Text style={styles.cardText}>⚙️ CNC TURNING OPERATIONS (Lathe)</Text>
          </TouchableOpacity>
             <TouchableOpacity style={[styles.card,{backgroundColor:'#f0cf62',width:'100%'}]} 

@@ -3,16 +3,16 @@ import { useLoader } from '@react-three/fiber/native'
 import * as THREE from 'three'
 
 export const Textures = [
-  { name: 'steel',     image: require('../../assets/images/textures/steel.jpg') },
-  { name: 'aluminium', image: require('../../assets/images/textures/aluminium.jpg') },
-  { name: 'copper',    image: require('../../assets/images/textures/copper.jpg') },
-  { name: 'brass',     image: require('../../assets/images/textures/brass.jpg') },
-  { name: 'knurl',     image: require('../../assets/images/textures/knurl.png') },
-  { name: 'wood',      image: require('../../assets/images/textures/woodTextures.jpg') },
-  { name: 'marble',    image: require('../../assets/images/textures/marbels.jpg') },
-  { name: 'wall',      image: require('../../assets/images/textures/wall.jpg') },
-  { name: 'plastic',   image: require('../../assets/images/textures/plastic.jpg') },
-  { name: 'default',   image: require('../../assets/images/textures/sheet.jpg') },
+  { name: 'steel',     image: require('../../assets/images/textures/steel.jpg') ,color:'#888',roughness:0.6,metalness:0.8},
+  { name: 'aluminium', image: require('../../assets/images/textures/aluminium.jpg') ,color:'#ccc',roughness:0.5,metalness:0.5},
+  { name: 'copper',    image: require('../../assets/images/textures/copper.jpg') ,color:'#d2691e',roughness:0.7,metalness:0.9},
+  { name: 'brass',     image: require('../../assets/images/textures/brass.jpg') ,color:'#cd7f32',roughness:0.6,metalness:0.8},
+  { name: 'knurl',     image: require('../../assets/images/textures/knurl.png') ,color:'#888',roughness:0.8,metalness:0.2},
+  { name: 'wood',      image: require('../../assets/images/textures/woodTextures.jpg') ,color:'#d2691e',roughness:0.9,metalness:0.1},
+  { name: 'marble',    image: require('../../assets/images/textures/marbels.jpg') ,color:'#ccc',roughness:0.5,metalness:0.5},
+  { name: 'wall',      image: require('../../assets/images/textures/wall.jpg') ,color:'#888',roughness:0.5,metalness:0.5},
+  { name: 'plastic',   image: require('../../assets/images/textures/plastic.jpg') ,color:'#ccc',roughness:0.5,metalness:0.5},
+  { name: 'default',   image: require('../../assets/images/textures/sheet.jpg') ,color:'#888',roughness:0.5,metalness:0.5},
 ];
 
 const FALLBACK = require('../../assets/images/textures/sheet.jpg');
@@ -23,24 +23,21 @@ const getTexture = (type) => {
   return found ? found.image : FALLBACK;
 };
 
-export function useTextureLoader(type = 'default', width = 100, height = 100) {
-  const texturePath = getTexture(type); // always a valid require()
-  
-  const texture = useLoader(THREE.TextureLoader, texturePath);
-  
+export function useTextureLoader({type='default', width = 512, height = 512,flipY = true, repeat=[4,2]}) {
+  const texturePath = getTexture(type); // always a valid require()  
+  const texture = useLoader(THREE.TextureLoader, texturePath); 
   useEffect(() => {
-    texture.flipY = true;
+    texture.flipY = flipY;
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     const repeatX = Math.max(10, Math.round(width / 50));
     const repeatY = Math.max(10, Math.round(height / 50));
-    texture.repeat.set(.008, .0001);
+    texture.repeat.set(...repeat);
     texture.needsUpdate = true;
   }, [texture, width, height]);
-
   return texture;
 }
 
-//knurl texture 
+//knurl texture
 export function useKnurlTextureLoader() {
   const texture = useLoader(
     THREE.TextureLoader,

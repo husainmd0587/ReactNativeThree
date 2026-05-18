@@ -273,9 +273,12 @@ const changePlane = useCallback((pos, id) => {
     <View style={[S.root, style]}{...(!customGesture && !isScrolling ? events : {})}>
         <Canvas
           camera={camera}
-          shadows
+          shadows={false}
           dpr={[1, 2]}
-          gl={{ physicallyCorrectLights: true, antialias: false  }}
+          gl={{ physicallyCorrectLights: true,    antialias: false,
+    alpha: true,
+    stencil: false,
+    depth: true,  powerPreference: 'high-performance',  }}
           onCreated={CanvaOnCreated}
           fallback={Fallback}
         >
