@@ -7,43 +7,55 @@ import {
   GestureDetector, Gesture,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
+
 import {
   Canvas as SkiaCanvas,
   Path, Skia, Group, Line, Circle, Oval,
-  LinearGradient, vec,
+  LinearGradient,
+  vec,
 } from '@shopify/react-native-skia';
-import { runOnJS, useSharedValue } from 'react-native-reanimated';
+
+import {
+  runOnJS,
+  useSharedValue,
+  useDerivedValue,
+  withRepeat,
+  withTiming,
+  cancelAnimation,
+  Easing,
+} from 'react-native-reanimated';
+
 import { useFrame as useR3FFrame } from '@react-three/fiber/native';
 import useControls from 'r3f-native-orbitcontrols';
-import { useTextureLoader } from '../../../../utils/materials/textures'
-import CanvaPovider from '../../../../provider'
+import { useTextureLoader } from '../../../../utils/materials/textures';
+import CanvaPovider from '../../../../provider';
 import * as THREE from 'three';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 // ── Layout ────────────────────────────────────────────────────
-const HEADER_H   = Platform.OS === 'ios' ? 96 : 58;
-const TOOLBAR_H  = 88;
-const CANVAS_H   = SH - HEADER_H - TOOLBAR_H;
-const CANVAS_W   = SW;
+const HEADER_H  = Platform.OS === 'ios' ? 96 : 58;
+const TOOLBAR_H = 88;
+const CANVAS_H  = SH - HEADER_H - TOOLBAR_H;
+const CANVAS_W  = SW;
 
 // ── Drawing space ─────────────────────────────────────────────
-const PROFILE_SEGS  = 80;
-const STOCK_RADIUS  = Math.min(CANVAS_H * 0.38, 140);
-const AXIS_Y        = CANVAS_H * 0.50;
-const STOCK_LEFT    = 28;
-const STOCK_RIGHT   = CANVAS_W - 28;
-const STOCK_WIDTH   = STOCK_RIGHT - STOCK_LEFT;
+const PROFILE_SEGS = 80;
+const STOCK_RADIUS = Math.min(CANVAS_H * 0.38, 140);
+const AXIS_Y       = CANVAS_H * 0.50;
+const STOCK_LEFT   = 28;
+const STOCK_RIGHT  = CANVAS_W - 28;
+const STOCK_WIDTH  = STOCK_RIGHT - STOCK_LEFT;
 
 // ── Tools ─────────────────────────────────────────────────────
 const TOOLS = [
-  { id: 'roughing', name: 'Roughing',    icon: '▬', color: '#e67e22', width: 24, depth: 9,   shape: 'round'  },
-  { id: 'gouge',    name: 'Bowl Gouge',  icon: '◡', color: '#3498db', width: 14, depth: 5,   shape: 'round'  },
-  { id: 'skew',     name: 'Skew',        icon: '◇', color: '#9b59b6', width: 8,  depth: 3.5, shape: 'flat'   },
-  { id: 'parting',  name: 'Parting',     icon: '|', color: '#e74c3c', width: 3,  depth: 10,  shape: 'narrow' },
-  { id: 'scraper',  name: 'Scraper',     icon: '▱', color: '#1abc9c', width: 22, depth: 1.2, shape: 'flat'   },
-  { id: 'spindle',  name: 'Spindle',     icon: '⟨', color: '#f39c12', width: 5,  depth: 6,   shape: 'point'  },
-  { id: 'bead',     name: 'Bead',        icon: '◉', color: '#ff6b9d', width: 6,  depth: 4,   shape: 'round'  },
+  { id: 'roughing', name: 'Roughing',   icon: '▬', color: '#e67e22', width: 24, depth: 9,   shape: 'round'  },
+  { id: 'gouge',    name: 'Bowl Gouge', icon: '◡', color: '#3498db', width: 14, depth: 5,   shape: 'round'  },
+  { id: 'skew',     name: 'Skew',       icon: '◇', color: '#9b59b6', width: 8,  depth: 3.5, shape: 'flat'   },
+  { id: 'parting',  name: 'Parting',    icon: '|', color: '#e74c3c', width: 3,  depth: 10,  shape: 'narrow' },
+  { id: 'scraper',  name: 'Scraper',    icon: '▱', color: '#1abc9c', width: 22, depth: 1.2, shape: 'flat'   },
+  { id: 'spindle',  name: 'Spindle',    icon: '⟨', color: '#f39c12', width: 5,  depth: 6,   shape: 'point'  },
+  { id: 'bead',     name: 'Bead',       icon: '◉', color: '#ff6b9d', width: 6,  depth: 4,   shape: 'round'  },
 ];
 
 const MATERIALS = [
@@ -55,7 +67,7 @@ const MATERIALS = [
 ];
 
 // ── Profile helpers ───────────────────────────────────────────
-const makeProfile = () => new Array(PROFILE_SEGS).fill(STOCK_RADIUS);
+const makeProfile = () =>new Float32Array(PROFILE_SEGS).fill(STOCK_RADIUS);
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -70,7 +82,7 @@ function applyTool(profile, cx, cy, tool) {
   const dist = Math.abs(cy - AXIS_Y);
   if (dist < 2 || cx < STOCK_LEFT || cx > STOCK_RIGHT) return profile;
 
-  const next = profile.slice();
+  const next = Float32Array.from(profile);
   const seg  = xToSeg(cx);
   const half = Math.floor(tool.width / 2);
 
@@ -94,11 +106,11 @@ function applyTool(profile, cx, cy, tool) {
 function smooth(profile, str = 0.4) {
   const o = profile.slice();
   for (let i = 1; i < profile.length - 1; i++)
-    o[i] = profile[i] * (1 - str) + (profile[i-1] + profile[i+1]) / 2 * str;
+    o[i] = profile[i] * (1 - str) + (profile[i - 1] + profile[i + 1]) / 2 * str;
   return o;
 }
 
-// ── Skia path builders — silhouette stays constant ────────────
+// ── Skia path builders ────────────────────────────────────────
 function fillPath(profile) {
   const p = Skia.Path.Make();
   p.moveTo(STOCK_LEFT, AXIS_Y - profile[0]);
@@ -117,40 +129,13 @@ function fillPath(profile) {
   return p;
 }
 
-function outlinePath(profile) {
-  const p = Skia.Path.Make();
-  for (let i = 0; i < PROFILE_SEGS; i++) {
-    const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-    const y = AXIS_Y - profile[i];
-    i === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-  }
-  for (let i = PROFILE_SEGS - 1; i >= 0; i--) {
-    const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-    const y = AXIS_Y + profile[i];
-    p.lineTo(x, y);
-  }
-  p.close();
-  return p;
-}
-
-// Highlight path — X offset shifts with rotOffset for moving specular
-function highlightPath(profile, rotOffset) {
-  const p = Skia.Path.Make();
-  const offsetX = rotOffset * 22;
-  for (let i = 0; i < PROFILE_SEGS; i++) {
-    const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH + offsetX;
-    const y = AXIS_Y - profile[i] * 0.72;
-    i === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-  }
-  return p;
-}
 
 // ── 3D: LatheGeometry from profile ───────────────────────────
 const WORLD_H = 4.0;
 const WORLD_R = 1.8;
 
 function PotteryMesh({ profile, mat, autoRotate }) {
-  const ref = useRef();
+  const ref     = useRef();
   const texture = useTextureLoader({});
 
   useR3FFrame((_, dt) => {
@@ -171,9 +156,7 @@ function PotteryMesh({ profile, mat, autoRotate }) {
     return g;
   }, [profile]);
 
-  useEffect(() => {
-    return () => geo.dispose();
-  }, [geo]);
+  useEffect(() => { return () => geo.dispose(); }, [geo]);
 
   const material = useMemo(() => new THREE.MeshStandardMaterial({
     color: new THREE.Color(mat.color),
@@ -183,9 +166,7 @@ function PotteryMesh({ profile, mat, autoRotate }) {
     side: THREE.DoubleSide,
   }), [mat]);
 
-  useEffect(() => {
-    return () => material.dispose();
-  }, [material]);
+  useEffect(() => { return () => material.dispose(); }, [material]);
 
   return (
     <group ref={ref} position={[0, -WORLD_H / 2, 0]}>
@@ -199,13 +180,11 @@ function Scene3D({ profile, mat, autoRotate }) {
     <>
       <color attach="background" args={['#0a0a18']} />
       <ambientLight intensity={0.35} color="#ffe8d0" />
-      <directionalLight position={[4, 8, 4]}  intensity={1.4} castShadow color="#ffffff" />
-      <directionalLight position={[-4, 3, -2]} intensity={0.45} color="#a0c8ff" />
-      <pointLight       position={[0, 6, 2]}   intensity={0.8}  color="#ffd0a0" distance={10} />
-      <pointLight       position={[0, -1, 4]}  intensity={0.3}  color="#ffffff"  distance={6}  />
-
+      <directionalLight position={[4, 8, 4]}   intensity={1.4} castShadow color="#ffffff" />
+      <directionalLight position={[-4, 3, -2]}  intensity={0.45} color="#a0c8ff" />
+      <pointLight       position={[0, 6, 2]}    intensity={0.8}  color="#ffd0a0" distance={10} />
+      <pointLight       position={[0, -1, 4]}   intensity={0.3}  color="#ffffff"  distance={6}  />
       <PotteryMesh profile={profile} mat={mat} autoRotate={autoRotate} />
-
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -WORLD_H / 2, 0]} receiveShadow>
         <circleGeometry args={[4, 48]} />
         <meshStandardMaterial color="#141428" roughness={1} />
@@ -216,81 +195,93 @@ function Scene3D({ profile, mat, autoRotate }) {
 
 // ── 2D canvas ─────────────────────────────────────────────────
 function DrawingCanvas({ profile, onProfile, tool }) {
-  // ── FAKE 3D ROTATION ────────────────────────────────────────
-  // rotFactor: -1 to 1 sine wave, drives gradient + highlight
-  const [rotFactor, setRotFactor] = useState(0);
-  // angleRef for ring phases (needs to be ref for access in render without re-render)
-  const angleRef = useRef(0);
-  const isSpinningRef = useRef(true);
-  const spinRafRef = useRef(null);
+// Shared angle value (UI thread)
+const angle = useSharedValue(0);
+const startSpin = () => {
+  angle.value = withRepeat(
+    withTiming(Math.PI * 2, {
+      duration: 2200,
+      easing: Easing.linear,
+    }),
+    -1,
+    false
+  );
+};
 
-  useEffect(() => {
-    let lastTime = Date.now();
+useEffect(() => {
+  startSpin();
+  return () => cancelAnimation(angle);
+}, []);
 
-    const spinLoop = () => {
-      const now = Date.now();
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
+// Animated gradient start
+const gradStartX = useDerivedValue(() => {
+  return vec(
+    CANVAS_W * (0.28 + Math.sin(angle.value) * 0.18),
+    AXIS_Y - STOCK_RADIUS
+  );
+});
 
-      if (isSpinningRef.current) {
-        angleRef.current += dt * 3;
-        setRotFactor(Math.sin(angleRef.current));
-      }
+// Animated gradient end
+const gradEndX = useDerivedValue(() => {
+  return vec(
+    CANVAS_W * (0.62 + Math.sin(angle.value) * 0.14),
+    AXIS_Y + STOCK_RADIUS
+  );
+});
 
-      spinRafRef.current = requestAnimationFrame(spinLoop);
-    };
 
-    spinRafRef.current = requestAnimationFrame(spinLoop);
 
-    return () => {
-      if (spinRafRef.current) cancelAnimationFrame(spinRafRef.current);
-    };
-  }, []);
-
-  // Reanimated shared values for gesture (worklet-safe)
-  const prevX = useSharedValue(0);
-  const prevY = useSharedValue(0);
-
-  // Cursor - plain React state for position
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0, visible: false });
+const cursorX = useSharedValue(0);
+const cursorY = useSharedValue(0);
+const cursorVisible = useSharedValue(0);
 
   // RAF batching refs
-  const pendingPoint = useRef(null);
-  const rafRef = useRef(null);
-  const isProcessing = useRef(false);
-
+  const pendingPoint    = useRef(null);
+  const rafRef          = useRef(null);
+  const isProcessing    = useRef(false);
   const lastReactUpdate = useRef(0);
-  const profileRef = useRef(profile);
-
-  profileRef.current = profile;
+  const profileRef      = useRef(profile);
+  profileRef.current    = profile;
+  const toolRef = useRef(tool);
+  useEffect(() => { toolRef.current = tool; }, [tool]);
 
   const updatePendingPoint = useCallback((x, y) => {
     pendingPoint.current = { x, y };
   }, []);
 
+  // onProfile removed from deps — it's stable (useState setter).
+  // tool removed — toolRef handles it.
   const processCut = useCallback(() => {
     if (!isProcessing.current) {
       rafRef.current = null;
       return;
     }
 
-    const point = pendingPoint.current;
-    pendingPoint.current = null;
+const point = pendingPoint.current;
+
+if (!point) {
+  rafRef.current = requestAnimationFrame(processCut);
+  return;
+}
+
+pendingPoint.current = null;
 
     if (point) {
-      let next = applyTool(profileRef.current, point.x, point.y, tool);
-      if (tool.id === 'scraper') next = smooth(next, 0.35);
+      // Always reads toolRef.current — never stale
+      const currentTool = toolRef.current;
+      let next = applyTool(profileRef.current, point.x, point.y, currentTool);
+      if (currentTool.id === 'scraper') next = smooth(next, 0.35);
       profileRef.current = next;
 
       const now = Date.now();
-      if (now - lastReactUpdate.current > 30) {
+      if (now - lastReactUpdate.current > 80) {
         lastReactUpdate.current = now;
         onProfile([...next]);
       }
     }
 
     rafRef.current = requestAnimationFrame(processCut);
-  }, [tool, onProfile]);
+  }, [onProfile]);
 
   const startProcessing = useCallback(() => {
     if (!isProcessing.current) {
@@ -316,52 +307,73 @@ function DrawingCanvas({ profile, onProfile, tool }) {
     }
   }, [onProfile]);
 
-  const gesture = Gesture.Pan()
-    .minDistance(0)
-    .onBegin(e => {
-      'worklet';
-      isSpinningRef.current = false;
 
-      prevX.value = e.x;
-      prevY.value = e.y;
 
-      runOnJS(setCursorPos)({ x: e.x, y: e.y, visible: true });
-      runOnJS(startProcessing)();
-      runOnJS(updatePendingPoint)(e.x, e.y);
-    })
-    .onUpdate(e => {
-      'worklet';
-      runOnJS(setCursorPos)({ x: e.x, y: e.y, visible: true });
-      runOnJS(updatePendingPoint)(e.x, e.y);
 
-      prevX.value = e.x;
-      prevY.value = e.y;
-    })
-    .onEnd(() => {
-      'worklet';
-      isSpinningRef.current = true;
+const gesture = Gesture.Pan()
+  .minDistance(0)
 
-      runOnJS(setCursorPos)({ x: 0, y: 0, visible: false });
-      runOnJS(stopProcessing)();
-      runOnJS(syncReactState)();
-    });
+  .onBegin((e) => {
+    'worklet';
+    // stop pottery spin
+    cancelAnimation(angle);
 
-  // ── Paths — silhouette stays constant ─────────────────────
+    // cursor (UI thread only)
+    cursorX.value = e.x;
+    cursorY.value = e.y;
+    cursorVisible.value = 1;
+
+    // start cutting loop
+    runOnJS(startProcessing)();
+    runOnJS(updatePendingPoint)(e.x, e.y);
+  })
+
+  .onUpdate((e) => {
+    'worklet';
+    // update cursor on UI thread
+    cursorX.value = e.x;
+    cursorY.value = e.y;
+    // update cutting point
+    runOnJS(updatePendingPoint)(e.x, e.y);
+  })
+
+  .onEnd(() => {
+    'worklet';
+    // hide cursor
+    cursorVisible.value = 0;
+    // restart spinning
+    angle.value = withRepeat(
+      withTiming(Math.PI * 2, {
+        duration: 2200,
+        easing: Easing.linear,
+      }),
+      -1,
+      false
+    );
+
+    // stop carving
+    runOnJS(stopProcessing)();
+    runOnJS(syncReactState)();
+  });
+
+
+
+  // ── Paths ─────────────────────────────────────────────────────
+  // Silhouette paths — only rebuild when profile changes (not 60fps)
   const fp = useMemo(() => fillPath(profile), [profile]);
-  const op = useMemo(() => outlinePath(profile), [profile]);
-  const hp = useMemo(() => highlightPath(profile, rotFactor), [profile, rotFactor]);
+ 
 
-  // Rings — ry fixed, rx will animate in render
   const rings = useMemo(() => {
     const out = [];
-    for (let i = 6; i < PROFILE_SEGS - 6; i += 12) {
+    for (let i = 6; i < PROFILE_SEGS - 6; i += 11) {
       const x  = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
       const ry = profile[i];
-      out.push({ x, ry });
+      out.push({ x, ry, segIdx: i });
     }
     return out;
   }, [profile]);
 
+  // Tool cursor shape — only rebuilds when tool changes
   const toolCursor = useMemo(() => {
     const halfW = tool.width / 2;
     const p = Skia.Path.Make();
@@ -371,15 +383,15 @@ function DrawingCanvas({ profile, onProfile, tool }) {
       p.quadTo(0, -halfW * 1.5, halfW, 0);
       p.lineTo(-halfW, 0);
       p.close();
-    } else if (tool.shape === 'flat' || tool.shape === 'scraper') {
+    } else if (tool.shape === 'flat') {
       p.addRect({ x: -halfW, y: -4, width: halfW * 2, height: 8 });
-    } else if (tool.shape === 'point' || tool.shape === 'spindle') {
+    } else if (tool.shape === 'point') {
       p.moveTo(0, -halfW);
       p.lineTo(halfW, halfW);
       p.lineTo(-halfW, halfW);
       p.close();
     } else if (tool.shape === 'narrow') {
-      p.addRect({ x: -1, y: -10, width: 2, height: 20 });
+      p.addRect({ x: -1.5, y: -12, width: 3, height: 24 });
     } else {
       p.addRect({ x: -halfW, y: -4, width: halfW * 2, height: 8 });
     }
@@ -387,15 +399,20 @@ function DrawingCanvas({ profile, onProfile, tool }) {
     return p;
   }, [tool]);
 
-  // Gradient shift based on rotFactor
-  const gradStartX = CANVAS_W * (0.2 + rotFactor * 0.25);
-  const gradEndX = CANVAS_W * (0.55 + rotFactor * 0.2);
+const axisLines = useMemo(
+  () => Array.from({ length: 12 }),
+  []
+);
 
+const depthLines = useMemo(
+  () => Array.from({ length: 15 }),
+  []
+);
   return (
     <GestureDetector gesture={gesture}>
       <SkiaCanvas style={{ width: CANVAS_W, height: CANVAS_H }}>
 
-        {/* Lathe bed - horizontal rails */}
+        {/* Lathe bed rails */}
         <Line p1={vec(STOCK_LEFT - 8, AXIS_Y - 3)} p2={vec(STOCK_RIGHT + 8, AXIS_Y - 3)}
           strokeWidth={5} color="#1e3a5f" />
         <Line p1={vec(STOCK_LEFT - 8, AXIS_Y + 3)} p2={vec(STOCK_RIGHT + 8, AXIS_Y + 3)}
@@ -406,113 +423,94 @@ function DrawingCanvas({ profile, onProfile, tool }) {
           strokeWidth={2} color="#3b6fa0" />
 
         {/* Center axis dashes */}
-        {Array.from({ length: 12 }).map((_, i) => (
+        {axisLines.map((_, i) => (
           <Line key={i}
             p1={vec(STOCK_LEFT + i * (STOCK_WIDTH / 12), AXIS_Y)}
             p2={vec(STOCK_LEFT + (i + 0.42) * (STOCK_WIDTH / 12), AXIS_Y)}
             strokeWidth={1} color="rgba(59,130,246,0.3)" />
         ))}
 
-        {/* Stock fill — silhouette constant, gradient animates */}
         <Path path={fp} style="fill">
+
           <LinearGradient
-            start={vec(gradStartX, AXIS_Y - STOCK_RADIUS)}
-            end={vec(gradEndX, AXIS_Y + STOCK_RADIUS)}
-            colors={['#3a1a08', '#7a3818', '#ecb898', '#ffd8b8', '#c07848', '#3a1a08']}
+           start={gradStartX.value}
+            end={gradEndX.value}
+            colors={[
+              '#2a0e04',
+              '#6a2c10',
+              '#b86030',
+              '#ecb898',
+              '#fad0b0',
+              '#d08858',
+              '#7a3a18',
+              '#2a0e04',
+            ]}
           />
+
         </Path>
 
         {/* Cross-section depth lines */}
-        {Array.from({ length: 15 }).map((_, i) => {
+        {depthLines.map((_, i) => {
           const idx = Math.floor((i / 15) * PROFILE_SEGS);
           const x   = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
           const r   = profile[idx];
           return (
-            <Line key={i} p1={vec(x, AXIS_Y - r)} p2={vec(x, AXIS_Y + r)}
-              strokeWidth={0.35} color="rgba(140,60,20,0.15)" />
+            <Line key={i}
+              p1={vec(x, AXIS_Y - r)}
+              p2={vec(x, AXIS_Y + r)}
+              strokeWidth={0.3} color="rgba(140,60,20,0.12)" />
           );
         })}
 
-        {/* Rotation rings — rx animates with phase, ry fixed */}
-        <Group opacity={0.22}>
-          {rings.map((r, i) => {
-            const phase = (i / rings.length) * Math.PI;
-            const animRx = Math.abs(Math.sin(angleRef.current * 2 + phase)) * r.ry * 0.13;
-            if (animRx < 0.5) return null;
-            return (
-              <Oval key={i}
-                x={r.x - animRx} y={AXIS_Y - r.ry}
-                width={animRx * 2} height={r.ry * 2}
-                color="#ffcc88" style="stroke" strokeWidth={0.8} />
-            );
-          })}
-        </Group>
+        {/* Cross-section rings — rendered statically; rx animation
+            removed because it required setState at 60fps per ring.
+            The gradient sweep already gives the rotation feel. */}
+  <Group opacity={0.22}>
+  {rings.map((r, i) => (
+    <Oval
+      key={i}
+      x={r.x - r.ry * 0.12}
+      y={AXIS_Y - r.ry}
+      width={r.ry * 0.24}
+      height={r.ry * 2}
+      color="#ffcc88"
+      style="stroke"
+      strokeWidth={0.7}
+    />
+  ))}
+</Group>
 
-        {/* Highlight streak — X shifts with rotFactor */}
-        <Path path={hp} style="stroke" strokeWidth={2.5}
-          color="rgba(255,230,190,0.30)" />
-
-        {/* Silhouette — constant */}
-        <Path path={op} style="stroke" strokeWidth={2.5} color="#5c2a10" />
-
-        {/* Stock OD guide — constant */}
-        <Line p1={vec(STOCK_LEFT, AXIS_Y - STOCK_RADIUS)}
-              p2={vec(STOCK_RIGHT, AXIS_Y - STOCK_RADIUS)}
-              strokeWidth={1} color="rgba(255,70,70,0.18)" />
-        <Line p1={vec(STOCK_LEFT, AXIS_Y + STOCK_RADIUS)}
-              p2={vec(STOCK_RIGHT, AXIS_Y + STOCK_RADIUS)}
-              strokeWidth={1} color="rgba(255,70,70,0.18)" />
-
-        {/* End caps — always static */}
-        <Line p1={vec(STOCK_LEFT, AXIS_Y - profile[0])}
-              p2={vec(STOCK_LEFT, AXIS_Y + profile[0])}
-              strokeWidth={3} color="#5c2a10" />
-        <Line p1={vec(STOCK_RIGHT, AXIS_Y - profile[PROFILE_SEGS - 1])}
-              p2={vec(STOCK_RIGHT, AXIS_Y + profile[PROFILE_SEGS - 1])}
-              strokeWidth={3} color="#5c2a10" />
-
-        {/* Axis dot */}
         <Circle cx={CANVAS_W / 2} cy={AXIS_Y} r={3} color="#3b82f6" />
-
-        {/* Ruler ticks */}
         {Array.from({ length: 6 }).map((_, i) => {
           const x = STOCK_LEFT + (i / 5) * STOCK_WIDTH;
-          return <Line key={i} p1={vec(x, AXIS_Y - 10)} p2={vec(x, AXIS_Y - 4)}
-            strokeWidth={1} color="rgba(70,110,160,0.45)" />;
+          return (
+            <Line key={i}
+              p1={vec(x, AXIS_Y - 10)}
+              p2={vec(x, AXIS_Y - 4)}
+              strokeWidth={1} color="rgba(70,110,160,0.45)" />
+          );
         })}
 
-        {/* TOOL CURSOR — plain transform */}
-        {cursorPos.visible && (
-          <Group transform={[{ translateX: cursorPos.x }, { translateY: cursorPos.y }]}>
+        {/* Tool cursor */}
+              <Group
+              opacity={cursorVisible}
+              transform={[
+                { translateX: cursorX.value },
+                { translateY: cursorY.value },
+              ]}
+            >
             <Path
               path={toolCursor}
               style="fill"
               color={tool.color + '40'}
               transform={[{ translateX: 2 }, { translateY: 2 }]}
             />
-            <Path
-              path={toolCursor}
-              style="fill"
-              color={tool.color + 'CC'}
-            />
-            <Path
-              path={toolCursor}
-              style="stroke"
-              strokeWidth={1.5}
-              color="#ffffff"
-            />
+            <Path path={toolCursor} style="fill"   color={tool.color + 'CC'} />
+            <Path path={toolCursor} style="stroke"  strokeWidth={1.5} color="#ffffff" />
             <Circle cx={0} cy={0} r={2} color="#ffffff" />
-            <Circle
-              cx={0}
-              cy={0}
-              r={tool.width / 2}
-              color={tool.color}
-              style="stroke"
-              strokeWidth={1}
-              opacity={0.5}
-            />
+            <Circle cx={0} cy={0} r={tool.width / 2}
+              color={tool.color} style="stroke" strokeWidth={1} opacity={0.5} />
           </Group>
-        )}
 
       </SkiaCanvas>
     </GestureDetector>
@@ -521,14 +519,15 @@ function DrawingCanvas({ profile, onProfile, tool }) {
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function FreehandTurning() {
-  const [profile,    setProfile]   = useState(makeProfile);
-  const [tool,       setTool]      = useState(TOOLS[0]);
-  const [is3D,       setIs3D]      = useState(false);
-  const [matIdx,     setMatIdx]    = useState(0);
-  const [autoRotate, setAutoRot]   = useState(true);
-  const [OrbitControls] = useControls();
+  const [profile,    setProfile]  = useState(makeProfile);
+  const [tool,       setTool]     = useState(TOOLS[0]);
+  const [is3D,       setIs3D]     = useState(false);
+  const [matIdx,     setMatIdx]   = useState(0);
+  const [autoRotate, setAutoRot]  = useState(true);
+  const [OrbitControls]           = useControls();
 
   const mat = MATERIALS[matIdx];
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor="#090910" />
@@ -579,12 +578,13 @@ export default function FreehandTurning() {
         </View>
 
         {/* Body */}
-        <View style={s.body}  >
+        <View style={s.body}>
           {is3D ? (
-            <View style={{ flex: 1 }} >
-             <CanvaPovider camPosition={[0,0,7]}>
-                  <Scene3D profile={profile} mat={mat} autoRotate={autoRotate}  />
-             </CanvaPovider>
+            <View style={{ flex: 1 }}>
+              <CanvaPovider camPosition={[0, 0, 7]}>
+                <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} />
+              </CanvaPovider>
+
               {/* Material selector */}
               <View style={s.matBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}

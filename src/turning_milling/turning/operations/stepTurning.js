@@ -28,7 +28,6 @@ function RadiusAtZ(profile, z) {
 function generateCncPasses(profile, rawRadius, maxDepthPerPass) {
   const allProfiles = []
   let currentProfile = profile.map(p => ({ z: p.z, r: rawRadius }))
-
   while (true) {
     const nextProfile = profile.map((p, i) => {
       const targetR = p.r
@@ -38,7 +37,6 @@ function generateCncPasses(profile, rawRadius, maxDepthPerPass) {
       }
       return { ...p }
     })
-
     allProfiles.push(nextProfile)
 
     if (nextProfile.every((p, i) => p.r <= profile[i].r + 0.0001)) break
@@ -129,7 +127,7 @@ const rawGeometry = useMemo(() => {
     if (toolZ.current >= z1) {
       stepRef.current = next
       if (stepRef.current === currentProfile.length - 1) {
-        passRef.current += 1
+        passRef.current += 1 
         setPassIndex(passRef.current)
         stepRef.current = 0
         toolZ.current = currentProfile[0].z

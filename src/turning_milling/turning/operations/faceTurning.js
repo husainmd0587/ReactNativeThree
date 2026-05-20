@@ -86,7 +86,7 @@ function Scene({
   const faceCapRef = useRef()
   const backCapRef = useRef()
 
-  const texture = useTextureLoader()
+  const texture = useTextureLoader({type:'default'})
 
   /* ---------------- PASSES ---------------- */
   const allProfiles = useMemo(

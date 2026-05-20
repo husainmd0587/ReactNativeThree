@@ -45,10 +45,8 @@ function Scene() {
   const partRef = useRef()
   const toolRef = useRef()
   const spindleRef=useRef()
-
   const tool = useRef({ z: -0.5, feed: 0.035,running: true, })
   const radiusProfile = useRef(Array(SEGMENTS).fill(START_RADIUS))
-
   const cutCounter = useRef(0)
   const dirty = useRef(false)
 

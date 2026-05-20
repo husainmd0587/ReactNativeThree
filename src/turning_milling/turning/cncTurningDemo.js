@@ -18,8 +18,9 @@ import OuterThreading  from './operations/threads'
 import DrillingOperation from './operations/drilling'
 import KnurlingOperation,{KnurlByTexture} from './operations/knurling'
 import PartingOperations from './operations/parting'
+import Parting2 from './operations/parting2';
 import FreehandTurning from './operations/freehandTurning/freehandTurning'
-
+import FreehandTurning2 from './operations/freehandTurning/freehandTurning2';
 import StepWithCsg from './operations/stepWithCSGTurning/stepCsg'
 
 const CNCOperations=[
@@ -31,7 +32,9 @@ const CNCOperations=[
   {name:'Knurling',component:KnurlingOperation},
   {name:'Knurling by texture',component:KnurlByTexture},
   {name:'Parting',component:PartingOperations},
+  {name:'Parting2', component:Parting2},
   {name:'Freehand Turning',component:FreehandTurning},
+  {name:'Freehand Turning2',component:FreehandTurning2},
   {name:'Step Turning with CSG',component:StepWithCsg},
 ]
 
