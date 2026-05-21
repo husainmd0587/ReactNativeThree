@@ -141,8 +141,8 @@ const rawGeometry = useMemo(() => {
     toolRef.current?.position.set(toolX, toolZ.current, 0)
     clipPlane.constant = -toolZ.current
 
-    partRef.current.rotation.y += 0.01
-    rawPartRef.current.rotation.y += 0.01
+    partRef.current.rotation.y += 0.04
+    rawPartRef.current.rotation.y += 0.04
 
     const rawProfile = allProfiles[Math.max(passRef.current - 1, 0)]
     const faceRadius = RadiusAtZ(rawProfile, toolZ.current)
@@ -208,7 +208,7 @@ const rawGeometry = useMemo(() => {
  
 export function StepTurning() {
   return (
-    <CanvaPovider>
+    <CanvaPovider camPosition={[0,0,5]}>
       <Scene />
     </CanvaPovider>
   )

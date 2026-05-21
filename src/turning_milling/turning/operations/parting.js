@@ -34,7 +34,8 @@ function buildLeft(profile, partingZ) {
   clipped.push({ z: partingZ, r: rAtCut })
 
   const pts = clipped.map(p => new THREE.Vector2(p.r, p.z))
-  pts.unshift(new THREE.Vector2(0, pts[0].y))
+  pts.push(new THREE.Vector2(0, pts.at(-1).y))
+    console.log('pts---',pts)
   return makeLathe(pts)
 }
 
@@ -50,6 +51,7 @@ function buildRight(profile, partingZ, partingWidth) {
 
   const pts = clipped.map(p => new THREE.Vector2(p.r, p.z))
   pts.unshift(new THREE.Vector2(0, pts[0].y))
+
   return makeLathe(pts)
 }
 
@@ -89,15 +91,15 @@ const PROFILE = [
   { z:  3, r: 0.5 },
   { z:  3, r: 0 },
 ]
-const PARTING_Z     = 1
-const PARTING_WIDTH = 0.15
+const PARTING_Z     = -1
+const PARTING_WIDTH = 0.20
 const TOOL_START_X  = 2.0   // tool rests here before cut
-const CUT_SPEED     = 0.4   // units / second (radial feed)
-const SEP_SPEED     = 0.5   // part separation speed
+const CUT_SPEED     = 0.2   // units / second (radial feed)
+const SEP_SPEED     = 0.3   // part separation speed
 
 export default function Scene() {
   // animation state as refs (mutated in useFrame, no re-renders)
-  const phase       = useRef(PHASE.CUT)
+  const phase       = useRef(PHASE.IDLE)
   const cutProgress = useRef(0)   // 0 = not started, 1 = fully cut
   const sepProgress = useRef(0)   // 0 = touching, 1 = separated
 
@@ -112,7 +114,7 @@ export default function Scene() {
   // ── static geometries (left / right never change shape) ──
   const leftGeo  = useMemo(() => buildLeft(PROFILE, PARTING_Z), [])
   const rightGeo = useMemo(() => buildRight(PROFILE, PARTING_Z, PARTING_WIDTH), [])
-
+  const partingGeo= useMemo(() => buildLeft(PROFILE, PARTING_Z,PARTING_WIDTH, 0), [])
   // parting geo is rebuilt each frame during cut — start with full
   const partingGeoRef = useRef(buildParting(PROFILE, PARTING_Z, PARTING_WIDTH, 0))
 
@@ -128,9 +130,9 @@ export default function Scene() {
     const right= rightRef.current
 
     // spin workpiece
-    if (left)  left.rotation.y  += 0.06
-    if (right) right.rotation.y += 0.06
-    if (mid)   mid.rotation.y   += 0.06
+    if (left)  left.rotation.y  += 0.04
+    if (right) right.rotation.y += 0.04
+    if (mid)   mid.rotation.y   += 0.04
 
     // ── PHASE: CUT ──────────────────────────────────────────
     if (phase.current === PHASE.CUT) {
@@ -170,29 +172,23 @@ export default function Scene() {
       if (sepProgress.current >= 1) phase.current = PHASE.DONE
     }
   })
-
+ const Materials=<meshStandardMaterial metalness={0.5} map={texture} roughness={0.3} color="#c8a882"   side={THREE.DoubleSide}/>
   return (
     <>
       {/* LEFT */}
       <mesh ref={leftRef} geometry={leftGeo}>
-        <meshStandardMaterial metalness={0.5} map={texture} roughness={0.3} color="#c8a882"   side={THREE.DoubleSide}/>
+        {Materials}
       </mesh>
 
       {/* RIGHT */}
       <mesh ref={rightRef} geometry={rightGeo}>
-        <meshStandardMaterial metalness={0.5}  map={texture} roughness={0.3} color="#c8a882"   side={THREE.DoubleSide}/>
+        {Materials}
       </mesh>
 
       {/* PARTING STRIP */}
       <mesh ref={midRef} position={[0, PARTING_Z, 0]}>
         <primitive object={partingGeoRef.current} attach="geometry" />
-        <meshStandardMaterial
-          color="#fff"
-           map={texture}
-          metalness={0.5}
-          roughness={0.3}
-          side={THREE.DoubleSide}
-        />
+       {Materials}
       </mesh>
 
       {/* TOOL — starts parked at maxR, Y centred on parting zone */}

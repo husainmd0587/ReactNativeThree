@@ -1,22 +1,15 @@
-import React, { useMemo, useRef, forwardRef, useState } from 'react'
+import React, { useMemo, useRef, useState, useCallback,useEffect } from 'react'
 import { useFrame } from '@react-three/fiber/native'
 import * as THREE from 'three'
 import { useTextureLoader } from '../../../utils/materials/textures'
 import CanvaPovider from '../../../provider'
+// ─── phases ──────────────────────────────────────────────────────
+const PHASE = { IDLE: 0, CUT: 1, SEPARATE: 2, DONE: 3 }
 
-/* ---------------- TOOL ---------------- */
-export const Tool = forwardRef((_, ref) => (
-  <mesh ref={ref}>
-    <boxGeometry args={[0.2, 0.4, 0.2]} />
-    <meshStandardMaterial color="orange" />
-  </mesh>
-))
-
-/* ---------------- HELPERS ---------------- */
-function RadiusAtZ(profile, z) {
+// ─── helpers ─────────────────────────────────────────────────────
+function radiusAtZ(profile, z) {
   for (let i = 0; i < profile.length - 1; i++) {
-    const p0 = profile[i]
-    const p1 = profile[i + 1]
+    const p0 = profile[i], p1 = profile[i + 1]
     if (z >= p0.z && z <= p1.z) {
       const t = (z - p0.z) / Math.max(p1.z - p0.z, 0.0001)
       return p0.r + t * (p1.r - p0.r)
@@ -25,230 +18,173 @@ function RadiusAtZ(profile, z) {
   return profile.at(-1).r
 }
 
-function generateCncPasses(profile, rawRadius, maxDepthPerPass) {
-  const allProfiles = []
-  let currentProfile = profile.map(p => ({ z: p.z, r: rawRadius }))
-
-  while (true) {
-    const nextProfile = profile.map((p, i) => {
-      const currentR = currentProfile[i].r
-      return {
-        z: p.z,
-        r: Math.max(p.r, currentR - maxDepthPerPass),
-      }
-    })
-
-    allProfiles.push(nextProfile)
-
-    if (nextProfile.every((p, i) => p.r <= profile[i].r + 1e-4)) break
-    currentProfile = nextProfile
-  }
-
-  return allProfiles
+function makeLathe(pts) {
+  return new THREE.LatheGeometry(pts, 128)
 }
 
-/* ---------------- MODES ---------------- */
-const MODE_TURN = 0
-const MODE_FACE = 1
-const MODE_DONE = 2
+// build left part up to partingZ
+function buildLeft(profile, partingZ) {
+ 
+  // close at parting plane
+  const rAtCut = radiusAtZ(profile, partingZ)
+  clipped.push({ z: partingZ, r: rAtCut })
+  const pts = clipped.map(p => new THREE.Vector2(p.r, p.z))
+  pts.push(new THREE.Vector2(0, pts.at(-1).y))
 
-/* ---------------- WORKPIECE ---------------- */
-function Scene({
-  length = 7,
-  rawRadius = 1.6,
-  speed = 0.5,
-  maxDepthPerPass = 0.2,
-  profile = [
-    { z: -3, r: 0 },
-    { z: -3, r: 1 },
-    { z: -2, r: 0.9 },
-    { z: -1, r: 0.7 },
-    { z: 0, r: 0.6 },
-    { z: 1, r: 0.6 },
-    { z: 2, r: 0.5 },
-    { z: 3, r: 0.5 },
-    { z: 3, r: 0 },
-  ],
-}) {
-  const [passIndex, setPassIndex] = useState(1)
-  const [cutting, setCutting] = useState(true)
+  return makeLathe(pts)
+}
 
-  const modeRef = useRef(MODE_TURN)
-  const passRef = useRef(0)
-  const stepRef = useRef(0)
 
-  const toolZ = useRef(profile[0].z)
-  const faceX = useRef(rawRadius)
+// parting strip with shrinking radii (progress 0→1 = full→gone)
+function buildParting(profile, partingZ, partingWidth, cutProgress) {
+  const R1full = radiusAtZ(profile, partingZ)
+  const R2full = radiusAtZ(profile, partingZ + partingWidth)
+  const R1 = R1full * (1 - cutProgress)
+  const R2 = R2full * (1 - cutProgress)
 
-  const toolRef = useRef()
-  const partRef = useRef()
-  const rawPartRef = useRef()
-  const faceCapRef = useRef()
-  const backCapRef = useRef()
+  const pts = [
+    new THREE.Vector2(0,  0),
+    new THREE.Vector2(R1, 0),
+    new THREE.Vector2(R2, partingWidth),
+    new THREE.Vector2(0,  partingWidth),
+  ]
+  return makeLathe(pts)
+}
 
-  const texture = useTextureLoader({type:'default'})
+// ─── Tool ────────────────────────────────────────────────────────
+export const Tool = React.forwardRef((_, ref) => (
+  <mesh ref={ref}>
+    <boxGeometry args={[0.12, 0.35, 0.12]} />
+    <meshStandardMaterial color="orange" />
+  </mesh>
+))
 
-  /* ---------------- PASSES ---------------- */
-  const allProfiles = useMemo(
-    () => generateCncPasses(profile, rawRadius, maxDepthPerPass),
-    [profile, rawRadius, maxDepthPerPass]
-  )
-  const passes = allProfiles.length - 1
+// ─── Scene ───────────────────────────────────────────────────────
+const PROFILE = [
+  { z: -3, r: 0 },
+  { z: -3, r: 1 },
+  { z: -2, r: 0.9 },
+  { z: -1, r: 0.7 },
+  { z:  0, r: 0.6 },
+  { z:  1, r: 0.6 },
+  { z:  2, r: 0.5 },
+  { z:  3, r: 0.5 },
+  { z:  3, r: 0 },
+]
+const PARTING_Z     = -1
+const PARTING_WIDTH = 0.20
+const TOOL_START_X  = 2.0   // tool rests here before cut
+const CUT_SPEED     = 0.2   // units / second (radial feed)
+const SEP_SPEED     = 0.3   // part separation speed
 
-  /* ---------------- CLIP PLANE ---------------- */
-  const clipPlane = useMemo(
-    () => new THREE.Plane(new THREE.Vector3(0, 1, 0), length / 2),
-    [length]
-  )
+export default function Scene() {
+  // animation state as refs (mutated in useFrame, no re-renders)
+  const phase       = useRef(PHASE.IDLE)
+  const cutProgress = useRef(0)   // 0 = not started, 1 = fully cut
+  const sepProgress = useRef(0)   // 0 = touching, 1 = separated
 
-  /* ---------------- GEOMETRY ---------------- */
-  const rawGeometry = useMemo(() => {
-    const pts = allProfiles[Math.max(passIndex - 1, 0)].map(p => new THREE.Vector2(p.r, p.z))
-    pts.push(new THREE.Vector2(0, pts.at(-1).y))
-    return new THREE.LatheGeometry(pts, 128)
-  }, [passIndex])
+  const toolRef   = useRef()
+  const leftRef   = useRef()
+  const rightRef  = useRef()
+  const midRef    = useRef()
+ const texture = useTextureLoader({})
+  // start button triggers animation
+  const [started, setStarted] = useState(true)
 
-  const finishedGeometry = useMemo(() => {
-    const pts = allProfiles[passIndex].map(p => new THREE.Vector2(p.r, p.z))
-    pts.unshift(new THREE.Vector2(0, pts[0].y))
-    return new THREE.LatheGeometry(pts, 128)
-  }, [passIndex])
+  // ── static geometries (left / right never change shape) ──
+  const leftGeo  = useMemo(() => buildLeft(PROFILE, PARTING_Z), [])
+  const rightGeo = useMemo(() => buildRight(PROFILE, PARTING_Z, PARTING_WIDTH), [])
+  const partingGeo= useMemo(() => buildLeft(PROFILE, PARTING_Z,PARTING_WIDTH, 0), [])
+  // parting geo is rebuilt each frame during cut — start with full
+  const partingGeoRef = useRef(buildParting(PROFILE, PARTING_Z, PARTING_WIDTH, 0))
 
-  /* ---------------- ANIMATION ---------------- */
-useFrame((_, delta) => {
+  // ── tool start X: parked just outside max radius ──
+  const maxR = radiusAtZ(PROFILE, PARTING_Z) + 0.2
 
-  /* ================= OD TURNING ================= */
-  if (modeRef.current === MODE_TURN) {
+  useFrame((_, delta) => {
+    if (!started) return
 
-    if (passRef.current >= passes) {
-      modeRef.current = MODE_FACE
-      faceX.current = rawRadius
-      return
-    }
+    const tool = toolRef.current
+    const mid  = midRef.current
+    const left = leftRef.current
+    const right= rightRef.current
 
-    const prof = allProfiles[passRef.current]
-    const i = stepRef.current
-    const n = Math.min(i + 1, prof.length - 1)
+    // spin workpiece
+    if (left)  left.rotation.y  += 0.04
+    if (right) right.rotation.y += 0.04
+    if (mid)   mid.rotation.y   += 0.04
 
-    const z0 = prof[i].z
-    const z1 = prof[n].z
-    const r0 = prof[i].r
-    const r1 = prof[n].r
+    // ── PHASE: CUT ──────────────────────────────────────────
+    if (phase.current === PHASE.CUT) {
+      cutProgress.current = Math.min(cutProgress.current + delta * CUT_SPEED, 1)
 
-    toolZ.current += delta * speed
+      // move tool radially inward
+      const toolX = maxR * (1 - cutProgress.current)
+      if (tool) tool.position.set(toolX, PARTING_Z + PARTING_WIDTH / 2, 0)
 
-    if (toolZ.current >= z1) {
-      stepRef.current = n
-      if (n === prof.length - 1) {
-        passRef.current++
-        setPassIndex(passRef.current)
-        stepRef.current = 0
-        toolZ.current = prof[0].z
-        clipPlane.constant = length / 2
-        return
+      // rebuild parting geometry with shrinking radii
+      const newGeo = buildParting(PROFILE, PARTING_Z, PARTING_WIDTH, cutProgress.current)
+      if (mid) {
+        mid.geometry.dispose()
+        mid.geometry = newGeo
+      }
+      partingGeoRef.current = newGeo
+
+      if (cutProgress.current >= 1) {
+        phase.current = PHASE.SEPARATE
+        // hide parting mesh
+        if (mid) mid.visible = false
+        // hide tool
+        if (tool) tool.visible = false
       }
     }
 
-    const t = (toolZ.current - z0) / Math.max(z1 - z0, 1e-4)
-    const toolX = r0 + t * (r1 - r0)
+    // ── PHASE: SEPARATE ─────────────────────────────────────
+    if (phase.current === PHASE.SEPARATE) {
+      sepProgress.current = Math.min(sepProgress.current + delta * SEP_SPEED, 1)
+      const d = sepProgress.current * 0.8  // drift distance
 
-    // Tool follows OD profile
-    toolRef.current.position.set(toolX, toolZ.current, 0)
-    clipPlane.constant = -toolZ.current
+      // left part moves toward -Z (operator side)
+      if (left)  left.position.z  = -d
+      // right part moves toward +Z (tailstock side)
+      if (right) right.position.z =  d
 
-    /* ---- FRONT FACE (FIXED Z, SHRINKS WITH PROFILE) ---- */
-    const faceZ = profile[0].z
-    const faceRadius = RadiusAtZ(prof,toolZ.current )
-
-    faceCapRef.current.position.y = toolZ.current + 0.001 // 🔴 push forward
-    faceCapRef.current.scale.set(faceRadius , 1, faceRadius )
-    faceCapRef.current.visible = true
-  }
-
-  /* ================ FACE TURNING ================ */
-  else if (modeRef.current === MODE_FACE) {
-
-    faceX.current -= delta * speed
-
-    if (faceX.current <= 0) {
-      modeRef.current = MODE_DONE
-      setCutting(false)
-      faceCapRef.current.visible = false
-      return
+      if (sepProgress.current >= 1) phase.current = PHASE.DONE
     }
-
-    const faceZ = profile[0].z
-
-    // Tool feeds radially inward
-    toolRef.current.position.set(faceX.current, faceZ, 0)
-    clipPlane.constant = -faceZ
-
-    // Face shrinks with tool X
-    faceCapRef.current.position.y = faceZ + 0.001
-    faceCapRef.current.scale.set(faceX.current, 1, faceX.current)
-    faceCapRef.current.visible = true
-  }
-
-  /* ================= ROTATION ================= */
-  partRef.current.rotation.y += 0.01
-  rawPartRef.current.rotation.y += 0.01
-
-  /* ================= BACK CAP ================= */
-  const backZ = profile.at(-1).z
-  const backProfile = allProfiles[Math.min(passRef.current, passes)]
-  const backRadius = RadiusAtZ(backProfile, backZ)
-
-  backCapRef.current.position.y = backZ
-  backCapRef.current.scale.set(backRadius, 1, backRadius)
-  backCapRef.current.visible = true
-})
-
-
-
-  /* ---------------- RENDER ---------------- */
+  })
+ const Materials=<meshStandardMaterial metalness={0.5} map={texture} roughness={0.3} color="#c8a882"   side={THREE.DoubleSide}/>
   return (
     <>
-      <mesh ref={rawPartRef} geometry={rawGeometry}>
-        <meshStandardMaterial
-          map={texture}
-          metalness={0.5}
-          roughness={0.45}
-          clippingPlanes={cutting ? [clipPlane] : []}
-          side={THREE.DoubleSide}
-        />
+      {/* LEFT */}
+      <mesh ref={leftRef} geometry={leftGeo}>
+        {Materials}
       </mesh>
 
-      <mesh ref={partRef} geometry={finishedGeometry}>
-        <meshStandardMaterial
-          map={texture}
-          metalness={0.4}
-          roughness={0.25}
-          side={THREE.DoubleSide}
-          polygonOffset
-          polygonOffsetFactor={-1}
-        />
+      {/* RIGHT */}
+      <mesh ref={rightRef} geometry={rightGeo}>
+        {Materials}
       </mesh>
 
-      <mesh ref={faceCapRef}>
-        <cylinderGeometry args={[1, 1, 0.01, 64]} />
-        <meshStandardMaterial color="red"   clippingPlanes={[]} />
+      {/* PARTING STRIP */}
+      <mesh ref={midRef} position={[0, PARTING_Z, 0]}>
+        <primitive object={partingGeoRef.current} attach="geometry" />
+       {Materials}
       </mesh>
 
-      <mesh ref={backCapRef}>
-        <cylinderGeometry args={[1, 1, 0.01, 64]} />
-        <meshStandardMaterial color="#777"   clippingPlanes={[]} />
-      </mesh>
+      {/* TOOL — starts parked at maxR, Y centred on parting zone */}
+      <Tool
+        ref={toolRef}
+        position={[maxR, PARTING_Z + PARTING_WIDTH / 2, 0]}
+      />
 
-      <Tool ref={toolRef} />
     </>
   )
 }
 
-
-export default function FaceTurning() {
+export default function Facing() {
   return (
-    <CanvaPovider>
+    <CanvaPovider camPosition={[0,0,6]}>
       <Scene />
     </CanvaPovider>
-   )
-  }
+  )
+}
