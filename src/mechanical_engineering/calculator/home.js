@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import MetalWeightCalculator from './allCalculators/maetalWaight'
-
+import RPMCalculator from './allCalculators/RPM_cutting_speed'
 
 
 const Stack = createNativeStackNavigator()
@@ -18,10 +18,12 @@ const MODULES = [
     icon: '⚖️',
     accent: '#0F6E56',
     accentBg: '#e1e7f5',
-    
+},
+{ 
+  name:'RPM CalCulator',
+  label:'RPM Calculator',
+  screen:RPMCalculator
 }
- 
-
 ]
 
 const ModuleCard = ({ item, onPress }) => (

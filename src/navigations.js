@@ -138,8 +138,8 @@ const NavigationMain = ({ navigation }) => {
 // ── Screens config ─────────────────────────────────────────────────────────
 const AllScreens = [
   {
-    name: 'HomeCad',
-    label: 'CAD Design',
+    name: ' Engineering_drawing&CAD',
+    label: ' Engineering drawing & CAD',
     desc: 'Sketch, model and export 2D/3D parts',
     component: HomeCad,
     emoji: '✏️',
