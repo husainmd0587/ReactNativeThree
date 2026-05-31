@@ -23,7 +23,7 @@ function Scene({
   feed = 0.4,
   rpm = 0.6,
 }) {
-  const texture = useTextureLoader()
+  const texture = useTextureLoader({})
   const groupRef = useRef()
   const toolRef = useRef()
   const rawPartRef = useRef()
@@ -161,7 +161,7 @@ useLayoutEffect(() => {
 
 export default function Threads() {
   return (
-    <CanvaPovider>
+    <CanvaPovider camPosition={[20,0,8]}>
       <Scene />
     </CanvaPovider>
    )

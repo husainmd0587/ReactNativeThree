@@ -144,7 +144,7 @@ useFrame((_, delta) => {
           metalness={0.6}
           roughness={0.35}
           side={THREE.DoubleSide}
-            map={useTextureLoader()}
+            map={useTextureLoader({})}
         />
       </mesh>
         </group>

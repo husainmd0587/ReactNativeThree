@@ -189,3 +189,4 @@ class GCodeInterpreter {
     }
   }
 }
+export default GCodeInterpreter

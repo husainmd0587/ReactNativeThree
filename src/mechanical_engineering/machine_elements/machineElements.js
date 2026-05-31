@@ -1,9 +1,20 @@
-import React from 'react'
+import React,{useEffect} from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-
+import Animated, { useSharedValue,
+    useAnimatedStyle,  
+    withSpring,
+    withRepeat,
+    withTiming,
+    withDecay,
+    withDelay,
+    withClamp,
+    withSequence,
+    Easing
+    
+} from 'react-native-reanimated'
 import AllGears from './gears/allGears'
 import EngineHome from './engine/engineHome'
 import CNCHome from './cnc/cncHome'
@@ -56,10 +67,17 @@ const MODULES = [
 
 ]
 
-const ModuleCard = ({ item, onPress }) => (
+const ModuleCard = ({ item, onPress }) => {
+     
+    const val=useSharedValue(0)
+    const animStyle=useAnimatedStyle(()=>{return {transform:[{rotate:`${val.value}deg`}]}})
+    useEffect(()=>{
+      val.value=withRepeat(withTiming(2000,{duration:10000,easing: Easing.linear,}),-1)
+    },[])
+  return (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
     <View style={[styles.iconBox, { backgroundColor: item.accentBg }]}>
-      <Text style={styles.iconText}>{item.icon}</Text>
+      <Animated.Text style={[styles.iconText,animStyle]}>{item.icon}</Animated.Text>
     </View>
     <Text style={styles.cardTitle}>{item.label}</Text>
     <Text style={styles.cardDesc}>{item.description}</Text>
@@ -68,7 +86,7 @@ const ModuleCard = ({ item, onPress }) => (
     </View>
     <Text style={styles.arrow}>→</Text>
   </TouchableOpacity>
-)
+)}
 
 const MAinScreen = ({ navigation }) => (
   <SafeAreaView style={styles.screen}>
@@ -137,7 +155,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconText: {
-    fontSize: 20,
+    fontSize: 25,
   },
   cardTitle: {
     fontSize: 15,

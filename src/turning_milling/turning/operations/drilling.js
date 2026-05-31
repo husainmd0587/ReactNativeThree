@@ -5,7 +5,7 @@ import { useTextureLoader } from '../../../utils/materials/textures'
 import CanvaPovider from '../../../provider'
 /* ================= DRILL TOOL ================= */
 export const DrillTool = forwardRef((props, ref) => {
-    const texture = useTextureLoader()
+    const texture = useTextureLoader({})
   return (
     <group ref={ref} {...props}>
       {/* Tool body */}
@@ -35,7 +35,7 @@ function Scene({ length = 5, rawRadius = 1 }) {
   const groupRef = useRef()
   const toolRef = useRef()
  
-  const texture = useTextureLoader()
+const texture = useTextureLoader({})
 
   const DRILL_TIP_OFFSET_Y = 1.07
 
@@ -131,7 +131,7 @@ function Scene({ length = 5, rawRadius = 1 }) {
 
 export default function DrillingOperation() {
   return (
-    <CanvaPovider>
+    <CanvaPovider camPosition={[1,-4,6]}>
       <Scene />
     </CanvaPovider>
   )

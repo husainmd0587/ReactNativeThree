@@ -23,23 +23,23 @@ const AnimatedSlogan = ({ slogans, delay = 0 }) => {
   useEffect(() => {
     const timeout = setTimeout(() => {
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
       ]).start();
 
       const interval = setInterval(() => {
         Animated.parallel([
-          Animated.timing(fadeAnim,  { toValue: 0, duration: 350, useNativeDriver: true }),
-          Animated.timing(slideAnim, { toValue: -10, duration: 350, useNativeDriver: true }),
+          Animated.timing(fadeAnim,  { toValue: 0, duration: 500, useNativeDriver: true }),
+          Animated.timing(slideAnim, { toValue: -10, duration: 500, useNativeDriver: true }),
         ]).start(() => {
           setIndex(prev => (prev + 1) % slogans.length);
           slideAnim.setValue(10);
           Animated.parallel([
-            Animated.timing(fadeAnim,  { toValue: 1, duration: 350, useNativeDriver: true }),
-            Animated.timing(slideAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
+            Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
+            Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
           ]).start();
         });
-      }, 3000);
+      }, 5000);
 
       return () => clearInterval(interval);
     }, delay);

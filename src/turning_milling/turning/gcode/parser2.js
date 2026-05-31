@@ -855,3 +855,4 @@ class CustomGCodeParser {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = CustomGCodeParser;
 }
+export default CustomGCodeParser;

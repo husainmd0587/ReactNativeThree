@@ -13,7 +13,7 @@ import Fitting from './fitting/fitting';
 const Stack = createNativeStackNavigator()
 const MODULES = [
 {
-      name: 'WeldingGuide',
+  name: 'WeldingGuide',
   label: 'Welding Guide',
   screen: Welding,
   description: 'Reference for welding techniques and parameters.',
@@ -25,7 +25,12 @@ const MODULES = [
  {
     name:'BlackSmithy',
     label:'BlackSmithy',
-    screen:BlackSmithy
+    screen:BlackSmithy,
+ },
+ {
+  name:'Fitting',
+  label:'Fittings',
+  screen:Fitting
  }
 
 ]

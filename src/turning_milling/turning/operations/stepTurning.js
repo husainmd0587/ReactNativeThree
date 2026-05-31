@@ -174,7 +174,7 @@ const rawGeometry = useMemo(() => {
       </mesh>
 
       {/* FINISHED PART */}
-      <mesh ref={partRef} geometry={finishedGeometry}>
+      <mesh ref={partRef} geometry={finishedGeometry} >
         <meshStandardMaterial
           color="#fff"
           metalness={0.4}
@@ -195,9 +195,9 @@ const rawGeometry = useMemo(() => {
       </mesh>
 
       {/* BACK/BOTTOM CAP */}
-      <mesh ref={backCapRef}>
+      <mesh ref={backCapRef} >
         <cylinderGeometry args={[1, 1, 0.01, 64]} />
-        <meshStandardMaterial color="#777" />
+        <meshStandardMaterial color="#777"  map={texture}/>
       </mesh>
 
       {/* TOOL */}
