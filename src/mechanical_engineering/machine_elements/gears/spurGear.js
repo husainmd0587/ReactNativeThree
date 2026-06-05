@@ -7,14 +7,14 @@ if (typeof navigator === 'undefined') {
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber/native'
 import { MeshStandardMaterial } from 'three'
-
+import Privider from '../../../provider';
 import { useGLTF } from '../../../hooks/useGLTF'
 const MODEL_URL = require('../../../assets/glb/spur_gear.glb')
 // import { useTextureLoader } from '../assets/all_textures'
 
 
 
-function SpurGear(props) {
+function Scene(props) {
   const group = useRef()
   const meshRefs = useRef({})
 
@@ -87,6 +87,14 @@ function SpurGear(props) {
       {...props}
     />
   )
+}
+
+
+function SpurGear(props) {
+  return (
+    <Privider camPosition={[2,7,2]}>
+      <Scene {...props} />
+    </Privider>) 
 }
 
 export default SpurGear

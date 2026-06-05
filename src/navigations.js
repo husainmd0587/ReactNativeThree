@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import {  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,  StatusBar, ScrollView, Animated, } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -10,8 +11,9 @@ import MetalWeightCalculator from './mechanical_engineering/calculator/home';
 import MachineElements from './mechanical_engineering/machine_elements/machineElements';
 import Robots from './mechanical_engineering/robots/robotsHome';
 import Workshop from './mechanical_engineering/workshop/workshop';
+import AutomobileHome from './mechanical_engineering/automobile/automobileHome';
 import ProductionManagement from './mechanical_engineering/management/management';
-
+import MCQ from './mechanical_engineering/management/mcq/MCQ500'
 
 const Stack = createNativeStackNavigator();
 // ── Animated slogan ────────────────────────────────────────────────────────
@@ -207,8 +209,19 @@ const AllScreens = [
   },
   {
     name:'Workshop',
-    component:Workshop,
-    label:'Engineering Workshop'
+    label:'Workshop',
+    component: Workshop,
+    emoji: '🔧',
+    accent: '#5CB85C', accentBg: '#EAFDEB',
+    slogen: ['Welding, smithy & more.', 'Your workshop reference.'],
+  },
+  {
+    name:'Automobile',
+    label:'Automobile Engineering',
+    component: AutomobileHome,
+    emoji: '🚗',
+    accent: '#FF5733', accentBg: '#FFEDE8',
+    slogen: ['Engines, systems & design.', 'Explore automobile engineering.'],
   },
   {
     name: 'Management',
@@ -218,6 +231,14 @@ const AllScreens = [
     wide: true,
     accent: '#854F0B', accentBg: '#FAEEDA',
     slogen: ['5S, Kaizen & more.', 'Streamline your workflow.'],
+  },
+  {
+    name: 'MCQ',
+    label: '500 Question Answer  Practice',
+    component: MCQ,
+    emoji: '📝',
+    accent: '#3B82F6', accentBg: '#DBEAFE',
+    slogen: ['Test your knowledge.', 'Practice makes perfect.'],
   }
 ];
 

@@ -3,13 +3,15 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import MetalWeightCalculator from './allCalculators/maetalWaight'
+import MetalWeightCalculator2 from './allCalculators/maetalWaight'
+import MetalWeightCalculator from './allCalculators/metalWeightCalculator/homeScreen'
 import RPMCalculator from './allCalculators/RPM_cutting_speed'
-
+import ScientificCalculator from './allCalculators/ScientificCalculator'
+import UnitConverter from './allCalculators/unitConvertor'
 
 const Stack = createNativeStackNavigator()
 const MODULES = [
-{
+  {
     name: 'MetalWeightCalculator',
     label: 'Metal Weight Calculator',
     screen: MetalWeightCalculator,
@@ -18,12 +20,48 @@ const MODULES = [
     icon: '⚖️',
     accent: '#0F6E56',
     accentBg: '#e1e7f5',
+  },
+{
+    name: 'MetalWeightCalculator2',
+    label: 'Metal Weight Calculator2',
+    screen: MetalWeightCalculator2,
+    description: 'Calculate weight of metal parts based on dimensions and material.',
+    badge: 'Weight',
+    icon: '⚖️',
+    accent: '#293fbb',
+    accentBg: '#84d65e',
 },
 { 
   name:'RPM CalCulator',
   label:'RPM Calculator',
-  screen:RPMCalculator
+  screen:RPMCalculator,
+  description:'Calculate RPM based on cutting speed and tool diameter.',  
+  badge:'RPM',
+  icon:'🔄',
+  accent:'#7f90f3',
+  accentBg:'#e0e4f8'
+},
+{
+  name:'ScientificCalculator',
+  label:'Scientific Calculator',
+  screen:ScientificCalculator,
+  description:'Perform advanced mathematical calculations.',
+  badge:'Math',
+  icon:'🔢',
+  accent:'#FF6B6B',
+  accentBg:'#ffebee'
+},
+{
+  name:'UnitConverter',
+  label:'Unit Converter',
+  screen:UnitConverter,
+  description:'Convert between different units of measurement.',
+  badge:'Convert',
+  icon:'🔄',
+  accent:'#4CAF50',
+  accentBg:'#e8f5e9'
 }
+
 ]
 
 const ModuleCard = ({ item, onPress }) => (

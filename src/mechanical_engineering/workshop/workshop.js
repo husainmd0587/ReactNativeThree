@@ -3,12 +3,16 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
+
 import Welding from "./welding/welding";
 import BlackSmithy from './blacksmithy/blacksmithy';
 import Carpentry from './carpentry/carpentry';
 import ElectricalWiring from './electrical_wiring/electrical_wiring';
 import Fitting from './fitting/fitting';
-
+import Foundry from './foundry/foundry';
+import SheetMetal from './sheet_metal/sheetMetal';
+import Plumbing from './plumbing/plumbing';
+import Machining from './machine_shop/machineshop'
 
 const Stack = createNativeStackNavigator()
 const MODULES = [
@@ -22,17 +26,84 @@ const MODULES = [
   accent: '#D9534F',
   accentBg: '#FFECEF',
 },
- {
-    name:'BlackSmithy',
-    label:'BlackSmithy',
-    screen:BlackSmithy,
- },
- {
-  name:'Fitting',
-  label:'Fittings',
-  screen:Fitting
- }
-
+{
+  name:'MachiningGuide',
+  label:'Machining Guide',
+  screen: Machining,
+  description:'Reference for machining techniques and tools.',
+  badge:'Machine',
+  icon:'⚙️',
+  accent:'#5BC0DE',
+  accentBg:'#EAF6FD',
+},
+{
+  name:'SheetMetalGuide',
+  label:'Sheet Metal Guide',
+  screen: SheetMetal,
+  description:'Reference for sheet metal techniques and tools.',
+  badge:'Sheet',
+  icon:'📄'
+  ,accent:'#5CB85C',
+  accentBg:'#EAFDEB',
+},
+{
+  name: 'BlackSmithyGuide',
+  label: 'Blacksmithy Guide',
+  screen: BlackSmithy,
+  description: 'Reference for blacksmithing techniques and tools.',
+  badge: 'Smith',
+  icon: '⚒️',
+  accent: '#5BC0DE',
+  accentBg: '#EAF6FD',
+},{
+  name: 'CarpentryGuide',
+  label: 'Carpentry Guide',
+  screen: Carpentry,
+  description: 'Reference for carpentry techniques and tools.',
+  badge: 'Carpentry',
+  icon: '🪚'
+  ,accent: '#5CB85C',
+  accentBg: '#EAFDEB',
+},
+{
+  name: 'ElectricalWiringGuide',
+  label: 'Electrical Wiring Guide',
+  screen: ElectricalWiring,
+  description: 'Reference for electrical wiring techniques and tools.',
+  badge: 'Wire',
+  icon: '⚡',
+  accent: '#F0AD4E',
+  accentBg: '#FCF8F2',
+},{
+  name: 'FittingGuide',
+  label: 'Fitting Guide',
+  screen: Fitting,
+  description: 'Reference for fitting techniques and tools.',
+  badge: 'Fitting',
+  icon: '🔩'
+  ,accent: '#5CB85C',
+  accentBg: '#EAFDEB',
+},
+{
+  name: 'FoundryGuide',
+  label: 'Foundry Guide',
+  screen: Foundry,
+  description: 'Reference for foundry techniques and tools.',
+  badge: 'Foundry',
+  icon: '🏭'
+  ,accent: '#5BC0DE',
+  accentBg: '#EAF6FD',   
+},
+{
+  name: 'PlumbingGuide',
+  label: 'Plumbing Guide',
+  screen: Plumbing,
+  description: 'Reference for plumbing techniques and tools.',
+  badge: 'Plumbing',
+  icon: '🚰'
+  ,accent: '#5CB85C',
+  accentBg: '#EAFDEB',  
+}
 ]
 
 
@@ -108,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 0,
     elevation: 2,
-    padding: 14,
+    padding: 10,
     gap: 8,
   },
   iconBox: {

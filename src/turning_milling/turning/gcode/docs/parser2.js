@@ -228,7 +228,6 @@ class CustomGCodeParser {
         break;
       case 1:
         this.state.motionMode = 'G1';
-        break;
       case 2:
         this.state.motionMode = 'G2';
         break;

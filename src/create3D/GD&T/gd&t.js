@@ -1213,6 +1213,9 @@ export default function GDTLibrary() {
             })}
           </ScrollView>
 
+        
+
+
           {/* Symbol List */}
           <FlatList
             data={filteredSymbols}

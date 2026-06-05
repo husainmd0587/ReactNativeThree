@@ -5,7 +5,7 @@ import Sketch2D from './2d_Old/2dShapes/Sketch2D'
 import ToThreeDScreen from './2d_Old/2dShapes/threeD'
 import Sketching2D from './Sketching2D/main'
 import GDTLibrary from './GD&T/gd&t'
-
+import Main3D from './3d/main'
 
 export const NavigationMain = ({ navigation }) => {
   return (
@@ -38,10 +38,9 @@ export const NavigationMain = ({ navigation }) => {
 }
 
 const AllScreens = [
-  { name:'Main', component: NavigationMain ,showInMenu:false},
-  { name: 'Sketching2D', component: Sketching2D }, //this is the main sketching screen with all features
-  { name: 'Sketch2D', component: Sketch2D },
-  { name: 'ToThreeDScreen', component: ToThreeDScreen ,showInMenu:false},
+  { name: 'Sketching2D', component: Sketching2D },
+  // { name: 'Sketch2D', component: Sketch2D },
+  { name: 'Main3D', component: Main3D ,showInMenu:false},
   {name:'GDandT',  component:GDTLibrary}
 ]
 
@@ -50,6 +49,7 @@ const HomeCad = () => {
   return (
   
       <Stack.Navigator>
+        <Stack.Screen name='Main' component={NavigationMain} options={{headerShown:false}} />
          {AllScreens.map(screen => (<Stack.Screen  key={screen.name}  name={screen.name}  component={screen.component}  options={{headerShown:false}} /> ))}    
       </Stack.Navigator>
 

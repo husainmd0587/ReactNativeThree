@@ -7,7 +7,7 @@ if (typeof navigator === 'undefined') {
 import { useRef, useMemo,useEffect } from 'react'
 import { useFrame } from '@react-three/fiber/native'
 import { MeshStandardMaterial } from 'three'
-
+import Privider from '../../../provider';
 import { useGLTF } from '../../../hooks/useGLTFonline'
 import {useAnimations}  from '@react-three/drei/native'
 const MODEL_URL = 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/glb/mechanical/gears/GearSystem.glb'
@@ -15,7 +15,7 @@ const MODEL_URL = 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/glb/mecha
 
 // import { useTextureLoader } from '../assets/all_textures'
 
-function GearSystem(props) {
+function Scene(props) {
 
 
   const group = useRef()
@@ -80,6 +80,14 @@ function GearSystem(props) {
       object={scene}
       {...props}
     />
+  )
+}
+
+const GearSystem = () => {
+  return (
+    <Privider camPosition={[1, 1, -6]}  >
+      <Scene />
+    </Privider>
   )
 }
 

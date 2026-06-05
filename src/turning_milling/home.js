@@ -5,14 +5,14 @@ import { AllGcodeMcode } from './components/data'
 import G0 from "./gcodes/code/g0/g0";
 import G0_sim from "./gcodes/code/g0/g0_sim";
 import Turning from './turning/cncTurningDemo'
-import InterPreter from './turning/gcode/interPreter';
+import Parser from './turning/gcode/paerserHome';
 
 
 export const AllScreens = [
   { name:'G0', component: G0},
   { name:'G0_Sim', component: G0_sim},
   { name:'CNCTurning', component: Turning},
-  {name:'InterPreter',component:InterPreter}
+  {name:'Parser',component:Parser}
 ]
 
 
@@ -78,9 +78,9 @@ export const Home = ({ navigation }) => {
            <Text style={styles.cardText}>🛠️ CNC MILLING TOOLS</Text>
          </TouchableOpacity>
         
-        <TouchableOpacity  onPress={()=>{navigation.navigate('InterPreter')}} style={[styles.card,{backgroundColor:'#7f90f3',width:'100%'}]} 
+        <TouchableOpacity  onPress={()=>{navigation.navigate('Parser')}} style={[styles.card,{backgroundColor:'#7f90f3',width:'100%'}]} 
          >
-           <Text style={styles.cardText}>InterPreter</Text>
+           <Text style={styles.cardText}>Parser</Text>
          </TouchableOpacity>
       </View>
     </ScrollView>

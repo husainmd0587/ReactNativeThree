@@ -4,13 +4,13 @@ import { MeshStandardMaterial } from 'three'
 import { useGLTF } from '../../../hooks/useGLTF'
 
 const MODEL_URL = require('../../../assets/glb/rackandpinion_gear.glb')
-
+import Privider from '../../../provider';
 const GEAR_RADIUS = 1
 const ANGULAR_SPEED = .4
 const RACK_HALF_TRAVEL = 2
 const LINEAR_SPEED = ANGULAR_SPEED * GEAR_RADIUS
 
-function RackAndPinionGear(props) {
+function Scene(props) {
   const group = useRef()
   const meshRefs = useRef({})
   const rackOffset = useRef(0)
@@ -72,5 +72,13 @@ function RackAndPinionGear(props) {
     <primitive ref={group} object={scene} {...props} />
   )
 }
+
+
+const RackAndPinionGear = (props) => {
+  return <Privider camPosition={[2,7,2]}>
+    <Scene {...props} />
+  </Privider>
+}
+
 
 export default RackAndPinionGear

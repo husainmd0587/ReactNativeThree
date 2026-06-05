@@ -10,6 +10,41 @@
 /**
  * Example 1: Simple Parse
  */
+
+export const gcode1 = `
+N1 (FACING OP)
+
+N2 G28 (Home turret)
+
+N3 T0101 (CNMG 432)
+
+N4 G00 G54 Z0.
+
+N5 G00 X2.1
+
+N6 G50 S1500
+
+N7 G96 S400 M03
+
+N8 M08
+
+N9 G01 X-0.062 F0.005
+
+N10 G00 Z0.1
+
+N11 G00 X2.1
+
+N12 M09
+
+N13 M05
+
+N14 G00 G53 X0.
+
+N15 G00 G53 Z0.
+`;
+
+
+
 function example1_simpleParse() {
   console.log('\n=== Example 1: Simple Parse ===');
   

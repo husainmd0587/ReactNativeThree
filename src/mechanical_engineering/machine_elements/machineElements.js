@@ -15,7 +15,7 @@ import Animated, { useSharedValue,
     Easing
     
 } from 'react-native-reanimated'
-import AllGears from './gears/allGears'
+import AllGears from './gears/GearHome'
 import EngineHome from './engine/engineHome'
 import CNCHome from './cnc/cncHome'
 import AllBearings from './bearings/allbearings'
