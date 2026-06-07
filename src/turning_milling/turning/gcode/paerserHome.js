@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View, ScrollView } from 'react-native'
+import { StyleSheet, Text, View, ScrollView,TextInput } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import  Parser  from './parser/parser';
 import  Interpreter  from './parser/interPreter';
-import {gcode1} from './docs/gcodeExample'
+// import {gcode1} from './docs/gcodeExample'
 
 // ── Clean console loggers ────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ const logState = (state) => {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-const GCODE = `
+const gcode1 = `
   G4 P2
   G1 X10 Z-5 F100
   G4 P1
@@ -43,16 +43,18 @@ const ParserHome = () => {
   const [finalState, setFinalState] = useState(null);
   const [totalTime,  setTotalTime]  = useState(0);
   const [errors,     setErrors]     = useState([]);
+  const [gcode,      setGcode]      = useState(gcode1);
+
   useEffect(() => {
     const parser = new Parser();
     const interp = new Interpreter({ machineType: 'LATHE' });
 
     // Parser
-    const parsed = parser.parse(GCODE);
+    const parsed = parser.parse(gcode);
     setBlocks(parsed);
 
     // Interpreter
-    interp.load(GCODE);
+    interp.load(gcode);
     const result = interp.run();
 
     setTimeline(result.timeline);
@@ -60,20 +62,32 @@ const ParserHome = () => {
     setFinalState(result.finalState);
     setTotalTime(result.totalTime);
 
-  }, []);
+  }, [gcode]);
 
   return (
     <View style={s.root}>
       <Text style={s.title}>CNC Interpreter</Text>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <View style={{backgroundColor: '#a1a2a3', padding: 10, borderRadius: 6, marginBottom: 16}}>
-          <Text>GCODE</Text>
-          <Text style={{color: '#0e25f3',fontWeight: 'bold', fontFamily: 'monospace', marginTop: 4}}>
-            {GCODE.trim().split('\n').map((line, i) => (
-              <Text key={i}>{line.trim()}{'\n'}</Text>
-            ))}
-          </Text>
+        <View style={{backgroundColor: '#a1a2a3', padding: 5, borderRadius: 6, marginBottom: 5}}>
+          <Text>gcode</Text>
+         <TextInput
+  style={{
+    color: '#0e25f3',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    marginTop: 4,
+    minHeight: 120, // minimum height
+    borderWidth: 1,
+    padding: 5,
+    textAlignVertical: 'top', // important for Android
+  }}
+  value={gcode}
+  onChangeText={setGcode}
+  multiline
+  numberOfLines={6} // initial lines
+/>
+
         </View>
 
         {/* ── Machine state ─────────────────────────────── */}

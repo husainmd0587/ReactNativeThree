@@ -6,6 +6,7 @@ import ToThreeDScreen from './2d_Old/2dShapes/threeD'
 import Sketching2D from './Sketching2D/main'
 import GDTLibrary from './GD&T/gd&t'
 import Main3D from './3d/main'
+import DrawingHome from './drwaing&3D/drawingHome'
 
 export const NavigationMain = ({ navigation }) => {
   return (
@@ -40,6 +41,7 @@ export const NavigationMain = ({ navigation }) => {
 const AllScreens = [
   { name: 'Sketching2D', component: Sketching2D },
   // { name: 'Sketch2D', component: Sketch2D },
+  {name:'Engineering Drwaing and 3D',component:DrawingHome},
   { name: 'Main3D', component: Main3D ,showInMenu:false},
   {name:'GDandT',  component:GDTLibrary}
 ]

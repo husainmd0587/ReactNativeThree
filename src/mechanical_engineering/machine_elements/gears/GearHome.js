@@ -1,11 +1,11 @@
 
 
-import { StyleSheet, Text, View,TouchableOpacity,ScrollView } from 'react-native'
+import { StyleSheet, Text, View,TouchableOpacity,ScrollView,Image } from 'react-native'
 import React from 'react'
 import { Canvas } from '@react-three/fiber/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import Privider from '../../../provider';
-    
+import { useHomeBack } from '../../../utils/hooks/navigationHook'; 
 import SpurGear from './spurGear';
 import BevelGear from './bevelGear';
 import HelicalGear from './helicalGear';
@@ -108,7 +108,36 @@ const AllGears = () => {
 
 export default AllGears;
 
+export const BottomNav=({active,navigation})=>{
+       useHomeBack(navigation, 'Main');
+  return(
+     <View style={{width:'100%',marginTop:20}}>
+    <ScrollView horizontal={true} contentContainerStyle={styles.ScrollContainer }>
+        {
+          Gears.map((item,index)=>{
+            if (item.name===active)return ;
+            return(
+              <TouchableOpacity key={index} 
+              onPress={()=>{navigation.navigate(item.name)}} style={styles.card}>
+                <Image style={styles.img} 
+                source={{uri:'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/machineElements/gears/bevelGears.jpg'}}/>
+                <Text style={[styles.cardText,{color:item.accent}]}>
+                  { item.name }
+                </Text>
+              </TouchableOpacity>
+            )
+          })
+        }
+    </ScrollView>
+     </View>
+  )
+}
 
-
-
-const styles = StyleSheet.create({})
+const styles= StyleSheet.create({
+  ScrollContainer:  {height:'100%',gap:10,backgroundColor:'#ccc',padding:5
+  },
+  card:{backgroundColor:'#fff',width:100,alignItems:'center',borderRadius:10,overflow:'hidden'
+  },
+  img:{height:50,width:'90%'},
+  cardText:{}
+})

@@ -31,6 +31,7 @@ const MODULES = [
     description: 'Spur, helical, bevel & worm gear design and calculations.',
     badge: 'Gears',
     icon: '⚙️',
+    
     accent: '#534AB7',
     accentBg: '#EEEDFE',
   },

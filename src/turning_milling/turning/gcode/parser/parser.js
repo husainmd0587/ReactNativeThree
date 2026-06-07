@@ -1,5 +1,4 @@
 import  Tokenizer  from './tokenizer.js';
-
 export default class Parser {
   constructor() {
     this.tokenizer = new Tokenizer();

@@ -22,11 +22,22 @@ import Parting2 from './operations/parting2';
 import FreehandTurning from './operations/freehandTurning/freehandTurning'
 import FreehandTurning2 from './operations/freehandTurning/freehandTurning2';
 import StepWithCsg from './operations/stepWithCSGTurning/stepCsg'
-
+const GCODE = `
+G21 G90 G18
+T0101 M03 S800
+G00 X52 Z2
+G01 X50 Z0 F0.15
+G01 X40 Z-20
+G01 X35 Z-35
+G01 X35 Z-60
+G01 X50 Z-60
+G00 X55 Z5
+M05 M30
+`
 const CNCOperations=[
-  {name:'Turning',component:StepTurning},
+  {name:'Turning',component:()=><StepTurning gcode={GCODE} stockRadius={50}  speed={0.5} />},
   {name:'Turning2',component:StepTurning2},
-  {name:'FaceTurning',component:FaceTurning},
+  {name:'FaceTurning',component:FaceTurning}, 
   {name:'Threading',component:OuterThreading},
   {name:'Drilling',component:DrillingOperation},
   {name:'Knurling',component:KnurlingOperation},

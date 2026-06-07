@@ -12,6 +12,7 @@ import MachineElements from './mechanical_engineering/machine_elements/machineEl
 import Robots from './mechanical_engineering/robots/robotsHome';
 import Workshop from './mechanical_engineering/workshop/workshop';
 import AutomobileHome from './mechanical_engineering/automobile/automobileHome';
+import MaterialsHome from './mechanical_engineering/materials/materialsHome';
 import ProductionManagement from './mechanical_engineering/management/management';
 import MCQ from './mechanical_engineering/management/mcq/MCQ500'
 
@@ -222,6 +223,14 @@ const AllScreens = [
     emoji: '🚗',
     accent: '#FF5733', accentBg: '#FFEDE8',
     slogen: ['Engines, systems & design.', 'Explore automobile engineering.'],
+  },
+  {
+    name:'Materials',
+    label:'Materials Science',
+    component: MaterialsHome,
+    emoji: '🧱',
+    accent: '#6A5ACD', accentBg: '#F0E8FF',
+    slogen: ['Metals, polymers & ceramics.', 'Discover material properties.'],
   },
   {
     name: 'Management',

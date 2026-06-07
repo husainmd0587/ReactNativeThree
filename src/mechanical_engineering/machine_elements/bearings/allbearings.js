@@ -1,8 +1,7 @@
-
-
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { Canvas } from '@react-three/fiber/native';
+import { createStaticNavigation } from '@react-navigation/native';
 import Privider from '../../../provider';
 import BallBearing from './ball_bearings';
 // import RollerBearing from './rollerBearing';

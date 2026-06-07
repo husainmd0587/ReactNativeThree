@@ -7,7 +7,7 @@ if (typeof navigator === 'undefined') {
 import { useRef, useMemo,useEffect } from 'react'
 import { useFrame } from '@react-three/fiber/native'
 import { MeshStandardMaterial } from 'three'
-
+import CanvaProvider from '../../../provider'
 import { useGLTF } from '../../../hooks/useGLTFonline'
 import {useAnimations}  from '@react-three/drei/native'
 import SoundPlayer from '../../../utils/sound/soundPlayer'
@@ -16,7 +16,7 @@ const MODEL_URL = 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/glb/Robot
 
 // import { useTextureLoader } from '../assets/all_textures'
 
-function Robot2(props) {
+function Scene(props) {
 
 
   const group = useRef()
@@ -97,6 +97,14 @@ function Robot2(props) {
       object={scene}
       {...props}
     />
+  )
+}
+
+const Robot2=()=>{
+  return(
+    <CanvaProvider>
+      <Scene />
+    </CanvaProvider>
   )
 }
 
