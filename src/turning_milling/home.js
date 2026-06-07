@@ -6,13 +6,15 @@ import G0 from "./gcodes/code/g0/g0";
 import G0_sim from "./gcodes/code/g0/g0_sim";
 import Turning from './turning/cncTurningDemo'
 import Parser from './turning/gcode/paerserHome';
+import AboutCNC from './turning/MachinesParts/comps/aboutCNC';
 
 
 export const AllScreens = [
   { name:'G0', component: G0},
   { name:'G0_Sim', component: G0_sim},
   { name:'CNCTurning', component: Turning},
-  {name:'Parser',component:Parser}
+  {name:'Parser',component:Parser},
+  {name:'AboutCNC',component:AboutCNC}
 ]
 
 
@@ -38,7 +40,8 @@ export const Home = ({ navigation }) => {
         <Text style={styles.title}>Learn CNC G-Code Programming</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{marginTop:10}}>
           <Text style={styles.subtitle}>• Read • Update • Test</Text>
-          <TouchableOpacity style={{marginLeft:20,backgroundColor:'#f0cf62'}}>
+          <TouchableOpacity style={{marginLeft:20,backgroundColor:'#f0cf62'}} 
+            onPress={()=>{navigation.navigate('AboutCNC')}}>
             <Text style={styles.subtitle}>Main parts of cnc machines</Text>
           </TouchableOpacity>
         </ScrollView>

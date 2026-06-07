@@ -12,7 +12,7 @@ import CanvaPovider from '../../provider'
 import { CustomLatheGeometry } from './tmp/custom_geometry'
 import { StepTurning } from './operations/stepTurning'
 import StepTurning2 from './operations/stepTurning2'
-import  TurningWorkpiece from './operations/stepTurning2'
+import TurningWorkpiece from './operations/stepTurning2'
 import FaceTurning from './operations/faceTurning'
 import OuterThreading  from './operations/threads'
 import DrillingOperation from './operations/drilling'
@@ -22,6 +22,7 @@ import Parting2 from './operations/parting2';
 import FreehandTurning from './operations/freehandTurning/freehandTurning'
 import FreehandTurning2 from './operations/freehandTurning/freehandTurning2';
 import StepWithCsg from './operations/stepWithCSGTurning/stepCsg'
+
 const GCODE = `
 G21 G90 G18
 T0101 M03 S800
