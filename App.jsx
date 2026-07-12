@@ -1,23 +1,30 @@
 //React native Related provider
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, StatusBar } from 'react-native'
 import React from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Provider } from 'react-redux';
-import { store } from './src/utils/store/store';
-import MainStack from './src/navigations';
+import { store } from './src/store';
+import MainStack from './src/navigation/MainStack';
 import { Worker } from './src/all_glb/worker';
+import { PortalProvider } from './src/utils/ThreeJs_Utils/portal'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 const App = () => {
-    
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" hidden={false} translucent={false} />
       <Provider store={store}>
-        <MainStack />
+           <QueryClientProvider client={queryClient}>
+              <PortalProvider>
+                  <MainStack />
+              </PortalProvider>
+           </QueryClientProvider>
       </Provider>
-    </GestureHandlerRootView> 
-   
-  )
-}
+    </GestureHandlerRootView>
+  );
+};
 
 export default App
 

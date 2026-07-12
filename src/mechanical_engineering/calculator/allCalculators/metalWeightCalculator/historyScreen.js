@@ -1,28 +1,19 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  FlatList, Share, Alert, SafeAreaView, StatusBar,
+  ScrollView, Share, Alert, SafeAreaView, StatusBar,
 } from 'react-native';
-import { SHAPE_ICONS } from '../components/ShapeIcons';
-import { COLORS, RADIUS, SHADOW, FONT } from '../utils/theme';
-import {
-  loadHistory, deleteHistoryEntry, clearAllHistory, buildShareText,
-} from '../utils/storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { SHAPE_ICONS } from './shapeIcon';
+import { COLORS, RADIUS, SHADOW, FONT } from './theme';
+import { buildShareText } from './storage';
+import { useAppData } from './appData';
 
 export default function HistoryScreen({ navigation }) {
-  const [history, setHistory] = useState([]);
+  const { history, deleteHistoryEntry, clearAllHistory } = useAppData();
 
-  useFocusEffect(
-    useCallback(() => {
-      loadHistory().then(setHistory);
-    }, [])
-  );
-
-  const handleDelete = useCallback(async (id) => {
-    const updated = await deleteHistoryEntry(id);
-    setHistory(updated);
-  }, []);
+  const handleDelete = useCallback((id) => {
+    deleteHistoryEntry(id);
+  }, [deleteHistoryEntry]);
 
   const handleClear = useCallback(() => {
     Alert.alert(
@@ -32,14 +23,11 @@ export default function HistoryScreen({ navigation }) {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear', style: 'destructive',
-          onPress: async () => {
-            const updated = await clearAllHistory();
-            setHistory(updated);
-          },
+          onPress: () => clearAllHistory(),
         },
       ]
     );
-  }, []);
+  }, [clearAllHistory]);
 
   const handleShareAll = useCallback(async () => {
     if (!history.length) return;
@@ -52,7 +40,7 @@ export default function HistoryScreen({ navigation }) {
     await Share.share({ message: text });
   }, []);
 
-  const renderItem = useCallback(({ item }) => {
+  const HistoryCard = ({ item }) => {
     const Icon = SHAPE_ICONS[item.shapeId] || SHAPE_ICONS['hexagon'];
     return (
       <View style={styles.card}>
@@ -107,7 +95,7 @@ export default function HistoryScreen({ navigation }) {
         </View>
       </View>
     );
-  }, [handleDelete, handleShareOne]);
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -134,13 +122,12 @@ export default function HistoryScreen({ navigation }) {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={history}
-          keyExtractor={i => String(i.id)}
+        <ScrollView
           contentContainerStyle={styles.list}
-          renderItem={renderItem}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          {history.map(item => <HistoryCard key={String(item.id)} item={item} />)}
+        </ScrollView>
       )}
     </SafeAreaView>
   );

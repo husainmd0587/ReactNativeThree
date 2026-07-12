@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import MetalWeightCalculator2 from './allCalculators/maetalWaight'
-import MetalWeightCalculator from './allCalculators/metalWeightCalculator/homeScreen'
+import MetalCalculatorNavigator from './allCalculators/metalWeightCalculator/metalCalculatorNavigator'
 import RPMCalculator from './allCalculators/RPM_cutting_speed'
 import ScientificCalculator from './allCalculators/ScientificCalculator'
 import UnitConverter from './allCalculators/unitConvertor'
@@ -14,7 +14,7 @@ const MODULES = [
   {
     name: 'MetalWeightCalculator',
     label: 'Metal Weight Calculator',
-    screen: MetalWeightCalculator,
+    screen: MetalCalculatorNavigator,
     description: 'Calculate weight of metal parts based on dimensions and material.',
     badge: 'Weight',
     icon: '⚖️',

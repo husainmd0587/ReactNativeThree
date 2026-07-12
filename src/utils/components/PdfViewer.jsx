@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Animated,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Pdf from 'react-native-pdf';
@@ -19,25 +20,32 @@ const TEXT_PRIMARY = '#F0EDE8';
 const TEXT_MUTED = '#6B6B6B';
 
 const PdfViewer = ({
-  pdfUrl,
-  title = 'Document',
   navigation,
-  footerText = 'PDF · READ ONLY',
+  route,
+  pdfUrl: propPdfUrl,
+  title: propTitle,
+  footerText: propFooterText = 'PDF · READ ONLY',
   showHeader = true,
-  showFooter = true,
+  showFooter = false,
   fitPolicy = 0,
 }) => {
   const insets = useSafeAreaInsets();
+  const routeParams = route?.params || {};
+  const pdfUrl = propPdfUrl || routeParams.pdfUrl || routeParams.url || routeParams.uri;
+  const title = routeParams.title || propTitle || 'Document';
+  const footerText = routeParams.footerText || propFooterText;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [key, setKey] = useState(0);
-
+  const [pageNumber, setPageNumber] = useState({ current: 1, total: null });
+  const [inputValue, setInputValue] = useState('1'); // ← controlled input state
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pdfRef = useRef(null);
+  const isTypingRef = useRef(false); // ← flag to prevent scroll→input fighting
 
   const onLoad = () => {
     setLoading(false);
-
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 300,
@@ -54,15 +62,43 @@ const PdfViewer = ({
     setError(false);
     setLoading(true);
     fadeAnim.setValue(0);
-    setKey(prev => prev + 1);
+    setKey((prev) => prev + 1);
   };
+
+  // ── real-time page jump + scroll sync ───────
+  const handlePageInput = useCallback((text) => {
+    setInputValue(text);
+    isTypingRef.current = true;
+
+    const n = parseInt(text, 10);
+    if (n && n >= 1 && pdfRef.current) {
+      pdfRef.current.setPage(n);
+    }
+  }, []);
+
+  const onPageChanged = useCallback((page, total) => {
+    setPageNumber({ current: page, total });
+
+    // Only update input if user is NOT actively typing
+    if (!isTypingRef.current) {
+      setInputValue(String(page));
+    }
+  }, []);
+
+  const onInputFocus = () => {
+    isTypingRef.current = true;
+  };
+
+  const onInputBlur = () => {
+    isTypingRef.current = false;
+    // Snap input to actual current page on blur
+    setInputValue(String(pageNumber.current));
+  };
+  // ────────────────────────────────────────────
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={BG}
-      />
+      <StatusBar barStyle="light-content" backgroundColor={BG} />
 
       {showHeader && (
         <>
@@ -70,19 +106,29 @@ const PdfViewer = ({
             <TouchableOpacity
               style={styles.backBtn}
               onPress={() => navigation?.goBack()}
-              hitSlop={{
-                top: 10,
-                bottom: 10,
-                left: 10,
-                right: 10,
-              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
 
-            <Text style={styles.titleText}>
+            <Text style={styles.titleText} numberOfLines={1}>
               {title}
             </Text>
+
+            <View style={styles.pageBox}>
+              <TextInput
+                style={styles.pageInput}
+                value={inputValue}           // ← controlled
+                keyboardType="number-pad"
+                selectTextOnFocus
+                maxLength={4}
+                onChangeText={handlePageInput}
+                onFocus={onInputFocus}       // ← track typing state
+                onBlur={onInputBlur}         // ← reset + sync on blur
+              />
+              <Text style={styles.pageSlash}>/</Text>
+              <Text style={styles.pageTotal}>{pageNumber.total ?? '—'}</Text>
+            </View>
 
             <View style={styles.accentDot} />
           </View>
@@ -94,76 +140,44 @@ const PdfViewer = ({
       <View style={styles.viewerContainer}>
         {loading && !error && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator
-              size="large"
-              color={ORANGE}
-            />
-            <Text style={styles.loadingText}>
-              Loading...
-            </Text>
+            <ActivityIndicator size="large" color={ORANGE} />
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
         )}
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>
-              ⚠
-            </Text>
-
-            <Text style={styles.errorTitle}>
-              Failed to load PDF
-            </Text>
-
+            <Text style={styles.errorIcon}>⚠</Text>
+            <Text style={styles.errorTitle}>Failed to load PDF</Text>
             <Text style={styles.errorSub}>
               Check your connection and try again.
             </Text>
-
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={retry}
-            >
-              <Text style={styles.retryText}>
-                Retry
-              </Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={retry}>
+              <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              { opacity: fadeAnim },
-            ]}
-          >
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
             <Pdf
               key={key}
-              source={{
-                uri: pdfUrl,
-                cache: true,
-              }}
+              ref={pdfRef}
+              source={{ uri: pdfUrl, cache: true }}
               style={StyleSheet.absoluteFill}
               fitPolicy={fitPolicy}
               trustAllCerts={false}
               onLoadComplete={onLoad}
               onError={onError}
+              fitWidth={true}
+              onPageChanged={onPageChanged}
             />
           </Animated.View>
         )}
       </View>
 
       {showFooter && (
-        <View
-          style={[
-            styles.footer,
-            {
-              paddingBottom:
-                insets.bottom + 6,
-            },
-          ]}
-        >
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 6 }]}>
           <View style={styles.footerPill}>
-            <Text style={styles.footerText}>
-              {footerText}
-            </Text>
+            <Text style={styles.footerText}>{footerText}</Text>
           </View>
         </View>
       )}
@@ -210,6 +224,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+
+  pageBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+
+  pageInput: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontWeight: '600',
+    minWidth: 28,
+    textAlign: 'center',
+    padding: 0,
+    includeFontPadding: false,
+    backgroundColor: '#a5a4a4',
+    color: '#000',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+
+  pageSlash: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  pageTotal: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontWeight: '600',
+    minWidth: 28,
+    textAlign: 'center',
   },
 
   accentDot: {

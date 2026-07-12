@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  FlatList, StatusBar, SafeAreaView,
+  ScrollView, StatusBar, SafeAreaView,
 } from 'react-native';
-import { SHAPES, MATERIALS } from './shapes';
-import { SHAPE_PREVIEWS, SHAPE_ICONS } from './shapeIcon';
+import { SHAPES } from './shapes';
+import { SHAPE_ICONS } from './shapeIcon';
 import { COLORS, RADIUS, SHADOW, FONT } from './theme';
-import { addHistoryEntry, formatDate, buildShareText } from './storage';
 
 export default function HomeScreen({ navigation }) {
   const [isGrid, setIsGrid] = useState(true);
@@ -16,7 +15,7 @@ export default function HomeScreen({ navigation }) {
   }, [navigation]);
 
   // ── Grid item ──────────────────────────────────────────────────────────────
-  const GridItem = useCallback(({ item }) => {
+  const GridItem = ({ item }) => {
     const Icon = SHAPE_ICONS[item.id];
     return (
       <TouchableOpacity
@@ -30,10 +29,10 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.gridLabel}>{item.name}</Text>
       </TouchableOpacity>
     );
-  }, [openCalc]);
+  };
 
   // ── List item ──────────────────────────────────────────────────────────────
-  const ListItem = useCallback(({ item }) => {
+  const ListItem = ({ item }) => {
     const Icon = SHAPE_ICONS[item.id];
     return (
       <TouchableOpacity
@@ -48,7 +47,13 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.listDots}>⋮⋮</Text>
       </TouchableOpacity>
     );
-  }, [openCalc]);
+  };
+
+  // Shapes grouped two-per-row for the grid layout (plain .map, no FlatList)
+  const gridRows = [];
+  for (let i = 0; i < SHAPES.length; i += 2) {
+    gridRows.push(SHAPES.slice(i, i + 2));
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -72,23 +77,24 @@ export default function HomeScreen({ navigation }) {
 
       {/* ── Shape list / grid ── */}
       {isGrid ? (
-        <FlatList
-          data={SHAPES}
-          keyExtractor={i => i.id}
-          numColumns={2}
+        <ScrollView
           contentContainerStyle={styles.gridContainer}
-          columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => <GridItem item={item} />}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          {gridRows.map((row, i) => (
+            <View key={i} style={styles.gridRow}>
+              {row.map(item => <GridItem key={item.id} item={item} />)}
+              {row.length === 1 && <View style={styles.gridSpacer} />}
+            </View>
+          ))}
+        </ScrollView>
       ) : (
-        <FlatList
-          data={SHAPES}
-          keyExtractor={i => i.id}
+        <ScrollView
           contentContainerStyle={styles.listContainer}
-          renderItem={({ item }) => <ListItem item={item} />}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          {SHAPES.map(item => <ListItem key={item.id} item={item} />)}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -134,8 +140,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   gridRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  gridSpacer: {
+    flex: 1,
+    marginHorizontal: 4,
   },
   gridCard: {
     flex: 1,

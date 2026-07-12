@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Alert, SafeAreaView, StatusBar, ScrollView,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOW, FONT } from '../utils/theme';
-import { loadSettings, saveSettings } from '../utils/storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { COLORS, RADIUS, SHADOW, FONT } from './theme';
+import { useAppData } from './appData';
 
 const CURRENCIES = [
   { label: 'None', value: '' },
@@ -38,24 +37,12 @@ function RadioGroup({ value, options, onChange }) {
 }
 
 export default function SettingsScreen({ navigation }) {
-  const [settings, setSettings] = useState(null);
+  const { settings, updateSetting } = useAppData();
   const [showCurrPicker, setShowCurrPicker] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadSettings().then(setSettings);
-    }, [])
-  );
-
-  const update = useCallback(async (key, val) => {
-    setSettings(prev => {
-      const next = { ...prev, [key]: val };
-      saveSettings(next);
-      return next;
-    });
-  }, []);
-
-  if (!settings) return null;
+  const update = useCallback((key, val) => {
+    updateSetting(key, val);
+  }, [updateSetting]);
 
   const currLabel = CURRENCIES.find(c => c.value === settings.currency)?.label || 'Not selected';
 

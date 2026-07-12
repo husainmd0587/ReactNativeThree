@@ -24,7 +24,7 @@ export const SHAPES = [
     calcWeight: (d, density) => {
       const A = toMM(d.A, d.unitA);
       const L = toMM(d.length, d.unitLength);
-      return (3 * Math.sqrt(3) / 2) * Math.pow(A / 10, 2) * (L / 10) * (density / 1000) * 1000;
+      return (3 * Math.sqrt(3) / 2) * Math.pow(A / 10, 2) * (L / 10) * (density / 1000);
     },
     calcArea: (d) => {
       const A = toMM(d.A, d.unitA);
@@ -45,7 +45,7 @@ export const SHAPES = [
       const D = toMM(d.D, d.unitD);
       const L = toMM(d.length, d.unitLength);
       const r = D / 20;
-      return Math.PI * r * r * (L / 10) * (density / 1000) * 1000;
+      return Math.PI * r * r * (L / 10) * (density / 1000);
     },
     calcArea: (d) => {
       const D = toMM(d.D, d.unitD);
@@ -68,7 +68,7 @@ export const SHAPES = [
       const T = toMM(d.T, d.unitT);
       const L = toMM(d.length, d.unitLength);
       const ro = D / 20, ri = (D / 2 - T) / 10;
-      return Math.PI * (ro * ro - ri * ri) * (L / 10) * (density / 1000) * 1000;
+      return Math.PI * (ro * ro - ri * ri) * (L / 10) * (density / 1000);
     },
     calcArea: (d) => {
       const D = toMM(d.D, d.unitD);
@@ -88,7 +88,7 @@ export const SHAPES = [
     calcWeight: (d, density) => {
       const A = toMM(d.A, d.unitA);
       const L = toMM(d.length, d.unitLength);
-      return Math.pow(A / 10, 2) * (L / 10) * (density / 1000) * 1000;
+      return Math.pow(A / 10, 2) * (L / 10) * (density / 1000);
     },
     calcArea: (d) => {
       const A = toMM(d.A, d.unitA);
@@ -111,7 +111,7 @@ export const SHAPES = [
       const T = toMM(d.T, d.unitT);
       const L = toMM(d.length, d.unitLength);
       const a = A / 10, t = T / 10, l = L / 10;
-      return (a * a - (a - 2 * t) * (a - 2 * t)) * l * (density / 1000) * 1000;
+      return (a * a - (a - 2 * t) * (a - 2 * t)) * l * (density / 1000);
     },
     calcArea: (d) => {
       const A = toMM(d.A, d.unitA);
@@ -135,7 +135,7 @@ export const SHAPES = [
       const W = toMM(d.W, d.unitW) / 10, H = toMM(d.H, d.unitH) / 10;
       const TW = toMM(d.TW, d.unitTW) / 10, TF = toMM(d.TF, d.unitTF) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return (W * TF + TW * (H - TF)) * L * (density / 1000) * 1000;
+      return (W * TF + TW * (H - TF)) * L * (density / 1000);
     },
     calcArea: (d) => {
       const W = toMM(d.W, d.unitW) / 10, H = toMM(d.H, d.unitH) / 10;
@@ -159,7 +159,7 @@ export const SHAPES = [
       const H = toMM(d.H, d.unitH) / 10, W = toMM(d.W, d.unitW) / 10;
       const TF = toMM(d.TF, d.unitTF) / 10, TW = toMM(d.TW, d.unitTW) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return (2 * W * TF + TW * (H - 2 * TF)) * L * (density / 1000) * 1000;
+      return (2 * W * TF + TW * (H - 2 * TF)) * L * (density / 1000);
     },
     calcArea: (d) => {
       const H = toMM(d.H, d.unitH) / 10, W = toMM(d.W, d.unitW) / 10;
@@ -183,7 +183,7 @@ export const SHAPES = [
       const H = toMM(d.H, d.unitH) / 10, W = toMM(d.W, d.unitW) / 10;
       const TF = toMM(d.TF, d.unitTF) / 10, TW = toMM(d.TW, d.unitTW) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return (2 * W * TF + TW * (H - 2 * TF)) * L * (density / 1000) * 1000;
+      return (2 * W * TF + TW * (H - 2 * TF)) * L * (density / 1000);
     },
     calcArea: (d) => {
       const H = toMM(d.H, d.unitH) / 10, W = toMM(d.W, d.unitW) / 10;
@@ -204,7 +204,7 @@ export const SHAPES = [
     calcWeight: (d, density) => {
       const W = toMM(d.W, d.unitW) / 10, T = toMM(d.T, d.unitT) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return W * T * L * (density / 1000) * 1000;
+      return W * T * L * (density / 1000);
     },
     calcArea: (d) => {
       const W = toMM(d.W, d.unitW) / 10, L = toMM(d.length, d.unitLength) / 10;
@@ -225,7 +225,7 @@ export const SHAPES = [
     calcWeight: (d, density) => {
       const A = toMM(d.A, d.unitA) / 10, B = toMM(d.B, d.unitB) / 10;
       const T = toMM(d.T, d.unitT) / 10, L = toMM(d.length, d.unitLength) / 10;
-      return (A + B - T) * T * L * (density / 1000) * 1000;
+      return (A + B - T) * T * L * (density / 1000);
     },
     calcArea: (d) => {
       const A = toMM(d.A, d.unitA) / 10, B = toMM(d.B, d.unitB) / 10;
@@ -233,9 +233,6 @@ export const SHAPES = [
       return ((A + B) * L) / 10000;
     },
   },
-  // ─── PASTE THESE ENTRIES INTO YOUR SHAPES ARRAY ────────────────────────────
-// Add after the 'angle' entry. Also uses the same toMM() helper already defined.
-
   {
     id: 'rectbar',
     name: 'RECTANGULAR BAR',
@@ -250,7 +247,7 @@ export const SHAPES = [
       const W = toMM(d.W, d.unitW) / 10;
       const T = toMM(d.T, d.unitT) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return W * T * L * (density / 1000) * 1000;
+      return W * T * L * (density / 1000);
     },
     calcArea: (d) => {
       const W = toMM(d.W, d.unitW) / 10;
@@ -276,7 +273,7 @@ export const SHAPES = [
       const H = toMM(d.H, d.unitH) / 10;
       const T = toMM(d.T, d.unitT) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return (W * H - (W - 2 * T) * (H - 2 * T)) * L * (density / 1000) * 1000;
+      return (W * H - (W - 2 * T) * (H - 2 * T)) * L * (density / 1000);
     },
     calcArea: (d) => {
       const W = toMM(d.W, d.unitW) / 10;
@@ -301,7 +298,7 @@ export const SHAPES = [
       const W = toMM(d.W, d.unitW) / 10;
       const L = toMM(d.L, d.unitL) / 10;
       const T = toMM(d.T, d.unitT) / 10;
-      return W * L * T * (density / 1000) * 1000;
+      return W * L * T * (density / 1000);
     },
     calcArea: (d) => {
       const W = toMM(d.W, d.unitW) / 10;
@@ -324,7 +321,7 @@ export const SHAPES = [
     calcWeight: (d, density) => {
       const A = toMM(d.A, d.unitA) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return 2 * (Math.SQRT2 - 1) * A * A * L * (density / 1000) * 1000;
+      return 2 * (Math.SQRT2 - 1) * A * A * L * (density / 1000);
     },
     calcArea: (d) => {
       const A = toMM(d.A, d.unitA) / 10;
@@ -346,7 +343,7 @@ export const SHAPES = [
       const D = toMM(d.D, d.unitD) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
       const r = D / 2;
-      return (Math.PI * r * r / 2) * L * (density / 1000) * 1000;
+      return (Math.PI * r * r / 2) * L * (density / 1000);
     },
     calcArea: (d) => {
       const D = toMM(d.D, d.unitD) / 10;
@@ -373,13 +370,175 @@ export const SHAPES = [
       const W = toMM(d.W, d.unitW) / 10;
       const T = toMM(d.T, d.unitT) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
-      return (2 * W * T + (H - 2 * T) * T) * L * (density / 1000) * 1000;
+      return (2 * W * T + (H - 2 * T) * T) * L * (density / 1000);
     },
     calcArea: (d) => {
       const H = toMM(d.H, d.unitH) / 10;
       const W = toMM(d.W, d.unitW) / 10;
       const L = toMM(d.length, d.unitLength) / 10;
       return ((2 * W + H) * L) / 10000;
+    },
+  },
+  {
+    id: 'sphere',
+    name: 'SPHERE / BALL',
+    dims: [
+      { id: 'D',      label: 'Diameter (D)', unit: true,  default: 50 },
+      { id: 'pieces', label: 'Pieces',       unit: false, default: '' },
+      { id: 'kgPrice',label: 'Kg Price',     unit: false, default: '' },
+    ],
+    // No 'length' dim — a sphere isn't extruded, so weight comes straight
+    // from ball volume rather than cross-section × length.
+    calcWeight: (d, density) => {
+      const D = toMM(d.D, d.unitD);
+      const r = D / 20;
+      return (4 / 3) * Math.PI * r * r * r * (density / 1000);
+    },
+    calcArea: (d) => {
+      const D = toMM(d.D, d.unitD);
+      const r = D / 20;
+      return (4 * Math.PI * r * r) / 10000;
+    },
+  },
+  {
+    id: 'oval',
+    name: 'OVAL',
+    dims: [
+      { id: 'A',      label: 'Major Axis (A)', unit: true,  default: 60  },
+      { id: 'B',      label: 'Minor Axis (B)', unit: true,  default: 30  },
+      { id: 'length', label: 'Length',         unit: true,  default: 100 },
+      { id: 'pieces', label: 'Pieces',         unit: false, default: ''  },
+      { id: 'kgPrice',label: 'Kg Price',       unit: false, default: ''  },
+    ],
+    calcWeight: (d, density) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const B = toMM(d.B, d.unitB) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const a = A / 2, b = B / 2;
+      return Math.PI * a * b * L * (density / 1000);
+    },
+    calcArea: (d) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const B = toMM(d.B, d.unitB) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const a = A / 2, b = B / 2;
+      // Ramanujan's ellipse-perimeter approximation
+      const h = Math.pow(a - b, 2) / Math.pow(a + b, 2);
+      const perimeter = Math.PI * (a + b) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
+      return (perimeter * L) / 10000;
+    },
+  },
+  {
+    id: 'crsquare',
+    name: 'CR SQUARE',
+    dims: [
+      { id: 'A',      label: 'Side (A)',          unit: true,  default: 50  },
+      { id: 'R',      label: 'Corner Radius (R)', unit: true,  default: 8   },
+      { id: 'length', label: 'Length',            unit: true,  default: 100 },
+      { id: 'pieces', label: 'Pieces',            unit: false, default: ''  },
+      { id: 'kgPrice',label: 'Kg Price',          unit: false, default: ''  },
+    ],
+    // Corner-radius (rounded-corner) square bar: a square with the 4 corners
+    // rounded off — a real stock shape, distinct from a plain square bar.
+    calcWeight: (d, density) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const R = toMM(d.R, d.unitR) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const area = A * A - (4 - Math.PI) * R * R;
+      return area * L * (density / 1000);
+    },
+    calcArea: (d) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const R = toMM(d.R, d.unitR) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const perimeter = 4 * (A - 2 * R) + 2 * Math.PI * R;
+      return (perimeter * L) / 10000;
+    },
+  },
+  {
+    id: 'crrect',
+    name: 'CR RECTANGLE',
+    dims: [
+      { id: 'W',      label: 'Width (W)',         unit: true,  default: 60  },
+      { id: 'H',      label: 'Height (H)',        unit: true,  default: 40  },
+      { id: 'R',      label: 'Corner Radius (R)', unit: true,  default: 8   },
+      { id: 'length', label: 'Length',            unit: true,  default: 100 },
+      { id: 'pieces', label: 'Pieces',            unit: false, default: ''  },
+      { id: 'kgPrice',label: 'Kg Price',          unit: false, default: ''  },
+    ],
+    calcWeight: (d, density) => {
+      const W = toMM(d.W, d.unitW) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const R = toMM(d.R, d.unitR) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const area = W * H - (4 - Math.PI) * R * R;
+      return area * L * (density / 1000);
+    },
+    calcArea: (d) => {
+      const W = toMM(d.W, d.unitW) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const R = toMM(d.R, d.unitR) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const perimeter = 2 * (W - 2 * R) + 2 * (H - 2 * R) + 2 * Math.PI * R;
+      return (perimeter * L) / 10000;
+    },
+  },
+  {
+    id: 'triangle',
+    name: 'TRIANGLE',
+    dims: [
+      { id: 'B',      label: 'Base (B)',   unit: true,  default: 50  },
+      { id: 'H',      label: 'Height (H)', unit: true,  default: 43  },
+      { id: 'length', label: 'Length',     unit: true,  default: 100 },
+      { id: 'pieces', label: 'Pieces',     unit: false, default: ''  },
+      { id: 'kgPrice',label: 'Kg Price',   unit: false, default: ''  },
+    ],
+    calcWeight: (d, density) => {
+      const B = toMM(d.B, d.unitB) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const area = 0.5 * B * H;
+      return area * L * (density / 1000);
+    },
+    // Perimeter assumes an isosceles triangle (base + two equal sides) since
+    // only base and height are captured — a reasonable default for stock bar.
+    calcArea: (d) => {
+      const B = toMM(d.B, d.unitB) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const side = Math.sqrt((B / 2) * (B / 2) + H * H);
+      const perimeter = B + 2 * side;
+      return (perimeter * L) / 10000;
+    },
+  },
+  {
+    id: 'trapezoid',
+    name: 'TRAPEZOID',
+    dims: [
+      { id: 'A',      label: 'Top Width (A)',    unit: true,  default: 30  },
+      { id: 'B',      label: 'Bottom Width (B)', unit: true,  default: 60  },
+      { id: 'H',      label: 'Height (H)',       unit: true,  default: 40  },
+      { id: 'length', label: 'Length',           unit: true,  default: 100 },
+      { id: 'pieces', label: 'Pieces',           unit: false, default: ''  },
+      { id: 'kgPrice',label: 'Kg Price',         unit: false, default: ''  },
+    ],
+    calcWeight: (d, density) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const B = toMM(d.B, d.unitB) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const area = 0.5 * (A + B) * H;
+      return area * L * (density / 1000);
+    },
+    // Perimeter assumes an isosceles trapezoid (both slant sides equal)
+    calcArea: (d) => {
+      const A = toMM(d.A, d.unitA) / 10;
+      const B = toMM(d.B, d.unitB) / 10;
+      const H = toMM(d.H, d.unitH) / 10;
+      const L = toMM(d.length, d.unitLength) / 10;
+      const slant = Math.sqrt(Math.pow((B - A) / 2, 2) + H * H);
+      const perimeter = A + B + 2 * slant;
+      return (perimeter * L) / 10000;
     },
   },
 ];

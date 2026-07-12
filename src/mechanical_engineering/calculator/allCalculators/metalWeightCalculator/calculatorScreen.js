@@ -1,23 +1,27 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, Share, SafeAreaView, StatusBar,
 } from 'react-native';
 import { SHAPES, MATERIALS } from './shapes';
-import { SHAPE_PREVIEWS } from './shapeIcon';
+import { DimensionedPreview } from './dimensionOverlay';
 import { COLORS, RADIUS, SHADOW, FONT } from './theme';
-import { addHistoryEntry, formatDate, buildShareText } from './storage';
+import { formatDate, buildShareText } from './storage';
+import { useAppData } from './appData';
 
 const UNITS = ['mm', 'cm', 'm'];
 
 export default function CalculatorScreen({ route, navigation }) {
   const { shapeId } = route.params;
   const shape = useMemo(() => SHAPES.find(s => s.id === shapeId), [shapeId]);
+  const hasLength = useMemo(() => shape.dims.some(d => d.id === 'length'), [shape]);
+
+  const { addHistoryEntry, settings } = useAppData();
 
   const [matIndex, setMatIndex] = useState(0);
   const [mode, setMode] = useState('length'); // 'length' | 'weight'
   const [showMatPicker, setShowMatPicker] = useState(false);
-  const [extraMats, setExtraMats] = useState([]);
+  const [extraMats] = useState([]);
 
   // Build initial input state from shape dims
   const initInputs = useCallback(() => {
@@ -26,6 +30,7 @@ export default function CalculatorScreen({ route, navigation }) {
       obj[d.id] = d.default !== '' ? String(d.default) : '';
       if (d.unit) obj['unit' + d.id.charAt(0).toUpperCase() + d.id.slice(1)] = 'mm';
     });
+    obj.targetWeight = '';
     return obj;
   }, [shape]);
 
@@ -35,12 +40,14 @@ export default function CalculatorScreen({ route, navigation }) {
   const allMats = useMemo(() => [...MATERIALS, ...extraMats], [extraMats]);
   const material = allMats[matIndex] || MATERIALS[0];
 
-  const PreviewComp = SHAPE_PREVIEWS[shapeId];
-
   // ── Calculate ──────────────────────────────────────────────────────────────
+  // Two modes:
+  //  - 'length': the usual case — enter dimensions + length, get the weight.
+  //  - 'weight': enter a target weight instead, and the required length is
+  //    solved for automatically (weight scales linearly with length for every
+  //    shape here, so we measure weight-per-mm and divide it out).
   const calculate = useCallback(() => {
     const d = { ...inputs };
-    // convert unit fields
     shape.dims.forEach(dim => {
       if (dim.unit) {
         const unitKey = 'unit' + dim.id.charAt(0).toUpperCase() + dim.id.slice(1);
@@ -51,59 +58,88 @@ export default function CalculatorScreen({ route, navigation }) {
     const pieces = parseFloat(inputs.pieces) || 1;
     const kgPrice = parseFloat(inputs.kgPrice) || 0;
 
-    const weightPerPiece = shape.calcWeight(d, material.density);
-    const areaPerPiece   = shape.calcArea(d);
-    const totalWeight    = weightPerPiece * pieces;
-    const totalArea      = areaPerPiece   * pieces;
-    const total          = kgPrice > 0 ? (totalWeight * kgPrice) : null;
+    let weightPerPiece, areaPerPiece, computedLengthMM = null;
 
-    setResult({ weightPerPiece, areaPerPiece, totalWeight, totalArea, total, pieces, kgPrice });
-    return { weightPerPiece, areaPerPiece, totalWeight, totalArea, total, pieces, kgPrice };
-  }, [inputs, shape, material]);
+    if (mode === 'weight' && hasLength) {
+      const targetWeight = parseFloat(inputs.targetWeight) || 0;
+      const perMMDims = { ...d, length: '1', unitLength: 'mm' };
+      const weightPerMM = shape.calcWeight(perMMDims, material.density);
+      computedLengthMM = weightPerMM > 0 ? (targetWeight / pieces) / weightPerMM : 0;
+
+      const solvedDims = { ...d, length: String(computedLengthMM), unitLength: 'mm' };
+      weightPerPiece = shape.calcWeight(solvedDims, material.density);
+      areaPerPiece = shape.calcArea(solvedDims);
+    } else {
+      weightPerPiece = shape.calcWeight(d, material.density);
+      areaPerPiece = shape.calcArea(d);
+    }
+
+    const totalWeight = weightPerPiece * pieces;
+    const totalArea = areaPerPiece * pieces;
+    const total = kgPrice > 0 ? (totalWeight * kgPrice) : null;
+
+    const res = {
+      weightPerPiece, areaPerPiece, totalWeight, totalArea, total,
+      pieces, kgPrice, computedLengthMM,
+    };
+    setResult(res);
+    return res;
+  }, [inputs, shape, material, mode, hasLength]);
+
+  // Live "smart" recalculation — results stay current as the person types,
+  // instead of only updating on an explicit button press.
+  useEffect(() => {
+    calculate();
+  }, [calculate]);
+
+  // Build the dimension list used for saved/shared entries. In weight mode the
+  // length field is solved for, so its value comes from the result, not inputs.
+  const buildDimsList = useCallback((r) => {
+    return shape.dims
+      .filter(dim => !['pieces', 'kgPrice'].includes(dim.id))
+      .map(dim => {
+        if (mode === 'weight' && hasLength && dim.id === 'length') {
+          return {
+            id: dim.id,
+            label: dim.label,
+            value: r.computedLengthMM != null ? r.computedLengthMM.toFixed(2) : '',
+            unit: 'mm',
+          };
+        }
+        return {
+          id: dim.id,
+          label: dim.label,
+          value: inputs[dim.id] || '',
+          unit: dim.unit ? (inputs['unit' + dim.id.charAt(0).toUpperCase() + dim.id.slice(1)] || 'mm') : null,
+        };
+      });
+  }, [shape, inputs, mode, hasLength]);
 
   // ── Save ───────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(() => {
     const r = calculate();
-    const dimsList = shape.dims
-      .filter(d => !['pieces', 'kgPrice'].includes(d.id))
-      .map(d => ({
-        id: d.id,
-        label: d.label,
-        value: inputs[d.id] || '',
-        unit: d.unit ? (inputs['unit' + d.id.charAt(0).toUpperCase() + d.id.slice(1)] || 'mm') : null,
-      }));
-
     const entry = {
       id:        Date.now(),
       shapeId,
       shapeName: shape.name,
       material:  material.label,
-      dims:      dimsList,
+      dims:      buildDimsList(r),
       weight:    r.totalWeight.toFixed(4),
       area:      r.totalArea.toFixed(4),
       total:     r.total ? r.total.toFixed(2) : null,
       pieces:    r.pieces,
       date:      formatDate(),
     };
-    await addHistoryEntry(entry);
+    addHistoryEntry(entry);
     Alert.alert('Saved', 'Calculation saved to history.');
-  }, [calculate, shape, shapeId, material, inputs]);
+  }, [calculate, buildDimsList, shape, shapeId, material, addHistoryEntry]);
 
   // ── Share ──────────────────────────────────────────────────────────────────
   const handleShare = useCallback(async () => {
     const r = calculate();
-    const dimsList = shape.dims
-      .filter(d => !['pieces', 'kgPrice'].includes(d.id))
-      .map(d => ({
-        id: d.id,
-        label: d.label,
-        value: inputs[d.id] || '',
-        unit: d.unit ? (inputs['unit' + d.id.charAt(0).toUpperCase() + d.id.slice(1)] || 'mm') : null,
-      }));
-
     const entry = {
       shapeName: shape.name,
-      dims:      dimsList,
+      dims:      buildDimsList(r),
       weight:    r.totalWeight.toFixed(4),
       area:      r.totalArea.toFixed(4),
       total:     r.total ? r.total.toFixed(2) : null,
@@ -116,7 +152,7 @@ export default function CalculatorScreen({ route, navigation }) {
     } catch (e) {
       Alert.alert('Share failed', e.message);
     }
-  }, [calculate, shape, inputs]);
+  }, [calculate, buildDimsList, shape]);
 
   // ── Unit toggle for a dimension ────────────────────────────────────────────
   const cycleUnit = useCallback((dimId) => {
@@ -131,6 +167,13 @@ export default function CalculatorScreen({ route, navigation }) {
   const setInput = useCallback((key, val) => {
     setInputs(prev => ({ ...prev, [key]: val }));
   }, []);
+
+  const switchMode = useCallback((next) => {
+    if (next === 'weight' && !hasLength) return; // e.g. sheet/plate has no single length axis
+    setMode(next);
+  }, [hasLength]);
+
+  const currency = settings?.currency || '';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -160,7 +203,14 @@ export default function CalculatorScreen({ route, navigation }) {
         <View style={styles.card}>
           <View style={styles.visualRow}>
             <View style={styles.previewBox}>
-              <PreviewComp />
+              <DimensionedPreview
+                shape={shape}
+                inputs={
+                  mode === 'weight' && hasLength && result?.computedLengthMM != null
+                    ? { ...inputs, length: result.computedLengthMM.toFixed(1), unitLength: 'mm' }
+                    : inputs
+                }
+              />
             </View>
             <View style={styles.ctrlCol}>
               {/* Material picker */}
@@ -193,15 +243,20 @@ export default function CalculatorScreen({ route, navigation }) {
               <View style={styles.toggleRow}>
                 <TouchableOpacity
                   style={[styles.toggleBtn, mode === 'length' && styles.toggleBtnActive]}
-                  onPress={() => setMode('length')}
+                  onPress={() => switchMode('length')}
                 >
                   <Text style={[styles.toggleTxt, mode === 'length' && styles.toggleTxtActive]}>
                     by Length
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.toggleBtn, mode === 'weight' && styles.toggleBtnActive]}
-                  onPress={() => setMode('weight')}
+                  style={[
+                    styles.toggleBtn,
+                    mode === 'weight' && styles.toggleBtnActive,
+                    !hasLength && styles.toggleBtnDisabled,
+                  ]}
+                  disabled={!hasLength}
+                  onPress={() => switchMode('weight')}
                 >
                   <Text style={[styles.toggleTxt, mode === 'weight' && styles.toggleTxtActive]}>
                     by Weight
@@ -218,34 +273,63 @@ export default function CalculatorScreen({ route, navigation }) {
 
         {/* ── Inputs card ── */}
         <View style={styles.card}>
-          {shape.dims.map(dim => (
-            <View key={dim.id} style={styles.inputRow}>
-              <Text style={styles.inputLabel}>{dim.label} :</Text>
+          {shape.dims.map(dim => {
+            if (mode === 'weight' && hasLength && dim.id === 'length') return null;
+            return (
+              <View key={dim.id} style={styles.inputRow}>
+                <Text style={styles.inputLabel}>{dim.label} :</Text>
+                <TextInput
+                  style={styles.input}
+                  value={inputs[dim.id] !== undefined ? String(inputs[dim.id]) : ''}
+                  onChangeText={v => setInput(dim.id, v)}
+                  keyboardType="numeric"
+                  placeholder={dim.id === 'pieces' || dim.id === 'kgPrice' ? '' : String(dim.default)}
+                  placeholderTextColor={COLORS.text3}
+                />
+                {dim.unit && (
+                  <TouchableOpacity
+                    style={styles.unitBtn}
+                    onPress={() => cycleUnit(dim.id)}
+                  >
+                    <Text style={styles.unitTxt}>
+                      {inputs['unit' + dim.id.charAt(0).toUpperCase() + dim.id.slice(1)] || 'mm'} ▾
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+
+          {mode === 'weight' && hasLength && (
+            <View style={styles.inputRow}>
+              <Text style={styles.inputLabel}>Target Weight :</Text>
               <TextInput
                 style={styles.input}
-                value={inputs[dim.id] !== undefined ? String(inputs[dim.id]) : ''}
-                onChangeText={v => setInput(dim.id, v)}
+                value={inputs.targetWeight !== undefined ? String(inputs.targetWeight) : ''}
+                onChangeText={v => setInput('targetWeight', v)}
                 keyboardType="numeric"
-                placeholder={dim.id === 'pieces' || dim.id === 'kgPrice' ? '' : String(dim.default)}
+                placeholder="0"
                 placeholderTextColor={COLORS.text3}
               />
-              {dim.unit && (
-                <TouchableOpacity
-                  style={styles.unitBtn}
-                  onPress={() => cycleUnit(dim.id)}
-                >
-                  <Text style={styles.unitTxt}>
-                    {inputs['unit' + dim.id.charAt(0).toUpperCase() + dim.id.slice(1)] || 'mm'} ▾
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <View style={styles.unitBtn}>
+                <Text style={styles.unitTxt}>kg</Text>
+              </View>
             </View>
-          ))}
+          )}
         </View>
 
         {/* ── Results card ── */}
         <View style={styles.card}>
           <Text style={styles.resultsTitle}>Results</Text>
+
+          {mode === 'weight' && hasLength && (
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Required length :</Text>
+              <Text style={styles.resultVal}>
+                {result?.computedLengthMM != null ? result.computedLengthMM.toFixed(2) + ' mm' : '— mm'}
+              </Text>
+            </View>
+          )}
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Weight :</Text>
             <Text style={styles.resultVal}>
@@ -261,7 +345,7 @@ export default function CalculatorScreen({ route, navigation }) {
           {result?.total != null && (
             <View style={styles.resultRow}>
               <Text style={styles.resultLabel}>Total :</Text>
-              <Text style={styles.resultVal}>{result.total.toFixed(2)}</Text>
+              <Text style={styles.resultVal}>{currency}{result.total.toFixed(2)}</Text>
             </View>
           )}
         </View>
@@ -357,6 +441,7 @@ const styles = StyleSheet.create({
   },
   toggleBtn: { flex: 1, paddingVertical: 7, alignItems: 'center', backgroundColor: COLORS.card },
   toggleBtnActive: { backgroundColor: COLORS.cyan },
+  toggleBtnDisabled: { opacity: 0.4 },
   toggleTxt: { fontSize: 11, fontWeight: FONT.semibold, color: COLORS.text2 },
   toggleTxtActive: { color: COLORS.white },
 
