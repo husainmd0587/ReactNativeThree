@@ -1,5 +1,5 @@
 // Workshop3DModal.jsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, BackHandler,
   useWindowDimensions, Platform, StatusBar,
@@ -20,22 +20,36 @@ const CARD_HEIGHT = 250;
 
 const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
   const [mounted, setMounted] = useState(false);
+  const [fullscreenKey, setFullscreenKey] = useState(0);
   const { width, height } = useWindowDimensions();
   const progress = useSharedValue(0);
   const { addPortal, removePortal } = usePortal();
   const portalKey = usePortalKey('workshop3d');
- console.log('Render 3D Modal:', title, modelUrl?.slice(-20));
+  
+  // Stable refs to prevent effect re-runs
+  const addPortalRef = useRef(addPortal);
+  const removePortalRef = useRef(removePortal);
+
+  // Update refs when functions change
+  useEffect(() => {
+    addPortalRef.current = addPortal;
+    removePortalRef.current = removePortal;
+  }, [addPortal, removePortal]);
+
   const closeModal = useCallback(() => {
     progress.value = withTiming(
       0,
       { duration: 220, easing: Easing.in(Easing.cubic) },
       (finished) => {
-        if (finished) runOnJS(setMounted)(false);
+        if (finished) {
+          runOnJS(setMounted)(false);
+        }
       }
     );
   }, [progress]);
 
   const openModal = useCallback(() => {
+    setFullscreenKey(prev => prev + 1);
     setMounted(true);
   }, []);
 
@@ -63,16 +77,18 @@ const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
     ],
   }));
 
-  // ── Push / remove the fullscreen overlay in the app-root portal ─────────
-  useEffect(() => {
-    if (!mounted) {
-      removePortal(portalKey);
-      return undefined;
-    }
-
-    addPortal(
-      portalKey,
-      <View style={[styles.modalRoot, { width, height }]} pointerEvents="box-none">
+  // Memoize the fullscreen content - NO extra View wrapper
+  const fullscreenContent = useMemo(() => {
+    if (!mounted) return null;
+    
+    const uniqueKey = `fullscreen_${fullscreenKey}`;
+    
+    return (
+      <View 
+        key={uniqueKey}
+        style={[styles.modalRoot, { width, height }]} 
+        pointerEvents="box-none"
+      >
         <StatusBar hidden={Platform.OS === 'ios'} animated />
 
         <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}>
@@ -80,12 +96,18 @@ const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
         </Animated.View>
 
         <Animated.View style={[styles.sheet, { width, height }, sheetStyle]}>
-          {/* 3D Model - Full screen */}
           <View style={styles.sheetCanvas}>
-            <Model3DPreview modelUrl={modelUrl} camPosition={[3, 3, 7]} />
+            <Model3DPreview 
+              key={`fullscreen_model_${uniqueKey}`}
+              modelUrl={modelUrl} 
+              camPosition={[3, 3, 7]} 
+              isFullscreen={true}
+              loadingTimeout={60000}
+              onLoad={() => console.log('✅ Fullscreen model loaded')}
+              onError={(err) => console.error('❌ Fullscreen model error:', err)}
+            />
           </View>
 
-          {/* Header - Absolute positioned on top */}
           <View style={[styles.sheetHeader, styles.transparentHeader]} pointerEvents="box-none">
             <View style={styles.headerContent}>
               <View style={{ flex: 1 }}>
@@ -105,22 +127,35 @@ const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
         </Animated.View>
       </View>
     );
+  }, [mounted, fullscreenKey, width, height, modelUrl, title, subtitle, closeModal, backdropStyle, sheetStyle]);
 
-    // cleanup on unmount while still open (e.g. navigating away)
-    return () => removePortal(portalKey);
-    // backdropStyle/sheetStyle are stable animated-style objects; safe to omit from deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, width, height, title, subtitle, modelUrl, portalKey, addPortal, removePortal, closeModal]);
+  // Single portal effect - directly pass fullscreenContent
+  useEffect(() => {
+    if (!mounted) {
+      removePortalRef.current(portalKey);
+      return undefined;
+    }
+
+    // Directly add the content without extra wrapper
+    addPortalRef.current(portalKey, fullscreenContent);
+
+    return () => {
+      removePortalRef.current(portalKey);
+    };
+  }, [mounted, fullscreenKey, portalKey, fullscreenContent]);
 
   return (
     <View style={styles.card}>
-      {mounted ? (
-        <View style={[styles.cardCanvas, styles.cardPlaceholder]}>
-          <Text style={styles.placeholderIcon}>◈</Text>
-        </View>
-      ) : (
-        <Model3DPreview modelUrl={modelUrl} camPosition={[2, 2, 5]} style={styles.cardCanvas} />
-      )}
+      <Model3DPreview 
+        key={`small_${modelUrl}`}
+        modelUrl={modelUrl} 
+        camPosition={[2, 2, 5]} 
+        isFullscreen={false}
+        style={styles.cardCanvas} 
+        loadingTimeout={60000}
+        onLoad={() => console.log('✅ Small model loaded')}
+        onError={(err) => console.error('❌ Small model error:', err)}
+      />
 
       <View style={styles.cardOverlay} pointerEvents="box-none">
         {(title || subtitle) && (
@@ -144,7 +179,11 @@ const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
   );
 };
 
-export default React.memo(Workshop3DModal);
+export default React.memo(Workshop3DModal, (prev, next) => {
+  return prev.modelUrl === next.modelUrl && 
+         prev.title === next.title && 
+         prev.subtitle === next.subtitle;
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -156,26 +195,64 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginVertical: 8,
   },
-  cardCanvas: { ...StyleSheet.absoluteFillObject },
-  cardPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: SURFACE },
-  placeholderIcon: { fontSize: 32, color: MUTED },
-  cardOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', padding: 12 },
-  textBlock: { maxWidth: '75%' },
+  cardCanvas: { 
+    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+  },
+  cardPlaceholder: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: SURFACE 
+  },
+  placeholderIcon: { 
+    fontSize: 32, 
+    color: MUTED 
+  },
+  cardOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    justifyContent: 'space-between', 
+    padding: 12 
+  },
+  textBlock: { 
+    maxWidth: '75%' 
+  },
   title: {
-    fontSize: 14, fontWeight: '700', color: TEXT,
-    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+    fontSize: 14, 
+    fontWeight: '700', 
+    color: TEXT,
+    textShadowColor: 'rgba(0,0,0,0.6)', 
+    textShadowOffset: { width: 0, height: 1 }, 
+    textShadowRadius: 3,
   },
   subtitle: {
-    fontSize: 11, color: MUTED, marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+    fontSize: 11, 
+    color: MUTED, 
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.6)', 
+    textShadowOffset: { width: 0, height: 1 }, 
+    textShadowRadius: 3,
   },
   expandBtn: {
-    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.5)',
+    alignSelf: 'flex-start', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6,
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)', 
+    borderWidth: 1, 
+    borderColor: 'rgba(245,158,11,0.5)',
   },
-  expandIcon: { fontSize: 13, color: ACCENT },
-  expandLabel: { fontSize: 11, fontWeight: '700', color: TEXT },
+  expandIcon: { 
+    fontSize: 13, 
+    color: ACCENT 
+  },
+  expandLabel: { 
+    fontSize: 11, 
+    fontWeight: '700', 
+    color: TEXT 
+  },
 
   modalRoot: { 
     position: 'absolute', 
@@ -247,6 +324,6 @@ const styles = StyleSheet.create({
   closeIcon: { 
     fontSize: 16, 
     fontWeight: '700', 
-    color: '#fd0c0c' 
+    color: '#FFFFFF' 
   },
 });

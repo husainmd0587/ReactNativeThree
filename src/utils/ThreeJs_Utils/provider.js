@@ -1,9 +1,4 @@
-// React Three Fiber Canvas Provider — Professional CAD UI (v9)
-// Fixes applied vs v8:
-//  1. GestureDetector now wraps ONLY the Canvas view, not the whole screen.
-//  2. Pinch-to-zoom implemented with proper scale tracking.
-//  3. zoomLevel React state throttled to 100ms to prevent re-render storms.
-//  4. Clean, reliable CAD UI without ViewCube.
+
 import React, { Suspense, useMemo, useEffect, useState, useCallback, useRef, createContext, useContext, memo } from 'react';
 import {
   View, TouchableOpacity, Text, useWindowDimensions, StyleSheet, Animated,

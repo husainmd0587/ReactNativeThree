@@ -338,6 +338,17 @@ export function interpretGCode(gcodeText, opts = {}) {
   // We accumulate the first block's params and merge them in when the P/Q block arrives.
   const pendingRoughParams = { 71: {}, 72: {} };
 
+  // On a real control, the N(P)..N(Q) contour blocks referenced by G71/G72 are
+  // "consumed" by that cycle - the roughing cycle itself walks them, and control
+  // resumes normal execution AFTER the Q block, not by re-running P..Q again as
+  // ordinary moves. Only an explicit later G70 re-runs that contour (as the finish
+  // pass). Without this tracking, a P..Q block would get cut twice: once as literal
+  // moves when the interpreter naturally reaches those line numbers, and again
+  // inside the roughing cycle's own chain simulation.
+  const consumedByRoughRanges = [];
+  const isConsumedByRough = (lineNumber) =>
+    lineNumber !== null && consumedByRoughRanges.some(([p, q]) => lineNumber >= p && lineNumber <= q);
+
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     const a = addrMap(tok);
@@ -355,6 +366,7 @@ export function interpretGCode(gcodeText, opts = {}) {
     if (a.M === 5) state.spindleOn = false;
 
     if (a.G === 0 || a.G === 1) {
+      if (isConsumedByRough(tok.lineNumber)) continue; // already walked by G71/G72 above
       const to = resolveTarget(state, a);
       const from = { x: state.x, z: state.z };
       pushMove(moves, {
@@ -372,6 +384,7 @@ export function interpretGCode(gcodeText, opts = {}) {
     }
 
     if (a.G === 2 || a.G === 3) {
+      if (isConsumedByRough(tok.lineNumber)) continue; // already walked by G71/G72 above
       const to = resolveTarget(state, a);
       const from = { x: state.x, z: state.z };
       // I is radius-increment in X (NOT diameter), K is Z increment, both from start point
@@ -421,6 +434,7 @@ export function interpretGCode(gcodeText, opts = {}) {
         }
       }
       if (chain.length === 0) warnings.push(`Line ${tok.lineIndex}: G${a.G} P/Q range had no motion blocks.`);
+      else consumedByRoughRanges.push([pStart, qEnd]);
 
       if (a.G === 71) {
         const rough = pendingRoughParams[71];

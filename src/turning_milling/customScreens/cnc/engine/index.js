@@ -1,6 +1,6 @@
-import { interpretGCode } from './latheInterpreter';
-import { buildPasses } from './toolpathToPasses';
-import { buildProfilePath, pathToVector2, buildLatheGeometry } from './latheGeometryBuilder';
+import { interpretGCode } from './latheInterpreter.js';
+import { buildPasses } from './toolpathToPasses.js';
+import { buildProfilePath, pathToVector2, buildLatheGeometry, interpRadiusAtZ } from './latheGeometryBuilder.js';
 
 /**
  * simulateGCode - one call from raw G-code text to everything the renderer needs.
@@ -17,5 +17,5 @@ export function simulateGCode(gcodeText, stockConfig) {
   return { moves, warnings, ...built };
 }
 
-export { interpretGCode, buildPasses, buildProfilePath, pathToVector2, buildLatheGeometry };
-export default { simulateGCode, interpretGCode, buildPasses, buildProfilePath, pathToVector2, buildLatheGeometry };
+export { interpretGCode, buildPasses, buildProfilePath, pathToVector2, buildLatheGeometry, interpRadiusAtZ };
+export default { simulateGCode, interpretGCode, buildPasses, buildProfilePath, pathToVector2, buildLatheGeometry, interpRadiusAtZ };

@@ -69,4 +69,26 @@ export function buildLatheGeometry(THREE, outerProfile, innerProfile, segments =
   return new THREE.LatheGeometry(points, segments);
 }
 
+/**
+ * Linear-interpolate a profile's radius at an arbitrary Z. Profile is the
+ * {z,r}[] station array from toolpathToPasses (assumed sorted ascending by z).
+ * Used to size the "cap" disk that plugs the open cross-section at the clip
+ * plane, so the cut face reads as solid material instead of a hollow shell.
+ */
+export function interpRadiusAtZ(profile, z) {
+  if (!profile || profile.length === 0) return 0;
+  if (z <= profile[0].z) return profile[0].r;
+  const last = profile[profile.length - 1];
+  if (z >= last.z) return last.r;
+  for (let i = 1; i < profile.length; i++) {
+    if (profile[i].z >= z) {
+      const p0 = profile[i - 1];
+      const p1 = profile[i];
+      const t = (z - p0.z) / (p1.z - p0.z || 1);
+      return p0.r + (p1.r - p0.r) * t;
+    }
+  }
+  return last.r;
+}
+
 export default { buildProfilePath, pathToVector2, buildLatheGeometry };

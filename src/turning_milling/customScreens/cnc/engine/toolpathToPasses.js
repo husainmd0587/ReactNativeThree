@@ -82,6 +82,16 @@ export function buildPasses(moves, stockConfig) {
   // Group moves into passes: a new pass starts after a rapid move that follows at
   // least one cutting move (i.e. a retract-and-reposition), and also whenever the
   // cycle type changes (manual -> G71 -> G76 etc.).
+  //
+  // EXCEPTION: G74 (peck drilling) and G75 (peck grooving) retract between pecks
+  // purely for chip clearing - that's not a new material-removal pass, it's one
+  // continuous drilling/grooving operation. Splitting on every peck retreat turned
+  // a single 15mm-deep hole into ~5 near-instant "passes" that flew by too fast to
+  // see individually (and caused rapid mesh swaps / flicker). Roughing cycles
+  // (G71/G72/G76) DO get a fresh pass per depth-of-cut - that's the correct,
+  // visually meaningful granularity for those.
+  const NO_RETRACT_SPLIT_CYCLES = new Set(['G74', 'G75']);
+
   const passesRaw = [];
   let current = [];
   let lastCycle = null;
@@ -97,7 +107,7 @@ export function buildPasses(moves, stockConfig) {
     current.push(mv);
     lastCycle = mv.cycle;
     if (mv.isCutting) sawCutInCurrent = true;
-    if (mv.type === 'rapid' && sawCutInCurrent) {
+    if (mv.type === 'rapid' && sawCutInCurrent && !NO_RETRACT_SPLIT_CYCLES.has(mv.cycle)) {
       // Look ahead conceptually: we close the pass once we hit a rapid AFTER cutting,
       // but only if the rapid moves away significantly (real retract), not a tiny jog.
       const dist = Math.hypot(mv.to.x - mv.from.x, mv.to.z - mv.from.z);

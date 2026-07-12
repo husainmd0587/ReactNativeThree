@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber/native';
 import * as THREE from 'three';
 
-import { simulateGCode, buildProfilePath } from '../engine';
+import { simulateGCode, buildProfilePath, interpRadiusAtZ } from '../engine';
 import ToolBit from './ToolBit';
 import Sparks from './Sparks';
 
@@ -84,6 +84,16 @@ export default function CNCLatheSimulator({
     return list;
   }, [sim]);
 
+  // Parallel to `geometries` but keeping the raw {z,r}[] profile arrays (not THREE
+  // geometry) - needed to interpolate radius at an arbitrary Z for the cap disk.
+  const profiles = useMemo(() => {
+    if (!sim.ok) return [];
+    const { rawProfile, rawInnerProfile, passes } = sim.data;
+    const list = [{ outer: rawProfile, inner: rawInnerProfile }];
+    for (const p of passes) list.push({ outer: p.outerProfile, inner: p.innerProfile });
+    return list;
+  }, [sim]);
+
   useEffect(() => {
     return () => geometries.forEach((g) => g.dispose());
   }, [geometries]);
@@ -126,6 +136,8 @@ export default function CNCLatheSimulator({
   }, [activePass]);
 
   const telemetryAccumRef = useRef(0);
+  const capMeshRef = useRef();
+  const [capRadii, setCapRadii] = useState({ outer: 1, inner: 0.001 });
 
   useFrame((_, delta) => {
     if (!sim.ok || passes.length === 0) return;
@@ -147,16 +159,31 @@ export default function CNCLatheSimulator({
     planeRef.current.set(localNormalRef.current, sweepZ);
     planeRef.current.applyMatrix4(rotationMatrix);
 
+    // Cap disk plugs the open cross-section at the cut front so it reads as solid
+    // material, not a hollow shell. Position updates every frame for a smooth
+    // sweep; radius only needs the same ~10/sec cadence as telemetry since
+    // stations are sub-millimeter apart (imperceptible either way).
+    if (capMeshRef.current) capMeshRef.current.position.set(0, sweepZ, 0);
+
     if (playing && progressRef.current >= 1) {
       if (clampedIndex < passes.length - 1) {
         onPassIndexChange?.(clampedIndex + 1);
       }
     }
 
-    // Throttle telemetry callbacks to ~10/sec - plenty for a DRO readout, cheap on RN.
+    // Throttle telemetry callbacks (and the cap disk radius update) to ~10/sec.
     telemetryAccumRef.current += delta;
-    if (onTelemetry && telemetryAccumRef.current >= 0.1) {
+    if (telemetryAccumRef.current >= 0.1) {
       telemetryAccumRef.current = 0;
+
+      const beforeProfile = profiles[clampedIndex];
+      if (beforeProfile) {
+        const outer = Math.max(0.15, interpRadiusAtZ(beforeProfile.outer, sweepZ));
+        const inner = Math.max(0.02, interpRadiusAtZ(beforeProfile.inner, sweepZ));
+        setCapRadii({ outer, inner: Math.min(inner, outer - 0.05) });
+      }
+
+      if (onTelemetry) {
       const { cuts, cum, total } = cutPath;
       let x = activePass?.moves?.[0]?.from?.x ?? 0;
       let z = activePass?.moves?.[0]?.from?.z ?? 0;
@@ -184,6 +211,7 @@ export default function CNCLatheSimulator({
         passCount: passes.length,
         overallProgress: (clampedIndex + progressRef.current) / passes.length,
       });
+      }
     }
   });
 
@@ -195,14 +223,30 @@ export default function CNCLatheSimulator({
 
   return (
     <group>
-      {/* Finished-so-far layer: the target of this pass, sits underneath */}
+      {/* Finished-so-far layer: the target of this pass, sits underneath. Small
+          negative polygonOffset makes it reliably win the depth test over the
+          "before" layer in the (usually large) regions where they're coincident -
+          this replaces an old radial-scale hack that caused flicker of its own at
+          the flat end caps, where the scaled and unscaled geometry still shared an
+          exact center vertex. */}
       <mesh geometry={afterGeo}>
-        <meshPhysicalMaterial color="#c7ccd4" metalness={0.85} roughness={0.28} clearcoat={0.3} clearcoatRoughness={0.4} />
+        <meshPhysicalMaterial
+          color="#c7ccd4"
+          metalness={0.85}
+          roughness={0.28}
+          clearcoat={0.3}
+          clearcoatRoughness={0.4}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
       </mesh>
 
-      {/* Raw layer being swept away this pass. Slight radial scale bump avoids
-          z-fighting in the (usually large) regions where before === after. */}
-      <mesh geometry={beforeGeo} scale={[1.001, 1, 1.001]}>
+      {/* Raw layer being swept away this pass. DoubleSide is needed so the inside
+          of the shell (exposed wherever the clip plane cuts through) still
+          renders instead of vanishing - the cap disk below is what keeps that
+          exposed cross-section from reading as "hollow" rather than solid. */}
+      <mesh geometry={beforeGeo}>
         <meshPhysicalMaterial
           color="#9298a1"
           metalness={0.6}
@@ -210,6 +254,16 @@ export default function CNCLatheSimulator({
           clippingPlanes={[planeRef.current]}
           side={THREE.DoubleSide}
         />
+      </mesh>
+
+      {/* Cap disk: plugs the open cross-section right at the cut front so it
+          reads as a solid turned face, not a thin peeled-back shell. Sized from
+          the BEFORE profile (the boundary of remaining raw material) and rebuilt
+          via declarative <ringGeometry args={...}> - R3F disposes/recreates the
+          underlying geometry automatically when args change. */}
+      <mesh ref={capMeshRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[capRadii.inner, capRadii.outer, 48]} />
+        <meshStandardMaterial color="#d8dbe0" metalness={0.7} roughness={0.3} side={THREE.DoubleSide} />
       </mesh>
 
       <ToolBit pass={activePass} progressRef={progressRef} />
