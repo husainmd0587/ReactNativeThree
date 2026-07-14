@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, Share, SafeAreaView, StatusBar,
+  Modal, Dimensions,
 } from 'react-native';
 import { SHAPES, MATERIALS } from './shapes';
 import { DimensionedPreview } from './dimensionOverlay';
@@ -9,7 +10,65 @@ import { COLORS, RADIUS, SHADOW, FONT } from './theme';
 import { formatDate, buildShareText } from './storage';
 import { useAppData } from './appData';
 
-const UNITS = ['mm', 'cm', 'm'];
+const UNITS = ['mm', 'cm', 'm', 'in'];
+const SCREEN_H = Dimensions.get('window').height;
+
+// ── Material picker: 80%-height bottom sheet, since the material list is
+// long (37 entries) — a small inline dropdown doesn't scale to that.
+function MaterialPickerModal({ visible, materials, currentIndex, onSelect, onClose, customDensity, onCustomDensityChange }) {
+  const selected = materials[currentIndex];
+  const isCustom = selected?.density === null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+        <View style={styles.modalSheet}>
+          <View style={styles.dragHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Material</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.modalCloseTxt}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalList} showsVerticalScrollIndicator={false}>
+            {materials.map((m, i) => {
+              const isActive = i === currentIndex;
+              return (
+                <TouchableOpacity
+                  key={m.label}
+                  style={[styles.modalMatRow, isActive && styles.modalMatRowActive]}
+                  onPress={() => onSelect(i)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.modalMatLabel, isActive && styles.modalMatLabelActive]}>{m.label}</Text>
+                  <Text style={[styles.modalMatDensity, isActive && styles.modalMatDensityActive]}>
+                    {m.density !== null ? `${m.density} g/cm³` : 'set below'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {isCustom && (
+            <View style={styles.customDensityRow}>
+              <Text style={styles.customDensityLabel}>Custom density (g/cm³)</Text>
+              <TextInput
+                style={styles.customDensityInput}
+                value={customDensity}
+                onChangeText={onCustomDensityChange}
+                keyboardType="numeric"
+                placeholder="7.85"
+                placeholderTextColor={COLORS.text3}
+              />
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export default function CalculatorScreen({ route, navigation }) {
   const { shapeId } = route.params;
@@ -20,7 +79,8 @@ export default function CalculatorScreen({ route, navigation }) {
 
   const [matIndex, setMatIndex] = useState(0);
   const [mode, setMode] = useState('length'); // 'length' | 'weight'
-  const [showMatPicker, setShowMatPicker] = useState(false);
+  const [matModalVisible, setMatModalVisible] = useState(false);
+  const [customDensity, setCustomDensity] = useState('7.85');
   const [extraMats] = useState([]);
 
   // Build initial input state from shape dims
@@ -38,7 +98,11 @@ export default function CalculatorScreen({ route, navigation }) {
   const [result, setResult] = useState(null);
 
   const allMats = useMemo(() => [...MATERIALS, ...extraMats], [extraMats]);
-  const material = allMats[matIndex] || MATERIALS[0];
+  const rawMaterial = allMats[matIndex] || MATERIALS[0];
+  const isCustomMat = rawMaterial.density === null;
+  const material = isCustomMat
+    ? { label: rawMaterial.label, density: parseFloat(customDensity) || 7.85 }
+    : rawMaterial;
 
   // ── Calculate ──────────────────────────────────────────────────────────────
   // Two modes:
@@ -216,28 +280,11 @@ export default function CalculatorScreen({ route, navigation }) {
               {/* Material picker */}
               <TouchableOpacity
                 style={styles.matRow}
-                onPress={() => setShowMatPicker(v => !v)}
+                onPress={() => setMatModalVisible(true)}
               >
                 <Text style={styles.matLabel}>{material.label}</Text>
                 <Text style={styles.chevron}>▾</Text>
               </TouchableOpacity>
-              {showMatPicker && (
-                <View style={styles.matDropdown}>
-                  <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                    {allMats.map((m, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        style={[styles.matOpt, i === matIndex && styles.matOptActive]}
-                        onPress={() => { setMatIndex(i); setShowMatPicker(false); }}
-                      >
-                        <Text style={[styles.matOptTxt, i === matIndex && styles.matOptTxtActive]}>
-                          {m.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
 
               {/* Mode toggle */}
               <View style={styles.toggleRow}>
@@ -363,6 +410,16 @@ export default function CalculatorScreen({ route, navigation }) {
           <Text style={styles.footerIconTxt}>💾</Text>
         </TouchableOpacity>
       </View>
+
+      <MaterialPickerModal
+        visible={matModalVisible}
+        materials={allMats}
+        currentIndex={matIndex}
+        onSelect={(i) => { setMatIndex(i); if (allMats[i].density !== null) setMatModalVisible(false); }}
+        onClose={() => setMatModalVisible(false)}
+        customDensity={customDensity}
+        onCustomDensityChange={setCustomDensity}
+      />
     </SafeAreaView>
   );
 }
@@ -419,18 +476,78 @@ const styles = StyleSheet.create({
   },
   matLabel: { fontSize: 13, color: COLORS.text, fontWeight: FONT.medium },
   chevron:  { fontSize: 13, color: COLORS.text2 },
-  matDropdown: {
-    borderWidth: 1,
+
+  // ── Material picker modal (80% screen height) ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    height: SCREEN_H * 0.8,
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: { flex: 1, fontSize: 17, fontWeight: FONT.bold, color: COLORS.text },
+  modalCloseBtn: { padding: 4 },
+  modalCloseTxt: { fontSize: 18, color: COLORS.text2 },
+  modalList: { paddingVertical: 4 },
+  modalMatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalMatRowActive: { backgroundColor: COLORS.cyanLight },
+  modalMatLabel: { fontSize: 14, color: COLORS.text, fontWeight: FONT.medium },
+  modalMatLabelActive: { color: COLORS.cyanDark, fontWeight: FONT.semibold },
+  modalMatDensity: { fontSize: 12, color: COLORS.text2 },
+  modalMatDensityActive: { color: COLORS.cyanDark },
+  customDensityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+  },
+  customDensityLabel: { fontSize: 13, color: COLORS.text, fontWeight: FONT.medium },
+  customDensityInput: {
+    borderWidth: 1.5,
     borderColor: COLORS.border,
     borderRadius: RADIUS.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: COLORS.text,
     backgroundColor: COLORS.card,
-    ...SHADOW.md,
-    zIndex: 99,
+    minWidth: 90,
+    textAlign: 'right',
   },
-  matOpt: { paddingHorizontal: 14, paddingVertical: 10 },
-  matOptActive: { backgroundColor: COLORS.cyanLight },
-  matOptTxt: { fontSize: 13, color: COLORS.text },
-  matOptTxtActive: { color: COLORS.cyanDark, fontWeight: FONT.semibold },
 
   toggleRow: {
     flexDirection: 'row',

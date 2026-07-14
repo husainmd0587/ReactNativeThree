@@ -18,7 +18,7 @@ const TEXT = '#f0f2f5';
 const MUTED = '#9aa1b0';
 const CARD_HEIGHT = 250;
 
-const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
+const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl }) => {
   const [mounted, setMounted] = useState(false);
   const [fullscreenKey, setFullscreenKey] = useState(0);
   const { width, height } = useWindowDimensions();
@@ -100,6 +100,7 @@ const Workshop3DModal = ({ title, subtitle, modelUrl }) => {
             <Model3DPreview 
               key={`fullscreen_model_${uniqueKey}`}
               modelUrl={modelUrl} 
+              soundUrl={soundUrl}
               camPosition={[3, 3, 7]} 
               isFullscreen={true}
               loadingTimeout={60000}

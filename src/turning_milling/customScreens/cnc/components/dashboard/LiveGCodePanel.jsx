@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 
 const LINE_HEIGHT = 22;
 
-export default function LiveGCodePanel({ gcode, activeLine }) {
+export default function LiveGCodePanel({ gcode, activeLine, onEditProgram }) {
   const lines = gcode.split('\n');
   const scrollRef = useRef(null);
 
@@ -18,9 +18,16 @@ export default function LiveGCodePanel({ gcode, activeLine }) {
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>LIVE G-CODE</Text>
-        <Text style={styles.lineIndicator}>
-          LINE: <Text style={styles.lineNum}>{activeLine ?? '—'}</Text> / {lines.length}
-        </Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.lineIndicator}>
+            LINE: <Text style={styles.lineNum}>{activeLine ?? '—'}</Text> / {lines.length}
+          </Text>
+          {onEditProgram ? (
+            <TouchableOpacity style={styles.editBtn} onPress={onEditProgram}>
+              <Text style={styles.editBtnText}>✎ Edit / New</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView ref={scrollRef} style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -45,10 +52,13 @@ export default function LiveGCodePanel({ gcode, activeLine }) {
 
 const styles = StyleSheet.create({
   wrap: { backgroundColor: '#0b0c0e', borderRadius: 10, padding: 10, height: 220 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   title: { color: '#8a919c', fontSize: 10, letterSpacing: 0.5, fontWeight: '700' },
   lineIndicator: { color: '#8a919c', fontSize: 10 },
   lineNum: { color: '#5aa8ff', fontWeight: '700' },
+  editBtn: { marginLeft: 8, backgroundColor: '#1c2027', borderRadius: 5, paddingVertical: 3, paddingHorizontal: 6 },
+  editBtnText: { color: '#5aa8ff', fontSize: 9, fontWeight: '700' },
   scroll: { flex: 1 },
   lineRow: { flexDirection: 'row', alignItems: 'center', height: LINE_HEIGHT, paddingHorizontal: 4, borderRadius: 4 },
   lineRowActive: { backgroundColor: '#1c2b1c' },

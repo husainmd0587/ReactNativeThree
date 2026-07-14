@@ -24,6 +24,7 @@ const Modal3DScreen = ({ navigation, route }) => {
   const params = route?.params || {};
   const modelUrl = params.modelUrl || params.url || params.uri;
   const title = params.title || '3D Model Preview';
+  const soundUrl=params.soundUrl || null
   const subtitle = params.subtitle || '';
   const { width, height } = useWindowDimensions();
   
@@ -79,6 +80,7 @@ const Modal3DScreen = ({ navigation, route }) => {
         <View style={styles.modelContainer}>
           <Model3DPreview 
             modelUrl={modelUrl} 
+            soundUrl={soundUrl}
             camPosition={[3, 3, 7]} 
             style={styles.modelPreview}
           />

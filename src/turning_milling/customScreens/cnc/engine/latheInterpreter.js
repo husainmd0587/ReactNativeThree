@@ -73,6 +73,7 @@ function pushMove(moves, { lineIndex, type, from, to, center, state, cycle, isCu
     feed: state.feed,
     feedMode: state.feedMode,
     spindleSpeed: state.spindleSpeed,
+    spindleOn: state.spindleOn,
     toolNumber: state.toolNumber,
     cycle: cycle || 'manual',
     isCutting: !!isCutting,
@@ -337,6 +338,7 @@ export function interpretGCode(gcodeText, opts = {}) {
   //   G71 P10 Q20 U0.5 W0.1 F0.25   <- finish allowance + contour reference
   // We accumulate the first block's params and merge them in when the P/Q block arrives.
   const pendingRoughParams = { 71: {}, 72: {} };
+  const pendingRoughLine = { 71: null, 72: null }; // lineIndex that stashed it, for a "never consumed" warning
 
   // On a real control, the N(P)..N(Q) contour blocks referenced by G71/G72 are
   // "consumed" by that cycle - the roughing cycle itself walks them, and control
@@ -413,8 +415,14 @@ export function interpretGCode(gcodeText, opts = {}) {
 
       if (pStart === undefined || qEnd === undefined) {
         // First block of a split pair: just stash depth/retract params for later.
+        // If a PREVIOUS stash for this same cycle is still unconsumed, its P/Q
+        // block was never found before this new one overwrote it - warn.
+        if (pendingRoughLine[a.G] !== null) {
+          warnings.push(`Line ${pendingRoughLine[a.G]}: G${a.G} U/R params were never followed by a matching P/Q block.`);
+        }
         if (a.G === 71) pendingRoughParams[71] = { U: a.U, R: a.R };
         if (a.G === 72) pendingRoughParams[72] = { W: a.W, R: a.R };
+        pendingRoughLine[a.G] = tok.lineIndex;
         continue;
       }
 
@@ -435,6 +443,7 @@ export function interpretGCode(gcodeText, opts = {}) {
       }
       if (chain.length === 0) warnings.push(`Line ${tok.lineIndex}: G${a.G} P/Q range had no motion blocks.`);
       else consumedByRoughRanges.push([pStart, qEnd]);
+      pendingRoughLine[a.G] = null; // consumed, whether or not the chain was usable
 
       if (a.G === 71) {
         const rough = pendingRoughParams[71];
@@ -493,9 +502,52 @@ export function interpretGCode(gcodeText, opts = {}) {
       state.z = to.z;
       continue;
     }
+
+    if (a.G === 184) {
+      // RADIAL DRILLING - simulator-only cycle, not a real Fanuc code. There is
+      // no universal standard for radial/cross-drilling on a lathe (real
+      // live-tooling controls use C-axis + Y-axis polar interpolation, which is
+      // well beyond this engine's scope). G184 is a deliberate simplification:
+      //   G184 Z<axial pos> C<angle deg> D<diameter> Q<depth> F<feed>
+      // Does NOT move the X/Z carriage (a real radial-drill uses the C-axis and a
+      // driven tool, not the main slide) - it just records the hole. The
+      // axisymmetric profile system (toolpathToPasses.js) ignores this move
+      // entirely; it's picked up separately by engine/radialCSG.js.
+      if (a.Z === undefined) {
+        warnings.push(`Line ${tok.lineIndex}: G184 missing Z (axial position of the hole) - skipped.`);
+      } else {
+        moves.push({
+          lineIndex: tok.lineIndex,
+          type: 'radialDrill',
+          cycle: 'G184',
+          isCutting: false,
+          from: { x: state.x, z: state.z },
+          to: { x: state.x, z: state.z },
+          feed: a.F ?? state.feed,
+          feedMode: state.feedMode,
+          spindleSpeed: state.spindleSpeed,
+          spindleOn: state.spindleOn,
+          toolNumber: state.toolNumber,
+          radial: {
+            z: a.Z,
+            angleDeg: a.C ?? 0,
+            diameter: Math.max(0.5, a.D ?? 6),
+            depth: Math.max(0.1, a.Q ?? 5),
+          },
+        });
+      }
+      continue;
+    }
   }
 
-  return { moves, warnings, config };
+  if (pendingRoughLine[71] !== null) {
+    warnings.push(`Line ${pendingRoughLine[71]}: G71 U/R params were never followed by a matching P/Q block.`);
+  }
+  if (pendingRoughLine[72] !== null) {
+    warnings.push(`Line ${pendingRoughLine[72]}: G72 W/R params were never followed by a matching P/Q block.`);
+  }
+
+  return { moves, warnings, config, finalState: { ...state } };
 }
 
 export default { interpretGCode };

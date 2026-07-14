@@ -5,11 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from './meshopt_decoder_reference.js';
 
-// LRU Cache with max size to prevent memory leaks
-// NOTE: this cache stores the single "master" parsed scene per URL.
-// Every hook consumer gets its own SkeletonUtils.clone() of that master —
-// never the master itself — so multiple mounted <Model3DPreview> instances
-// (e.g. small card + fullscreen modal) never fight over the same Object3D graph.
+//use for compression -  gltfpack -i robot.glb -o compressed_robot.glb -cc -kn -vtf -vpf
 class LRUCache {
   constructor(maxSize = 5) {
     this.maxSize = maxSize;
@@ -246,7 +242,7 @@ export function useGLTF(url) {
           // Silent fail
         }
 
-        const gltf = await new Promise((resolve, reject) => {
+  const gltf = await new Promise((resolve, reject) => {
           loader.parse(
             arrayBuffer,
             '',
@@ -258,6 +254,19 @@ export function useGLTF(url) {
             }
           );
         });
+
+      // 🔍 DEBUG: check raw scene right after GLTFLoader.parse()
+            gltf.scene.traverse((c) => {
+              if (c.isMesh) {
+                const mat = Array.isArray(c.material) ? c.material[0] : c.material;
+            console.log(
+          '[RAW]', c.name,
+          'hasMap:', !!mat?.map,
+          'offset:', mat?.map?.offset?.x, mat?.map?.offset?.y,
+          'repeat:', mat?.map?.repeat?.x, mat?.map?.repeat?.y
+        );
+      }
+    });
 
         if (!isMounted.current) return;
 

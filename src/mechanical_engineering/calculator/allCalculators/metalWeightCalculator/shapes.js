@@ -1,14 +1,41 @@
 export const MATERIALS = [
-  { label: 'Steel',      density: 7.85 },
-  { label: 'Aluminium',  density: 2.70 },
-  { label: 'Copper',     density: 8.96 },
-  { label: 'Brass',      density: 8.50 },
-  { label: 'Cast Iron',  density: 7.20 },
-  { label: 'Lead',       density: 11.34 },
-  { label: 'Titanium',   density: 4.51 },
-  { label: 'Nickel',     density: 8.90 },
-  { label: 'Bronze',     density: 8.80 },
-  { label: 'Zinc',       density: 7.13 },
+  { label: 'Steel',           density: 7.85 },
+  { label: 'Stainless Steel', density: 7.90 },
+  { label: 'Aluminium',       density: 2.70 },
+  { label: 'Copper',          density: 8.96 },
+  { label: 'Brass',           density: 8.50 },
+  { label: 'Cast Iron',       density: 7.20 },
+  { label: 'Lead',            density: 11.34 },
+  { label: 'Titanium',        density: 4.51 },
+  { label: 'Nickel',          density: 8.90 },
+  { label: 'Bronze',          density: 8.80 },
+  { label: 'Zinc',            density: 7.133 },
+  { label: 'Acrylic',         density: 1.18 },
+  { label: 'Beryllium',       density: 1.85 },
+  { label: 'Chrome',          density: 7.19 },
+  { label: 'Columbium',       density: 8.57 },
+  { label: 'Duralumin',       density: 2.79 },
+  { label: 'Glass',           density: 2.50 },
+  { label: 'Gold',            density: 19.30 },
+  { label: 'Magnesium',       density: 1.74 },
+  { label: 'Mercury',         density: 13.60 },
+  { label: 'Molybdenum',      density: 10.22 },
+  { label: 'Nylon',           density: 1.15 },
+  { label: 'PB / Gunmetal',   density: 8.77 },
+  { label: 'Platinum',        density: 21.45 },
+  { label: 'Polycarbonate',   density: 1.20 },
+  { label: 'Polyethylene',    density: 0.96 },
+  { label: 'Polypropylene',   density: 0.91 },
+  { label: 'Potassium',       density: 0.86 },
+  { label: 'PVDF',            density: 1.78 },
+  { label: 'Silver',          density: 10.49 },
+  { label: 'Tantalum',        density: 16.69 },
+  { label: 'Teflon',          density: 2.20 },
+  { label: 'Tin',             density: 7.30 },
+  { label: 'Tungsten',        density: 19.30 },
+  { label: 'Water',           density: 1.00 },
+  { label: 'Zirconium',       density: 6.51 },
+  { label: 'Custom...',       density: null },
 ];
 
 export const SHAPES = [
@@ -545,5 +572,8 @@ export const SHAPES = [
 
 function toMM(val, unit) {
   const v = parseFloat(val) || 0;
-  return unit === 'cm' ? v * 10 : unit === 'm' ? v * 1000 : v;
+  if (unit === 'cm') return v * 10;
+  if (unit === 'm')  return v * 1000;
+  if (unit === 'in') return v * 25.4;
+  return v; // mm
 }

@@ -20,6 +20,7 @@ const ResourceList = ({ title, items = [], viewAllItem, accent, navigation }) =>
       navigation,
       accent,
       thumbnail: resource.thumbnail,
+      soundUrl:resource.soundUrl
     };
 
     switch (resource.type) {
@@ -133,10 +134,10 @@ const AudioResource = ({ url, title, size, navigation }) => (
   </TouchableOpacity>
 );
 
-const ThreeDResource = ({ url, title, size, navigation }) => (
+const ThreeDResource = ({ url, title, size,soundUrl, navigation }) => (
   <TouchableOpacity
     style={styles.resourceRow}
-    onPress={() => navigation.navigate('Modal3DScreen', { modelUrl: url, title })}
+    onPress={() => navigation.navigate('Modal3DScreen', { modelUrl: url,soundUrl, title })}
   >
     <View style={[styles.resourceIconWrap, { backgroundColor: '#E3F2FD' }]}> 
       <Text style={styles.resourceIcon}>🧊</Text>

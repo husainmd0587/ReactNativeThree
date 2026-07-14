@@ -9,9 +9,16 @@ import { Worker } from './src/all_glb/worker';
 import { PortalProvider } from './src/utils/ThreeJs_Utils/portal'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { suppressWarnings } from './src/utils/config/surppressWarning'
+// Suppress warnings on app start
+suppressWarnings();
+
+
+
 const queryClient = new QueryClient();
 
 const App = () => {
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" hidden={false} translucent={false} />

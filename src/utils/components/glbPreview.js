@@ -1,55 +1,166 @@
-// Model3DPreview.jsx
+// Model3DPreview.jsx - SIMPLIFIED FIX
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
 import { useFrame } from '@react-three/fiber/native';
+import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
 import CanvaProvider from '../ThreeJs_Utils/provider';
+import SoundPlayer from '../sound/soundPlayer'
 
 const EMPTY_OBJECT = Object.freeze({});
 const EMPTY_ARRAY = Object.freeze([]);
-
-// NOTE ON RESOURCE OWNERSHIP:
-// useGLTF() now returns a fresh SkeletonUtils.clone() of the cached master
-// scene for every hook call (see hooks/useGLTFonline.js). Clones share
-// geometry/material objects with the master and with every other clone of
-// the same URL. That means THIS component must NEVER dispose geometry or
-// materials on unmount — doing so would free resources still in use by
-// another mounted instance (e.g. the small card preview while the fullscreen
-// modal is open, or vice versa). Disposal of the underlying GPU resources is
-// handled centrally by the LRU cache in useGLTFonline.js when an entry is
-// evicted or cleared. This component only needs to drop its own references.
 
 function SceneModel({ 
   modelUrl, 
   materialConfig = EMPTY_OBJECT, 
   animations = EMPTY_ARRAY, 
+  playClipAnimations = true,
+  clipNames = null, 
+  animationTimeScale = 1,
+  soundUrl = null,
+  soundLoop = true,
   onMeshPress, 
   onLoad, 
   onError, 
+  onClipFinished,
+  onSoundLoaded,
+  onSoundError,
   ...props 
 }) {
   const group = useRef();
   const meshRefs = useRef({});
-  const previousSceneRef = useRef(null);
-  const { scene, ready, error } = useGLTF(modelUrl);
+  const previousSceneRef = useRef(null); 
+  const { scene, ready, error, animations: clips } = useGLTF(modelUrl);
   const [processed, setProcessed] = useState(false);
+  const mixerRef = useRef(null);
+  const soundLoadTimeoutRef = useRef(null);
+  const isPlayingRef = useRef(false);
+  const soundUrlRef = useRef(soundUrl);
+  const componentMountedRef = useRef(true);
+  const animationStartedRef = useRef(false);
+  const soundLoadedRef = useRef(false);
+  
+  // ✅ Use useAnimations from @react-three/drei
+  const { actions, names, mixer } = useAnimations(
+    playClipAnimations ? clips : [],
+    group
+  );
 
-  // Just drop references on unmount — do NOT dispose geometry/materials,
-  // they're shared (see note above). The cache owns disposal.
+  // Store mixer reference
   useEffect(() => {
+    if (mixer) {
+      mixerRef.current = mixer;
+    }
+  }, [mixer]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    componentMountedRef.current = true;
+    soundUrlRef.current = soundUrl;
+    soundLoadedRef.current = false;
+    
     return () => {
+      componentMountedRef.current = false;
       previousSceneRef.current = null;
       meshRefs.current = {};
+      // Cleanup sound on unmount
+      SoundPlayer.stop();
+      SoundPlayer.release();
+      isPlayingRef.current = false;
+      if (soundLoadTimeoutRef.current) {
+        clearTimeout(soundLoadTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [soundUrl]);
 
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
+  const onClipFinishedRef = useRef(onClipFinished);
+  const onSoundLoadedRef = useRef(onSoundLoaded);
+  const onSoundErrorRef = useRef(onSoundError);
+  
   useEffect(() => {
     onLoadRef.current = onLoad;
     onErrorRef.current = onError;
+    onClipFinishedRef.current = onClipFinished;
+    onSoundLoadedRef.current = onSoundLoaded;
+    onSoundErrorRef.current = onSoundError;
   });
+
+  // Load sound
+  useEffect(() => {
+    if (!soundUrl) {
+      soundLoadedRef.current = false;
+      return;
+    }
+
+    let mounted = true;
+    soundLoadedRef.current = false;
+
+    const loadSound = async () => {
+      try {
+        if (soundLoadTimeoutRef.current) {
+          clearTimeout(soundLoadTimeoutRef.current);
+        }
+
+        const loadPromise = SoundPlayer.load(soundUrl);
+        const timeoutPromise = new Promise((_, reject) => {
+          soundLoadTimeoutRef.current = setTimeout(() => {
+            reject(new Error('Sound loading timeout'));
+          }, 10000);
+        });
+
+        await Promise.race([loadPromise, timeoutPromise]);
+        
+        if (!mounted || !componentMountedRef.current) return;
+
+        soundLoadedRef.current = true;
+        onSoundLoadedRef.current?.();
+        console.log('✅ Sound loaded successfully');
+
+        // Start sound if animation is already playing
+        if (animationStartedRef.current && soundUrlRef.current === soundUrl) {
+          startSound();
+        }
+
+      } catch (error) {
+        console.error('❌ Failed to load sound:', error);
+        if (mounted && componentMountedRef.current) {
+          soundLoadedRef.current = false;
+          onSoundErrorRef.current?.(error);
+        }
+      }
+    };
+
+    loadSound();
+
+    return () => {
+      mounted = false;
+      if (soundLoadTimeoutRef.current) {
+        clearTimeout(soundLoadTimeoutRef.current);
+      }
+    };
+  }, [soundUrl]);
+
+  // Start sound function
+  const startSound = useCallback(() => {
+    if (!soundLoadedRef.current || !soundUrl || isPlayingRef.current) {
+      return;
+    }
+
+    try {
+      if (soundLoop && SoundPlayer.getSound()) {
+        SoundPlayer.setLoop(true);
+      }
+      
+      SoundPlayer.play();
+      isPlayingRef.current = true;
+      console.log('🔊 Sound started');
+    } catch (error) {
+      console.error('Error starting sound:', error);
+    }
+  }, [soundUrl, soundLoop]);
 
   useEffect(() => {
     if (error) {
@@ -72,9 +183,6 @@ function SceneModel({
     if (!needsReprocess) return scene;
     
     try {
-      // NOTE: previous scene is a clone this instance owned; just drop the
-      // reference. Do not traverse-and-dispose it — its geometry/materials
-      // may still be referenced by other clones (small preview / fullscreen).
       meshRefs.current = {};
       
       const meshes = [];
@@ -93,10 +201,6 @@ function SceneModel({
         const config = materialConfig[key] || {};
         
         if (Object.keys(config).length > 0) {
-          // Because this mesh's material may be shared with other clones of
-          // the same source model, mutating it in place would leak visual
-          // changes across instances. Always create a fresh material for
-          // this instance instead of mutating a shared one.
           const baseMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
           const material = new MeshStandardMaterial({
             color: config.color ?? baseMaterial?.color ?? '#999',
@@ -132,25 +236,93 @@ function SceneModel({
     }
   }, [scene, materialConfigKey, error, ready, processed]);
 
-  const animationsRef = useRef(animations);
+  // ✅ ANIMATION ONLY - runs once when actions are ready
   useEffect(() => {
-    animationsRef.current = animations;
-  }, [animations]);
+    // Skip if already started or no actions
+    if (animationStartedRef.current || !playClipAnimations || !actions || Object.keys(actions).length === 0) {
+      return;
+    }
 
-  useFrame((state, delta) => {
-    const currentAnimations = animationsRef.current;
-    if (!currentAnimations.length || !processedScene) return;
-    
-    const safeDelta = Math.min(delta, 0.03);
-    
-    currentAnimations.forEach((anim) => {
-      const mesh = meshRefs.current[anim.name];
-      if (!mesh) return;
-      
-      if (anim.rotateX) mesh.rotation.x += anim.rotateX * safeDelta;
-      if (anim.rotateY) mesh.rotation.y += anim.rotateY * safeDelta;
-      if (anim.rotateZ) mesh.rotation.z += anim.rotateZ * safeDelta;
+    // Determine which clips to play
+    let targetActions = actions;
+    if (clipNames && clipNames.length > 0) {
+      targetActions = {};
+      clipNames.forEach(name => {
+        if (actions[name]) {
+          targetActions[name] = actions[name];
+        }
+      });
+    }
+
+    const actionKeys = Object.keys(targetActions);
+    if (actionKeys.length === 0) {
+      return;
+    }
+
+    console.log(`Playing ${actionKeys.length} animations:`, actionKeys);
+
+    // Play all target actions
+    actionKeys.forEach((key) => {
+      const action = targetActions[key];
+      if (action) {
+        action.reset();
+        action.setLoop(Infinity, Infinity);
+        action.timeScale = animationTimeScale;
+        action.play();
+      }
     });
+
+    animationStartedRef.current = true;
+
+    // Start sound if loaded
+    if (soundLoadedRef.current && soundUrl) {
+      startSound();
+    }
+
+    // Handle clip finished
+    const handleFinished = (event) => {
+      const clipName = event.action?.getClip()?.name;
+      if (clipName) {
+        console.log('Animation finished:', clipName);
+        onClipFinishedRef.current?.(clipName);
+      }
+    };
+
+    if (mixerRef.current) {
+      mixerRef.current.addEventListener('finished', handleFinished);
+    }
+
+    return () => {
+      // Stop animations but keep sound playing
+      actionKeys.forEach((key) => {
+        const action = targetActions[key];
+        if (action) {
+          action.stop();
+        }
+      });
+      
+      if (mixerRef.current) {
+        mixerRef.current.removeEventListener('finished', handleFinished);
+      }
+    };
+  }, [actions, playClipAnimations, clipNames, animationTimeScale, soundUrl, startSound]); // Only runs when actions change
+
+  // ✅ Use useFrame for manual animations (rotation, etc.)
+  useFrame((state, delta) => {
+    const safeDelta = Math.min(delta, 0.03);
+
+    // Drive manual per-mesh rotation config
+    const currentAnimations = animations;
+    if (currentAnimations && currentAnimations.length > 0 && processedScene) {
+      currentAnimations.forEach((anim) => {
+        const mesh = meshRefs.current[anim.name];
+        if (!mesh) return;
+
+        if (anim.rotateX) mesh.rotation.x += anim.rotateX * safeDelta;
+        if (anim.rotateY) mesh.rotation.y += anim.rotateY * safeDelta;
+        if (anim.rotateZ) mesh.rotation.z += anim.rotateZ * safeDelta;
+      });
+    }
   });
 
   if (!processedScene) return null;
@@ -181,7 +353,12 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
   return (
     prevProps.modelUrl === nextProps.modelUrl &&
     prevConfig === nextConfig &&
-    prevProps.animations === nextProps.animations
+    prevProps.animations === nextProps.animations &&
+    prevProps.playClipAnimations === nextProps.playClipAnimations &&
+    prevProps.animationTimeScale === nextProps.animationTimeScale &&
+    prevProps.soundUrl === nextProps.soundUrl &&
+    prevProps.soundLoop === nextProps.soundLoop &&
+    JSON.stringify(prevProps.clipNames) === JSON.stringify(nextProps.clipNames)
   );
 });
 
@@ -191,9 +368,17 @@ function Model3DPreview({
   camPosition = [2, 2, 5], 
   materialConfig = EMPTY_OBJECT, 
   animations = EMPTY_ARRAY, 
+  playClipAnimations = true,
+  clipNames,
+  animationTimeScale = 1,
+  soundUrl = null,
+  soundLoop = true,
   style, 
   onLoad, 
   onError,
+  onClipFinished,
+  onSoundLoaded,
+  onSoundError,
   loadingTimeout = 60000,
   isFullscreen = false,
   ...props 
@@ -204,16 +389,6 @@ function Model3DPreview({
   const isMountedRef = useRef(true);
   const loadCalledRef = useRef(false);
 
-  // Latest-ref pattern for onLoad/onError. Parent components (e.g.
-  // Workshop3DModal) commonly pass these as inline arrow functions that get
-  // a new identity on every render. If those identities appeared in a
-  // dependency array below, an unrelated parent re-render (like the one that
-  // happens continuously during a close animation) would re-trigger status
-  // resets on a model that's already fully loaded — reopening the loading
-  // spinner and re-arming the error timeout with nothing left to cancel it,
-  // eventually surfacing a false "Failed to load" error. Reading the latest
-  // callback from a ref sidesteps that entirely: effects only depend on
-  // things that should actually restart loading (modelUrl, loadingTimeout).
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   useEffect(() => {
@@ -221,13 +396,10 @@ function Model3DPreview({
     onErrorRef.current = onError;
   });
 
-  // Stable instanceId — each logical "slot" (small vs fullscreen) gets its
-  // own Canvas/GL context, and (via useGLTF) its own cloned scene graph.
   const instanceId = useMemo(() => {
     return `preview_${modelUrl}_${isFullscreen ? 'fs' : 'sm'}`;
   }, [modelUrl, isFullscreen]);
 
-  // Stable across renders — no dependency on onLoad/onError identity.
   const handleError = useCallback((err) => {
     if (!isMountedRef.current) return;
     console.error('Model error:', err);
@@ -241,7 +413,6 @@ function Model3DPreview({
     }
   }, []);
 
-  // Stable across renders — no dependency on onLoad/onError identity.
   const handleLoad = useCallback(() => {
     if (!isMountedRef.current) return;
     setStatus('ready');
@@ -254,8 +425,6 @@ function Model3DPreview({
     }
   }, []);
 
-  // Reset state ONLY when the actual model URL (or timeout config) changes —
-  // never because a parent re-rendered with a fresh onLoad/onError closure.
   useEffect(() => {
     isMountedRef.current = true;
     loadCalledRef.current = false;
@@ -289,10 +458,18 @@ function Model3DPreview({
     modelUrl,
     materialConfig,
     animations,
+    playClipAnimations,
+    clipNames,
+    animationTimeScale,
+    soundUrl,
+    soundLoop,
     onLoad: handleLoad,
     onError: handleError,
+    onClipFinished,
+    onSoundLoaded,
+    onSoundError,
     ...props
-  }), [modelUrl, materialConfig, animations, handleLoad, handleError, props]);
+  }), [modelUrl, materialConfig, animations, playClipAnimations, clipNames, animationTimeScale, soundUrl, soundLoop, handleLoad, handleError, onClipFinished, onSoundLoaded, onSoundError, props]);
 
   if (!modelUrl) {
     return (

@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Dimensions, StatusBar, Platform,
-  Image, Animated,
+  Animated,
 } from 'react-native';
 import {
   GestureDetector, Gesture,
@@ -15,17 +15,13 @@ import {
   LinearGradient,
   vec,
   Text as SkiaText,
-  useFont,
+  matchFont,
 } from '@shopify/react-native-skia';
 
 import {
   runOnJS,
   useSharedValue,
   useDerivedValue,
-  withRepeat,
-  withTiming,
-  cancelAnimation,
-  Easing,
 } from 'react-native-reanimated';
 
 import { useFrame as useR3FFrame } from '@react-three/fiber/native';
@@ -69,6 +65,43 @@ const MATERIALS = [
   { id: 'wood', label: 'Wood', color: '#8B5E3C', roughness: 0.95, metalness: 0.00 },
   { id: 'bronze', label: 'Bronze', color: '#cd7f32', roughness: 0.35, metalness: 0.80 },
 ];
+
+// ── Handle → tip offset ────────────────────────────────────────
+// On a real lathe the tool tip is always pushed radially INWARD,
+// toward the spinning centerline -- never in a fixed screen direction.
+// We compute one continuous direction vector (finger → the workpiece
+// centerline) and reuse the exact same function for both rendering
+// the blade and for the cut itself, so they cannot diverge.
+const TOOL_REACH = 30; // px between grip (finger) and cutting tip
+const DEBUG_SHOW_TIP = true; // bright marker at the exact cut coordinate -- flip off once verified
+
+// Given a raw finger position, returns { tx, ty }: the cutting tip.
+// Direction = normalized vector from the finger toward the workpiece
+// centerline point (CANVAS_W/2, AXIS_Y); this is a continuous function
+// of (fx, fy) -- no discrete side-flip, no fixed angle, so there is no
+// boundary where render and cut can disagree.
+function fingerToTip(fx, fy) {
+  'worklet';
+  const dx = CANVAS_W / 2 - fx;
+  const dy = AXIS_Y - fy;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1; // guard divide-by-zero
+  const rawX = fx + (dx / len) * TOOL_REACH;
+  const rawY = fy + (dy / len) * TOOL_REACH;
+  const tx = rawX < STOCK_LEFT ? STOCK_LEFT : rawX > STOCK_RIGHT ? STOCK_RIGHT : rawX;
+  return { tx, ty: rawY };
+}
+
+// ── Fixed-size Skia font for in-canvas labels ──────────────────
+// react-native-skia's <Text> requires a real Skia font object (via
+// matchFont / useFont) -- it does NOT accept `fontSize` / `textAlign`
+// props directly. Previously no font was supplied, so the tool-name
+// label on the handle silently failed to render.
+const toolLabelFont = matchFont({
+  fontFamily: Platform.OS === 'ios' ? 'Helvetica' : 'sans-serif',
+  fontSize: 7,
+  fontStyle: 'normal',
+  fontWeight: 'normal',
+});
 
 // ── Profile helpers ───────────────────────────────────────────
 const makeProfile = () => new Float32Array(PROFILE_SEGS).fill(STOCK_RADIUS);
@@ -203,13 +236,14 @@ function DrawingCanvas({ profile, onProfile, tool }) {
 
   useEffect(() => {
     let last = performance.now();
+    let rafId;
     const tick = (ts) => {
       const dt = (ts - last) / 1000;
       last = ts;
       angleRef.value += dt * 5;
       rafId = requestAnimationFrame(tick);
     };
-    let rafId = requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, []);
 
@@ -233,19 +267,32 @@ function DrawingCanvas({ profile, onProfile, tool }) {
     return vec(centerX, (AXIS_Y + halfLen) + dy);
   });
 
-  // ── Cursor state ──
-  const cursorX = useSharedValue(0);
-  const cursorY = useSharedValue(0);
-  const TOOL_LENGTH = 100;
+  // ── Finger (grip) position -- where the touch actually is ──
+  const fingerX = useSharedValue(0);
+  const fingerY = useSharedValue(0);
+  const TOOL_LENGTH = 100; // handle-graphic length, decorative only
 
-  const toolBodyTransform = useDerivedValue(() => [
-    { translateX: cursorX.value },
-    { translateY: cursorY.value },
-  ]);
+  // The tool BODY (blade + handle) is anchored at the cutting TIP,
+  // not the finger -- the blade's local origin is the cutting edge,
+  // so translating the whole group to the tip makes the blade render
+  // where it actually cuts. The handle graphic still points back
+  // toward the grip, and a connector line (drawn below) makes the
+  // finger → tip offset visible.
+  const toolBodyTransform = useDerivedValue(() => {
+    const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
+    return [{ translateX: tx }, { translateY: ty }];
+  });
 
-  const fingerTransform = useDerivedValue(() => [
-    { translateX: cursorX.value },
-    { translateY: cursorY.value },
+  // Cutting-tip crosshair -- this is the point that actually carves.
+  const tipTransform = useDerivedValue(() => {
+    const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
+    return [{ translateX: tx }, { translateY: ty }];
+  });
+
+  // Small grip marker at the raw finger position, for reference.
+  const gripTransform = useDerivedValue(() => [
+    { translateX: fingerX.value },
+    { translateY: fingerY.value },
   ]);
 
   const pendingPoint = useRef(null);
@@ -318,16 +365,18 @@ function DrawingCanvas({ profile, onProfile, tool }) {
     .minDistance(0)
     .onBegin((e) => {
       'worklet';
-      cursorX.value = e.x;
-      cursorY.value = e.y;
+      fingerX.value = e.x;
+      fingerY.value = e.y;
+      const { tx, ty } = fingerToTip(e.x, e.y);
       runOnJS(startProcessing)();
-      runOnJS(updatePendingPoint)(e.x, e.y);
+      runOnJS(updatePendingPoint)(tx, ty);
     })
     .onUpdate((e) => {
       'worklet';
-      cursorX.value = e.x;
-      cursorY.value = e.y;
-      runOnJS(updatePendingPoint)(e.x, e.y);
+      fingerX.value = e.x;
+      fingerY.value = e.y;
+      const { tx, ty } = fingerToTip(e.x, e.y);
+      runOnJS(updatePendingPoint)(tx, ty);
     })
     .onEnd(() => {
       'worklet';
@@ -378,7 +427,7 @@ function DrawingCanvas({ profile, onProfile, tool }) {
         p.close();
         break;
 
-      case 'scraper':
+      case 'scraper': {
         const w = halfW * 1.4;
         p.moveTo(-w, 0);
         p.quadTo(-w, -halfW * 0.2, -w * 0.9, -halfW * 0.5);
@@ -386,6 +435,7 @@ function DrawingCanvas({ profile, onProfile, tool }) {
         p.quadTo(w, -halfW * 0.2, w, 0);
         p.close();
         break;
+      }
 
       case 'spindle':
         p.moveTo(-halfW * 0.7, 0);
@@ -479,8 +529,20 @@ function DrawingCanvas({ profile, onProfile, tool }) {
   const depthLines = useMemo(() => Array.from({ length: 10 }), []);
 
   const cuttingIndicator = useDerivedValue(() => {
+    const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
     const p = Skia.Path.Make();
-    p.addCircle(cursorX.value, cursorY.value, tool.width / 2 + 4);
+    p.addCircle(tx, ty, tool.width / 2 + 4);
+    return p;
+  });
+
+  // Connector from grip (finger) to tip -- built in world space each
+  // frame since the tip's offset direction now depends on which side
+  // of the axis the finger is on, so it's no longer a fixed vector.
+  const connectorPath = useDerivedValue(() => {
+    const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
+    const p = Skia.Path.Make();
+    p.moveTo(fingerX.value, fingerY.value);
+    p.lineTo(tx, ty);
     return p;
   });
 
@@ -695,19 +757,32 @@ function DrawingCanvas({ profile, onProfile, tool }) {
             opacity={0.2}
           />
 
-          {/* Tool name on handle */}
-          <SkiaText
-            x={0}
-            y={-TOOL_LENGTH + 12}
-            text={tool.name}
-            color="rgba(255,255,255,0.12)"
-            fontSize={7}
-            textAlign="center"
-          />
+          {/* Tool name on handle -- requires a real Skia font object */}
+          {toolLabelFont && (
+            <SkiaText
+              x={-tool.name.length * 1.8}
+              y={-TOOL_LENGTH + 12}
+              text={tool.name}
+              font={toolLabelFont}
+              color="rgba(255,255,255,0.12)"
+            />
+          )}
+        </Group>
+
+        {/* Grip marker (raw finger position) + connector to the tip */}
+        <Path
+          path={connectorPath}
+          style="stroke"
+          strokeWidth={1.5}
+          color="rgba(255,255,255,0.35)"
+        />
+        <Group transform={gripTransform}>
+          <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.5)" />
+          <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.25)" style="stroke" strokeWidth={1} />
         </Group>
 
         {/* ── CUTTING TIP INDICATOR ── */}
-        <Group transform={fingerTransform}>
+        <Group transform={tipTransform}>
           <Circle cx={0} cy={0} r={tool.width / 2 + 6} color={tool.color + '15'} />
           <Circle cx={0} cy={0} r={tool.width / 2 + 3} color={tool.color + '25'} />
           <Circle
@@ -747,6 +822,17 @@ function DrawingCanvas({ profile, onProfile, tool }) {
 
           <Circle cx={0} cy={0} r={8} color="rgba(255,255,255,0.04)" />
           <Circle cx={0} cy={0} r={5} color="rgba(255,255,255,0.06)" />
+
+          {/* DEBUG: bright marker at the exact (tx, ty) fed to applyTool.
+              If a cut doesn't land exactly under this dot, the bug is in
+              applyTool/xToSeg, not in the finger→tip offset. Flip
+              DEBUG_SHOW_TIP to false once confirmed. */}
+          {DEBUG_SHOW_TIP && (
+            <>
+              <Circle cx={0} cy={0} r={3} color="#ff0044" />
+              <Circle cx={0} cy={0} r={6} color="#ff0044" style="stroke" strokeWidth={1.5} opacity={0.9} />
+            </>
+          )}
         </Group>
       </SkiaCanvas>
     </GestureDetector>
@@ -788,8 +874,6 @@ function MagazineCloseButton({ onPress }) {
   );
 }
 
-
-
 function getToolDescription(toolId) {
   const descriptions = {
     'roughing': '⚡ Heavy material removal',
@@ -810,7 +894,7 @@ export default function FreehandTurning() {
   const [is3D, setIs3D] = useState(false);
   const [matIdx, setMatIdx] = useState(0);
   const [autoRotate, setAutoRot] = useState(true);
-  const [OrbitControls] = useControls();
+  const [OrbitControls, events] = useControls();
   const [showTooltip, setShowTooltip] = useState(null);
 
   // Magazine state
@@ -866,9 +950,8 @@ export default function FreehandTurning() {
     };
   }, [isMagazineOpen, magazineAnim]);
 
-  // Reset auto-hide timer on interaction
+  // Re-open the magazine and restart its auto-hide timer (used on tool tap)
   const handleMagazineInteraction = useCallback(() => {
-    setIsMagazineOpen(false);
     Animated.spring(magazineAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -932,8 +1015,13 @@ export default function FreehandTurning() {
         {/* Body */}
         <View style={[styles.body, { paddingBottom: is3D ? 0 : 80 }]}>
           {is3D ? (
-            <View style={{ flex: 1 }}>
+            // `{...events}` wires the pan/pinch responder from
+            // r3f-native-orbitcontrols to this view -- without it the
+            // gesture handlers OrbitControls relies on never fire and
+            // the "drag to orbit" hint in the header does nothing.
+            <View style={{ flex: 1 }} {...events}>
               <CanvaPovider camPosition={[0, 0, 7]}>
+                <OrbitControls enablePan={false} enableZoom target={[0, 0, 0]} />
                 <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} />
               </CanvaPovider>
 
@@ -1003,7 +1091,6 @@ export default function FreehandTurning() {
               </View>
               <Text style={styles.magazineSubtitle}>Tap to select</Text>
             </View>
-
 
             <ScrollView
               horizontal
@@ -1308,7 +1395,6 @@ const styles = StyleSheet.create({
     color: '#6a8aaa',
     letterSpacing: 0.2,
     textAlign: 'center',
-    bottom: -2,
     textTransform: 'capitalize',
   },
 
