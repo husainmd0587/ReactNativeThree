@@ -1,6 +1,6 @@
 import {
   StyleSheet, Text, View, useWindowDimensions,
-  ScrollView, TouchableOpacity, Platform, TextInput,
+  ScrollView, TouchableOpacity, Platform, TextInput, Alert,
 } from 'react-native';
 import React, {
   useState, useCallback, useEffect, useRef, useMemo,
@@ -27,6 +27,7 @@ import { applyMirror, mirrorSegment } from './utils/mirror/mirror';
 import { applyRotate, computeRotationAngle, snapAngle, radToDeg, rotateSegment } from './utils/rotate/rotate';
 import { applyScale, scaleSegment, computeScaleFactor, snapFactor, formatFactor } from './utils/scale/scale';
 import { findSnapPoint, DEFAULT_SNAP_SETTINGS, SNAP_COLORS, SNAP_SHAPES, resolveSnapPoint } from './utils/snap/snap';
+import { findClosedLoops, classifyLoops, hitTestProfiles } from './utils/profile/loopDetection';
 import { applyOrtho, formatAxis, computeAngleDeg, computeDist } from './utils/ortho/ortho';
 import { DIM_TYPES, DIM_SUBTYPES, autoDetectDimType, formatDimValue, buildDimGeometry } from './utils/dimension/dimension';
 import { buildCircularPattern, buildRectPattern, buildCircularPreview, buildRectPreview, applyPattern } from './utils/pattern/pattern';
@@ -49,6 +50,7 @@ const SHAPE_MAP = {
   trim: 4, extend: 5, offset: 6, fillet: 7, chamfer: 8,
   move: 9, copy: 10, mirror: 11, rotate: 12, scale: 13,
   erase: 14, dim: 15, cpat: 16, rpat: 17, stretch: 18,
+  profile: 19,
 };
 
 const SHAPE_META = {
@@ -1066,7 +1068,6 @@ const Sketching2D = ({ navigation }) => {
     return <Path path={p} color="orange" style="stroke" strokeWidth={3} />;
   }, [filletFirstSel, currentShape, shapeList]);
 
-  // ── Move ──────────────────────────────────────────────────────────────────
   const [selectedIndices, setSelectedIndices] = useState([]);
   const [isDragging, setIsDragging]           = useState(false);
   const selectedIndicesRef = useRef([]);
@@ -1075,6 +1076,62 @@ const Sketching2D = ({ navigation }) => {
   const wasDragMove        = useSharedValue(false);
   useEffect(() => { selectedIndicesRef.current = selectedIndices; }, [selectedIndices]);
   useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
+
+  // ── Profile selection (for Extrude / Revolve) ──────────────────────────────
+  // { outer: {indices, points, closed}, holes: [...], nestingWarning } | null
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const selectedProfileRef = useRef(null);
+  useEffect(() => { selectedProfileRef.current = selectedProfile; }, [selectedProfile]);
+
+  const handleProfileTap = useCallback((wx, wy) => {
+    try {
+      const loops = findClosedLoops(shapeListRef.current);
+      const profiles = classifyLoops(loops);
+      const hit = hitTestProfiles(profiles, { x: wx, y: wy });
+
+      if (hit) {
+        setSelectedProfile(hit);
+        if (hit.nestingWarning) Alert.alert('Profile selected', hit.nestingWarning);
+        return;
+      }
+
+      const hasOpenLoops = loops.some((l) => !l.closed);
+      if (hasOpenLoops) {
+        Alert.alert('Sketch is not closed', 'There is a gap between segment endpoints near where you tapped — close the loop before extruding or revolving.');
+      } else {
+        Alert.alert('No profile here', 'Tap inside a closed shape to select it for Extrude or Revolve.');
+      }
+    } catch (e) {
+      Alert.alert('Could not read this sketch', e?.message || 'Unknown error');
+    }
+  }, []);
+
+  const profileHighlight = useMemo(() => {
+    if (!selectedProfile) return null;
+
+    const outerPath = Skia.Path.Make();
+    const pts = selectedProfile.outer.points;
+    outerPath.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) outerPath.lineTo(pts[i].x, pts[i].y);
+    outerPath.close();
+
+    const holePaths = selectedProfile.holes.map((hole, i) => {
+      const p = Skia.Path.Make();
+      p.moveTo(hole.points[0].x, hole.points[0].y);
+      for (let j = 1; j < hole.points.length; j++) p.lineTo(hole.points[j].x, hole.points[j].y);
+      p.close();
+      return <Path key={`hole-${i}`} path={p} color="rgba(255,150,0,0.9)" style="stroke" strokeWidth={2} />;
+    });
+
+    return (
+      <Group key="profile-highlight">
+        <Path path={outerPath} color="rgba(255,150,0,0.18)" style="fill" />
+        <Path path={outerPath} color="rgba(255,150,0,0.9)" style="stroke" strokeWidth={2} />
+        {holePaths}
+      </Group>
+    );
+  }, [selectedProfile]);
+
 
   const dragStartX = useSharedValue(0);
   const dragStartY = useSharedValue(0);
@@ -1877,6 +1934,7 @@ const Sketching2D = ({ navigation }) => {
 
       if (currentShapeSV.value === 5)  { runOnJS(handleExtendEnd)(endX, endY); }
       if (currentShapeSV.value === 7 || currentShapeSV.value === 8) { runOnJS(handleFilletTap)(endX, endY, scale.value); }
+      if (currentShapeSV.value === 19) { runOnJS(handleProfileTap)(endX, endY); return; }
       if (currentShapeSV.value === 9) {
         windowActive.value = false;
         if (wasDragMove.value) {
@@ -1911,8 +1969,14 @@ const Sketching2D = ({ navigation }) => {
   const composed = Gesture.Simultaneous(pinch, pan, drawGesture);
 
   const sendToExtrudeScreen = useCallback(() => {
-    navigation.navigate('Main3D', { segments: shapeList });
-  }, [navigation, shapeList]);
+    if (selectedProfile) {
+      navigation.navigate('SketchToSolid', { profile: selectedProfile });
+      return;
+    }
+    setCurrentShape('profile');
+    currentShapeSV.value = SHAPE_MAP.profile;
+    Alert.alert('Select a profile', 'Tap inside a closed shape to select it, then tap "3D" again to continue.');
+  }, [navigation, selectedProfile]);
 
   // ── Layer panel ───────────────────────────────────────────────────────────
   const LayerPanel = showLayerPanel ? (
@@ -2082,6 +2146,7 @@ const Sketching2D = ({ navigation }) => {
               {renderedDimPreview}
               {extendHandles}
               {filletHighlight}
+              {profileHighlight}
               {moveHighlights}
               {copyHighlights}
               {copyPreviewElems}
@@ -2131,8 +2196,18 @@ const Sketching2D = ({ navigation }) => {
             {/* Extrude */}
             <TouchableOpacity style={styles.extrudeBtn} onPress={sendToExtrudeScreen} activeOpacity={0.75}>
               <Text style={styles.extrudeBtnIcon}>◈</Text>
-              <Text style={styles.extrudeBtnLabel}>3D</Text>
+              <Text style={styles.extrudeBtnLabel}>{selectedProfile ? '3D \u2192' : '3D'}</Text>
             </TouchableOpacity>
+
+            {selectedProfile && (
+              <TouchableOpacity
+                style={styles.extrudeBtn}
+                onPress={() => setSelectedProfile(null)}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.extrudeBtnLabel}>Clear</Text>
+              </TouchableOpacity>
+            )}
 
             {/* New chain */}
             <TouchableOpacity style={styles.newBtn} onPress={handleExitChain} activeOpacity={0.75}>

@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
 import CNCLatheSimulator from './components/CNCLatheSimulator';
 import Chuck from './components/Chuck';
-import Turret from './components/Turret';
 import ProgrammEdit from './ProgrammEdit';
 import ToolMagazine from './ToolMagazine';
 import { simulateGCode } from './engine';
@@ -86,7 +85,9 @@ export default function CncSimulatorPro() {
   const [editingProgram, setEditingProgram] = useState(false);
   const [showToolMagazine, setShowToolMagazine] = useState(false);
   const [passIndex, setPassIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const simRef = useRef(null);
+  const [preparing, setPreparing] = useState(false);
   const [simSpeedPercent, setSimSpeedPercent] = useState(100);
   const [viewMode, setViewMode] = useState('3D');
   const [showViewMenu, setShowViewMenu] = useState(false);
@@ -122,6 +123,27 @@ export default function CncSimulatorPro() {
 
   const handleTelemetry = useCallback((t) => setTelemetry(t), []);
 
+  // The Play button is the explicit trigger for any heavy CSG work (radial-drill
+  // holes), not mount/load and not "whichever pass happens to play next" -
+  // stock/chuck/turret render immediately regardless, and this only runs (with a
+  // visible loading indicator) if there's actually uncached work to do.
+  const handlePlay = useCallback(async () => {
+    if (simRef.current?.hasUncachedWork?.()) {
+      setPreparing(true);
+      await simRef.current.precomputeAll();
+      setPreparing(false);
+    }
+    setPlaying(true);
+  }, []);
+
+  const handleTogglePlay = useCallback(() => {
+    if (playing) {
+      setPlaying(false);
+    } else {
+      handlePlay();
+    }
+  }, [playing, handlePlay]);
+
   const handleStop = useCallback(() => {
     setPlaying(false);
     setPassIndex(0);
@@ -155,6 +177,7 @@ export default function CncSimulatorPro() {
         <directionalLight position={[50, 80, 50]} intensity={1} />
         <group rotation={[0, 0, -Math.PI / 2]}>
           <CNCLatheSimulator
+            ref={simRef}
             gcode={gcode}
             stockConfig={stockConfig}
             playing={playing}
@@ -166,13 +189,12 @@ export default function CncSimulatorPro() {
             resetToken={resetToken}
           />
           <Chuck stockConfig={stockConfig} spinning={playing && telemetry.spindleOn} rpm={telemetry.spindleSpeed || 400} />
-          <Turret activeToolNumber={telemetry.toolNumber} stockConfig={stockConfig} />
         </group>
       </CanvaProvider>
 
       <ViewportOverlay
         playing={playing}
-        onTogglePlay={() => setPlaying((p) => !p)}
+        onTogglePlay={handleTogglePlay}
         onStop={handleStop}
         onReset={handleStop}
         onFullscreen={() => setFullscreen((f) => !f)}
@@ -181,6 +203,14 @@ export default function CncSimulatorPro() {
         onChangeViewMode={setViewMode}
         showViewMenu={showViewMenu}
       />
+
+      {preparing ? (
+        <View style={styles.preparingOverlay}>
+          <ActivityIndicator color="#5aa8ff" size="large" />
+          <Text style={styles.preparingText}>Preparing simulation…</Text>
+          <Text style={styles.preparingSubtext}>Computing radial-drill geometry</Text>
+        </View>
+      ) : null}
 
       {fullscreen ? (
         <View style={styles.fullscreenStrip}>
@@ -304,7 +334,7 @@ export default function CncSimulatorPro() {
         {openPanel === 'CONTROLS' && (
           <BottomControlDeck
             playing={playing}
-            onCycleStart={() => setPlaying(true)}
+            onCycleStart={handlePlay}
             onFeedHold={() => setPlaying(false)}
             onStop={handleStop}
             onHome={() => setPassIndex(0)}
@@ -326,6 +356,19 @@ const styles = StyleSheet.create({
   viewportArea: { height: 400, backgroundColor: '#05060a' },
   viewportFull: { flex: 1, backgroundColor: '#05060a' },
   fullscreenStrip: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+  preparingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(5,6,10,0.82)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  preparingText: { color: '#e8eaed', fontSize: 13, fontWeight: '700', marginTop: 12 },
+  preparingSubtext: { color: '#6b7178', fontSize: 10, marginTop: 4 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8, paddingTop: 8, gap: 6 },
   chip: {
     flexDirection: 'row',

@@ -1,19 +1,20 @@
-// Model3DPreview.jsx - SIMPLIFIED FIX
+// Model3DPreview.jsx - Single materialConfig source
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useFrame } from '@react-three/fiber/native';
 import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
 import CanvaProvider from '../ThreeJs_Utils/provider';
-import SoundPlayer from '../sound/soundPlayer'
+import { useMaterialConfigs } from '../materials/materialConfigs.js';
+import SoundPlayer from '../sound/soundPlayer';
 
 const EMPTY_OBJECT = Object.freeze({});
 const EMPTY_ARRAY = Object.freeze([]);
 
 function SceneModel({ 
   modelUrl, 
-  materialConfig = EMPTY_OBJECT, 
+  materialConfig = EMPTY_OBJECT,  // Single source of truth
   animations = EMPTY_ARRAY, 
   playClipAnimations = true,
   clipNames = null, 
@@ -41,6 +42,36 @@ function SceneModel({
   const animationStartedRef = useRef(false);
   const soundLoadedRef = useRef(false);
   
+  // ✅ Load all material configs
+  const materialConfigs = useMaterialConfigs();
+  
+  // ✅ Extract main material and mesh configs from materialConfig
+  const { mainMaterial, meshConfigs } = useMemo(() => {
+    // If materialConfig is a string, treat it as the main material name
+    if (typeof materialConfig === 'string') {
+      return {
+        mainMaterial: materialConfig,
+        meshConfigs: {}
+      };
+    }
+    
+    // If materialConfig has a 'material' property, use it as main material
+    if (materialConfig && materialConfig.material) {
+      const { material, ...meshes } = materialConfig;
+      return {
+        mainMaterial: material,
+        meshConfigs: meshes
+      };
+    }
+    
+
+  
+    return {
+      mainMaterial: null,
+      meshConfigs: materialConfig || {}
+    };
+  }, [materialConfig]);
+
   // ✅ Use useAnimations from @react-three/drei
   const { actions, names, mixer } = useAnimations(
     playClipAnimations ? clips : [],
@@ -64,7 +95,6 @@ function SceneModel({
       componentMountedRef.current = false;
       previousSceneRef.current = null;
       meshRefs.current = {};
-      // Cleanup sound on unmount
       SoundPlayer.stop();
       SoundPlayer.release();
       isPlayingRef.current = false;
@@ -117,15 +147,12 @@ function SceneModel({
 
         soundLoadedRef.current = true;
         onSoundLoadedRef.current?.();
-        console.log('✅ Sound loaded successfully');
 
-        // Start sound if animation is already playing
         if (animationStartedRef.current && soundUrlRef.current === soundUrl) {
           startSound();
         }
 
       } catch (error) {
-        console.error('❌ Failed to load sound:', error);
         if (mounted && componentMountedRef.current) {
           soundLoadedRef.current = false;
           onSoundErrorRef.current?.(error);
@@ -143,7 +170,6 @@ function SceneModel({
     };
   }, [soundUrl]);
 
-  // Start sound function
   const startSound = useCallback(() => {
     if (!soundLoadedRef.current || !soundUrl || isPlayingRef.current) {
       return;
@@ -156,15 +182,12 @@ function SceneModel({
       
       SoundPlayer.play();
       isPlayingRef.current = true;
-      console.log('🔊 Sound started');
     } catch (error) {
-      console.error('Error starting sound:', error);
     }
   }, [soundUrl, soundLoop]);
 
   useEffect(() => {
     if (error) {
-      console.error('SceneModel error:', error);
       onErrorRef.current?.(error);
     } else if (ready && scene) {
       onLoadRef.current?.();
@@ -175,11 +198,11 @@ function SceneModel({
     return JSON.stringify(materialConfig);
   }, [materialConfig]);
 
+  // ✅ Process scene with material configs
   const processedScene = useMemo(() => {
     if (!scene || error || !ready) return null;
     
     const needsReprocess = !processed || previousSceneRef.current !== scene;
-    
     if (!needsReprocess) return scene;
     
     try {
@@ -198,31 +221,59 @@ function SceneModel({
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         
-        const config = materialConfig[key] || {};
+        // ✅ Get config for this specific mesh
+        let config = meshConfigs[key] || {};
         
-        if (Object.keys(config).length > 0) {
-          const baseMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-          const material = new MeshStandardMaterial({
-            color: config.color ?? baseMaterial?.color ?? '#999',
-            metalness: config.metalness ?? baseMaterial?.metalness ?? 0.9,
-            roughness: config.roughness ?? baseMaterial?.roughness ?? 0.4,
-            map: baseMaterial?.map ?? null,
-            roughnessMap: baseMaterial?.roughnessMap ?? null,
-            metalnessMap: baseMaterial?.metalnessMap ?? null,
-            normalMap: baseMaterial?.normalMap ?? null,
-            ...config,
-          });
-          mesh.material = material;
-          
-          ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'alphaMap', 'emissiveMap', 'aoMap', 'bumpMap'].forEach(mapType => {
-            if (material[mapType]) {
-              const texture = material[mapType];
-              texture.flipY = false;
-              texture.premultiplyAlpha = false;
-              texture.needsUpdate = true;
-            }
-          });
+        // ✅ If config is a string, it's a material name
+        if (typeof config === 'string') {
+          config = materialConfigs[config] || materialConfigs.default || {};
         }
+        
+        // ✅ Apply main material as base (if exists)
+        if (mainMaterial) {
+          let mainConfig;
+          
+          if (typeof mainMaterial === 'string') {
+            mainConfig = materialConfigs[mainMaterial] || materialConfigs.default || {};
+          } else {
+            mainConfig = mainMaterial;
+          }
+          
+          // Merge: main material as base, specific config overrides
+          config = { ...mainConfig, ...config };
+        }
+        
+        const baseMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        
+        // ✅ Create material with config
+        const material = new MeshStandardMaterial({
+          color: config.color ?? baseMaterial?.color ?? '#999',
+          metalness: config.metalness ?? baseMaterial?.metalness ?? 0.9,
+          roughness: config.roughness ?? baseMaterial?.roughness ?? 0.4,
+          map: config.map ?? null,
+          roughnessMap: config.roughnessMap ?? baseMaterial?.roughnessMap ?? null,
+          metalnessMap: config.metalnessMap ?? baseMaterial?.metalnessMap ?? null,
+          normalMap: config.normalMap ?? baseMaterial?.normalMap ?? null,
+          emissive: config.emissive ?? null,
+          emissiveIntensity: config.emissiveIntensity ?? 0,
+          transparent: config.transparent ?? false,
+          opacity: config.opacity ?? 1,
+          side: config.side ?? 2,
+          envMapIntensity: config.envMapIntensity ?? 0.5,
+          ...config,
+        });
+        
+        mesh.material = material;
+        
+        // Update texture settings
+        ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'alphaMap', 'emissiveMap', 'aoMap', 'bumpMap'].forEach(mapType => {
+          if (material[mapType]) {
+            const tex = material[mapType];
+            tex.flipY = config.flipY ?? false;
+            tex.premultiplyAlpha = false;
+            tex.needsUpdate = true;
+          }
+        });
       });
       
       previousSceneRef.current = scene;
@@ -230,20 +281,17 @@ function SceneModel({
       
       return scene;
     } catch (err) {
-      console.error('Error processing scene:', err);
       onErrorRef.current?.(err);
       return null;
     }
-  }, [scene, materialConfigKey, error, ready, processed]);
+  }, [scene, meshConfigs, error, ready, processed, mainMaterial, materialConfigs]);
 
   // ✅ ANIMATION ONLY - runs once when actions are ready
   useEffect(() => {
-    // Skip if already started or no actions
     if (animationStartedRef.current || !playClipAnimations || !actions || Object.keys(actions).length === 0) {
       return;
     }
 
-    // Determine which clips to play
     let targetActions = actions;
     if (clipNames && clipNames.length > 0) {
       targetActions = {};
@@ -259,9 +307,6 @@ function SceneModel({
       return;
     }
 
-    console.log(`Playing ${actionKeys.length} animations:`, actionKeys);
-
-    // Play all target actions
     actionKeys.forEach((key) => {
       const action = targetActions[key];
       if (action) {
@@ -274,16 +319,13 @@ function SceneModel({
 
     animationStartedRef.current = true;
 
-    // Start sound if loaded
     if (soundLoadedRef.current && soundUrl) {
       startSound();
     }
 
-    // Handle clip finished
     const handleFinished = (event) => {
       const clipName = event.action?.getClip()?.name;
       if (clipName) {
-        console.log('Animation finished:', clipName);
         onClipFinishedRef.current?.(clipName);
       }
     };
@@ -293,7 +335,6 @@ function SceneModel({
     }
 
     return () => {
-      // Stop animations but keep sound playing
       actionKeys.forEach((key) => {
         const action = targetActions[key];
         if (action) {
@@ -305,13 +346,12 @@ function SceneModel({
         mixerRef.current.removeEventListener('finished', handleFinished);
       }
     };
-  }, [actions, playClipAnimations, clipNames, animationTimeScale, soundUrl, startSound]); // Only runs when actions change
+  }, [actions, playClipAnimations, clipNames, animationTimeScale, soundUrl, startSound]);
 
-  // ✅ Use useFrame for manual animations (rotation, etc.)
+  // ✅ Use useFrame for manual animations
   useFrame((state, delta) => {
     const safeDelta = Math.min(delta, 0.03);
 
-    // Drive manual per-mesh rotation config
     const currentAnimations = animations;
     if (currentAnimations && currentAnimations.length > 0 && processedScene) {
       currentAnimations.forEach((anim) => {
@@ -365,8 +405,8 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
 // Model3DPreview Component
 function Model3DPreview({ 
   modelUrl, 
+  materialConfig = EMPTY_OBJECT,  // Single source of truth
   camPosition = [2, 2, 5], 
-  materialConfig = EMPTY_OBJECT, 
   animations = EMPTY_ARRAY, 
   playClipAnimations = true,
   clipNames,
@@ -402,7 +442,6 @@ function Model3DPreview({
 
   const handleError = useCallback((err) => {
     if (!isMountedRef.current) return;
-    console.error('Model error:', err);
     setError(err);
     setStatus('error');
     onErrorRef.current?.(err);
@@ -438,7 +477,6 @@ function Model3DPreview({
     
     timeoutRef.current = setTimeout(() => {
       if (!loadCalledRef.current && isMountedRef.current) {
-        console.warn('Loading timeout for:', modelUrl);
         setError(new Error('Loading timeout'));
         setStatus('error');
         onErrorRef.current?.(new Error('Loading timeout'));
@@ -456,7 +494,7 @@ function Model3DPreview({
 
   const sceneProps = useMemo(() => ({
     modelUrl,
-    materialConfig,
+    materialConfig,  // Pass the entire materialConfig
     animations,
     playClipAnimations,
     clipNames,

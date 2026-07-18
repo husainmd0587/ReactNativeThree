@@ -204,6 +204,7 @@ const _root = rootBlocks || blocks;
                title={block.title} 
                subtitle={block.subtitle} 
                modelUrl={block.url}
+               materialConfig={block.materialConfig}
                soundUrl={block.soundUrl}
               />
             );

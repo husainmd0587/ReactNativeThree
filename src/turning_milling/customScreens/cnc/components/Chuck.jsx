@@ -32,7 +32,7 @@ export default function Chuck({
   jawCount = 3,
   chuckRadius,
   chuckDepth,
-  gap = 4,
+  gap,
 }) {
   const spinGroupRef = useRef();
 
@@ -41,8 +41,11 @@ export default function Chuck({
   const depth = chuckDepth ?? stockRadius * 1.4;
   const zMin = (stockConfig?.zFace ?? 0) - (stockConfig?.stockLength ?? 80);
   // Sit just past the stock's far (clamped) end so the chuck body and the raw
-  // stock never intersect, with a small visible gap.
-  const chuckCenterY = zMin - gap - depth / 2;
+  // stock never intersect. Gap scales with stock size - a fixed small gap was
+  // proportionally tiny (under 10% of diameter) next to larger stock, and read
+  // as the chuck touching/covering the part rather than a clear separation.
+  const resolvedGap = gap ?? Math.max(4, stockRadius * 0.5);
+  const chuckCenterY = zMin - resolvedGap - depth / 2;
 
   const jawLength = stockRadius * 0.9;
   const jawWidth = radius * 0.4;

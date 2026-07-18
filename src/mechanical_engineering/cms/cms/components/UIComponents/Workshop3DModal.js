@@ -18,7 +18,7 @@ const TEXT = '#f0f2f5';
 const MUTED = '#9aa1b0';
 const CARD_HEIGHT = 250;
 
-const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl }) => {
+const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) => {
   const [mounted, setMounted] = useState(false);
   const [fullscreenKey, setFullscreenKey] = useState(0);
   const { width, height } = useWindowDimensions();
@@ -101,6 +101,7 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl }) => {
               key={`fullscreen_model_${uniqueKey}`}
               modelUrl={modelUrl} 
               soundUrl={soundUrl}
+              materialConfig={ materialConfig}
               camPosition={[3, 3, 7]} 
               isFullscreen={true}
               loadingTimeout={60000}
@@ -149,7 +150,8 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl }) => {
     <View style={styles.card}>
       <Model3DPreview 
         key={`small_${modelUrl}`}
-        modelUrl={modelUrl} 
+        modelUrl={modelUrl}
+        materialConfig={materialConfig}
         camPosition={[2, 2, 5]} 
         isFullscreen={false}
         style={styles.cardCanvas} 

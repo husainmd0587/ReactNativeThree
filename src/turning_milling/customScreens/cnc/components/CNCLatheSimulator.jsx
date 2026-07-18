@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { useFrame, useThree } from '@react-three/fiber/native';
 import * as THREE from 'three';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -6,6 +7,7 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { simulateGCode, buildProfilePath, interpRadiusAtZ, applyRadialFeatures, buildRadialDrillStages } from '../engine';
 import ToolBit from './ToolBit';
 import Sparks from './Sparks';
+import Turret from './Turret';
 
 const CSG = { Brush, Evaluator, SUBTRACTION };
 const RADIAL_DRILL_STAGE_COUNT = 4;
@@ -56,8 +58,13 @@ const RADIAL_DRILL_STAGE_COUNT = 4;
  *        passCount, overallProgress (0..1), cycle }
  *  - resetToken: bump this counter to force a hard reset to line 0 / pass 0, even
  *    if passIndex was already 0 (e.g. wire it to your Stop/Reset button)
+ *
+ * REF: exposes { hasUncachedWork(), precomputeAll() } for the parent to run all
+ * CSG work up front (e.g. triggered by a Play button, with a loading indicator)
+ * instead of either blocking initial load or stuttering mid-playback the first
+ * time a radial-drill pass is reached. See CncSimulatorPro.js for the pattern.
  */
-export default function CNCLatheSimulator({
+const CNCLatheSimulator = forwardRef(function CNCLatheSimulator({
   gcode,
   stockConfig,
   playing = true,
@@ -79,7 +86,7 @@ export default function CNCLatheSimulator({
   // while already on pass 0 wouldn't visually reset the sweep, since the internal
   // reset effect only fires when passIndex actually CHANGES.
   resetToken = 0,
-}) {
+}, ref) {
   const { gl } = useThree();
   useEffect(() => {
     // Required once for any material.clippingPlanes to have effect.
@@ -100,39 +107,105 @@ export default function CNCLatheSimulator({
 
   const geometries = useMemo(() => {
     if (!sim.ok) return [];
-    const { rawProfile, rawInnerProfile, passes, stockRadius } = sim.data;
+    const { rawProfile, rawInnerProfile, passes } = sim.data;
     const toPts = (outer, inner) => buildProfilePath(outer, inner).map((p) => new THREE.Vector2(p.r, p.z));
     const list = [new THREE.LatheGeometry(toPts(rawProfile, rawInnerProfile), 56)];
-    for (const p of passes) {
-      let geo = new THREE.LatheGeometry(toPts(p.outerProfile, p.innerProfile), 56);
-      // Bake in any radial holes drilled so far - CSG is a no-op (early return)
-      // if radialFeaturesSoFar is empty, so this costs nothing for programs that
-      // never use G184.
-      if (p.radialFeaturesSoFar?.length) {
-        geo = applyRadialFeatures(THREE, CSG, geo, p.radialFeaturesSoFar, stockRadius);
-      }
-      list.push(geo);
-    }
+    for (const p of passes) list.push(new THREE.LatheGeometry(toPts(p.outerProfile, p.innerProfile), 56));
     return list;
   }, [sim]);
 
-  // Precomputed progressive-depth plunge stages for each G184 pass - built ONCE
-  // here (not per frame; CSG is too expensive for that). Keyed by pass index.
-  // Each pass's stages start from `geometries[passIndex]` (the state BEFORE this
-  // pass, which - per the loop above - already has all PRIOR holes baked in, so
-  // we pass an empty priorFeatures list here to avoid redundant CSG work).
-  const radialStagesByPass = useMemo(() => {
-    if (!sim.ok) return {};
-    const { passes, stockRadius } = sim.data;
-    const map = {};
-    passes.forEach((p, i) => {
-      if (!p.newRadialFeature) return;
-      const baseGeo = geometries[i]; // state before this pass
-      if (!baseGeo) return;
-      map[i] = buildRadialDrillStages(THREE, CSG, baseGeo, p.newRadialFeature, [], stockRadius, RADIAL_DRILL_STAGE_COUNT);
-    });
-    return map;
-  }, [sim, geometries]);
+  // LAZY CSG caches: radial-hole baking and drill-stage computation are only run
+  // the first time a given pass is actually reached during playback, not eagerly
+  // for the whole program at load time. CSG boolean subtraction on a
+  // ~20k-triangle LatheGeometry is genuinely expensive (BVH construction +
+  // triangle intersection) - running it synchronously for every G184 pass in the
+  // program before the first frame even renders was the real cause of chuck/
+  // part/turret taking noticeably longer to appear once a program used G184.
+  // Caches are refs (not state) since they're pure memoization, not something
+  // that should trigger re-renders on their own.
+  const decoratedGeometryCache = useRef(new Map());
+  const radialStageCache = useRef(new Map());
+
+  useEffect(() => {
+    // Runs on unmount AND right before this effect re-fires for a new `sim`
+    // (new gcode loaded) - disposes whatever the caches accumulated for the
+    // PREVIOUS program before starting fresh for the new one.
+    return () => {
+      decoratedGeometryCache.current.forEach((g) => g.dispose());
+      decoratedGeometryCache.current.clear();
+      radialStageCache.current.forEach((stages) => stages.forEach((g) => g.dispose()));
+      radialStageCache.current.clear();
+    };
+  }, [sim]);
+
+  /** geometries[k] with any radial holes drilled by then baked in - CSG only runs once, lazily, on first request. */
+  function getDecoratedGeometry(k) {
+    if (!sim.ok || k === 0) return geometries[0]; // raw stock never has holes
+    const pass = sim.data.passes[k - 1];
+    if (!pass?.radialFeaturesSoFar?.length) return geometries[k]; // no CSG needed - the common case
+    if (decoratedGeometryCache.current.has(k)) return decoratedGeometryCache.current.get(k);
+    const decorated = applyRadialFeatures(THREE, CSG, geometries[k], pass.radialFeaturesSoFar, sim.data.stockRadius);
+    decoratedGeometryCache.current.set(k, decorated);
+    return decorated;
+  }
+
+  /** Progressive-depth plunge stages for pass `i` (only meaningful if it's a G184 pass) - computed once, lazily. */
+  function getRadialStages(i) {
+    if (!sim.ok) return null;
+    const pass = sim.data.passes[i];
+    if (!pass?.newRadialFeature) return null;
+    if (radialStageCache.current.has(i)) return radialStageCache.current.get(i);
+    const baseGeo = getDecoratedGeometry(i); // state before this pass, with any earlier holes already baked in
+    const stages = buildRadialDrillStages(THREE, CSG, baseGeo, pass.newRadialFeature, [], sim.data.stockRadius, RADIAL_DRILL_STAGE_COUNT);
+    radialStageCache.current.set(i, stages);
+    return stages;
+  }
+
+  // Exposed to the parent so it can precompute ALL CSG work up front (e.g. when
+  // the user presses Play) with a loading indicator, rather than either blocking
+  // at load or paying the cost silently mid-playback the first time a radial
+  // pass is reached.
+  useImperativeHandle(
+    ref,
+    () => ({
+      /** Cheap synchronous check - is there any G184/CSG work not yet cached? */
+      hasUncachedWork: () => {
+        if (!sim.ok) return false;
+        return sim.data.passes.some((p, i) => {
+          if (p.newRadialFeature && !radialStageCache.current.has(i)) return true;
+          if (p.radialFeaturesSoFar?.length && !decoratedGeometryCache.current.has(i + 1)) return true;
+          return false;
+        });
+      },
+      /** Runs every G184 pass's CSG (stages + baked-forward geometry) now, caching as it goes. */
+      precomputeAll: () =>
+        new Promise((resolve) => {
+          // Two-step deferral, because either alone isn't reliable:
+          //  1. Double requestAnimationFrame guarantees at least one real paint
+          //     cycle has passed - InteractionManager.runAfterInteractions ALONE
+          //     can fire on the very next JS tick if nothing is currently
+          //     registered as an interaction, which risks starting this
+          //     (synchronous, thread-blocking) work before the "preparing..."
+          //     overlay the parent just set has actually reached the screen.
+          //  2. InteractionManager.runAfterInteractions on top of that still
+          //     respects any genuinely in-flight native animations/transitions.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              InteractionManager.runAfterInteractions(() => {
+                if (sim.ok) {
+                  sim.data.passes.forEach((p, i) => {
+                    if (p.newRadialFeature) getRadialStages(i);
+                    getDecoratedGeometry(i + 1); // no-op/cheap if this pass has no radial features
+                  });
+                }
+                resolve();
+              });
+            });
+          });
+        }),
+    }),
+    [sim]
+  );
 
   // Parallel to `geometries` but keeping the raw {z,r}[] profile arrays (not THREE
   // geometry) - needed to interpolate radius at an arbitrary Z for the cap disk.
@@ -145,11 +218,8 @@ export default function CNCLatheSimulator({
   }, [sim]);
 
   useEffect(() => {
-    return () => {
-      geometries.forEach((g) => g.dispose());
-      Object.values(radialStagesByPass).forEach((stages) => stages.forEach((g) => g.dispose()));
-    };
-  }, [geometries, radialStagesByPass]);
+    return () => geometries.forEach((g) => g.dispose());
+  }, [geometries]);
 
   const passes = sim.ok ? sim.data.passes : [];
   const clampedIndex = Math.min(passIndex, Math.max(0, passes.length - 1));
@@ -355,7 +425,7 @@ export default function CNCLatheSimulator({
       }
 
       if (activePass?.cycle === 'G184') {
-        const stages = radialStagesByPass[clampedIndex];
+        const stages = getRadialStages(clampedIndex);
         if (stages) {
           const idx = Math.min(stages.length - 1, Math.floor(progressRef.current * stages.length));
           setRadialStageIndex((prev) => (prev !== idx ? idx : prev));
@@ -401,10 +471,11 @@ export default function CNCLatheSimulator({
   if (!sim.ok || passes.length === 0) return null;
 
   const isRadialDrillPass = activePass?.cycle === 'G184';
+  const activeToolNumber = activePass?.moves?.find((m) => m.isCutting || m.type === 'radialDrill')?.toolNumber ?? activePass?.moves?.[0]?.toolNumber ?? 0;
 
   if (isRadialDrillPass) {
-    const stages = radialStagesByPass[clampedIndex];
-    const stageGeo = stages ? stages[Math.min(radialStageIndex, stages.length - 1)] : geometries[clampedIndex];
+    const stages = getRadialStages(clampedIndex);
+    const stageGeo = stages ? stages[Math.min(radialStageIndex, stages.length - 1)] : getDecoratedGeometry(clampedIndex);
     return (
       <group>
         {/* Radial-drill pass: bypasses the clip-plane system entirely - a hole
@@ -414,12 +485,13 @@ export default function CNCLatheSimulator({
         <mesh geometry={stageGeo}>
           <meshPhysicalMaterial color="#c7ccd4" metalness={0.85} roughness={0.28} clearcoat={0.3} clearcoatRoughness={0.4} side={THREE.DoubleSide} />
         </mesh>
+        <Turret activeToolNumber={activeToolNumber} stockConfig={stockConfig} pass={activePass} progressRef={progressRef} />
       </group>
     );
   }
 
-  const beforeGeo = geometries[clampedIndex];
-  const afterGeo = geometries[clampedIndex + 1] ?? geometries[clampedIndex];
+  const beforeGeo = getDecoratedGeometry(clampedIndex);
+  const afterGeo = getDecoratedGeometry(clampedIndex + 1) ?? beforeGeo;
   const isCutting = (activePass?.moves ?? []).some((m) => m.isCutting);
 
   return (
@@ -470,6 +542,9 @@ export default function CNCLatheSimulator({
 
       <ToolBit pass={activePass} progressRef={progressRef} />
       <Sparks active={playing && isCutting} pass={activePass} progressRef={progressRef} />
+      <Turret activeToolNumber={activeToolNumber} stockConfig={stockConfig} pass={activePass} progressRef={progressRef} />
     </group>
   );
-}
+});
+
+export default CNCLatheSimulator;
