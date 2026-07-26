@@ -8,6 +8,7 @@ import { simulateGCode, buildProfilePath, interpRadiusAtZ, applyRadialFeatures, 
 import ToolBit from './ToolBit';
 import Sparks from './Sparks';
 import Turret from './Turret';
+import AxisGizmo from './AxisGizmo';
 
 const CSG = { Brush, Evaluator, SUBTRACTION };
 const RADIAL_DRILL_STAGE_COUNT = 4;
@@ -486,6 +487,7 @@ const CNCLatheSimulator = forwardRef(function CNCLatheSimulator({
           <meshPhysicalMaterial color="#c7ccd4" metalness={0.85} roughness={0.28} clearcoat={0.3} clearcoatRoughness={0.4} side={THREE.DoubleSide} />
         </mesh>
         <Turret activeToolNumber={activeToolNumber} stockConfig={stockConfig} pass={activePass} progressRef={progressRef} />
+        <AxisGizmo origin={[(stockConfig?.stockDiameter ?? 40) / 2 + 6, stockConfig?.zFace ?? 0, 0]} length={(stockConfig?.stockDiameter ?? 40) * 0.4} />
       </group>
     );
   }
@@ -543,6 +545,7 @@ const CNCLatheSimulator = forwardRef(function CNCLatheSimulator({
       <ToolBit pass={activePass} progressRef={progressRef} />
       <Sparks active={playing && isCutting} pass={activePass} progressRef={progressRef} />
       <Turret activeToolNumber={activeToolNumber} stockConfig={stockConfig} pass={activePass} progressRef={progressRef} />
+      <AxisGizmo origin={[(stockConfig?.stockDiameter ?? 40) / 2 + 6, stockConfig?.zFace ?? 0, 0]} length={(stockConfig?.stockDiameter ?? 40) * 0.4} />
     </group>
   );
 });

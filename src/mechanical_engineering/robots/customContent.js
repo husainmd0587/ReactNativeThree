@@ -1,15 +1,13 @@
-import {CustomScreen} from './customScreens/screen'
-//* Custom cards and custom block *//
+import {RoboticsNavigator} from './customScreens/robotics/navigation/RoboticsNavigator'
+
+
 import {CustomCard} from './customCard/card'
 
 
 export const CustomScreensList = [
   {
-    name: "AutomobileHome",
-    component: CustomScreen,
-    data: {
-      title: 'Automobile Engineering custom data for testing',
-    },
+    name: "RoboticsSimulations",
+    component: RoboticsNavigator,
   },
 ];
 

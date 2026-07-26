@@ -1,26 +1,32 @@
-// materials/materialConfigs.js - COMPLETE VERSION
+// materials/materialConfigs.js - COMPLETE VERSION (fixed)
 import { useTextureLoader } from './textures';
 import * as THREE from 'three';
 
 export function useMaterialConfigs() {
-  // Load existing textures
-  let steelTexture, woodTexture, copperTexture, marbleTexture, defaultTexture;
-  let aluminiumTexture, brassTexture, plasticTexture, knurlTexture, wallTexture;
-  
-  try {
-    steelTexture = useTextureLoader({ type: 'steel', repeat: [2, 2] });
-    aluminiumTexture = useTextureLoader({ type: 'aluminium', repeat: [2, 2] });
-    copperTexture = useTextureLoader({ type: 'copper', repeat: [2, 2] });
-    brassTexture = useTextureLoader({ type: 'brass', repeat: [2, 2] });
-    knurlTexture = useTextureLoader({ type: 'knurl', repeat: [4, 2] });
-    woodTexture = useTextureLoader({ type: 'wood', repeat: [2, 2] });
-    marbleTexture = useTextureLoader({ type: 'marble', repeat: [2, 2] });
-    wallTexture = useTextureLoader({ type: 'wall', repeat: [2, 2] });
-    plasticTexture = useTextureLoader({ type: 'plastic', repeat: [2, 2] });
-    defaultTexture = useTextureLoader({ type: 'default', repeat: [2, 2] });
-  } catch (e) {
-    console.log('⚠️ Some textures not found, using color fallbacks');
-  }
+  // ✅ FIX: hooks must never be wrapped in try/catch, and must always run
+  // in the same order/count on every render. The previous version wrapped
+  // 10 sequential useTextureLoader() calls in a try/catch — if
+  // useTextureLoader suspends (throws a Promise) or throws a real Error
+  // for ANY one texture, every hook call after it in the list was skipped
+  // for that render. The next render (once the texture resolved) ran all
+  // 10 calls again — a different hook count between renders, which is
+  // exactly what triggers "Rendered more hooks than during the previous
+  // render."
+  //
+  // useTextureLoader itself must be the place that tolerates a missing/
+  // failed texture (e.g. catching internally and returning null), not
+  // this call site. If it currently throws on failure, fix it there —
+  // see the note at the bottom of this file.
+  const steelTexture = useTextureLoader({ type: 'steel', repeat: [2, 2] });
+  const aluminiumTexture = useTextureLoader({ type: 'aluminium', repeat: [2, 2] });
+  const copperTexture = useTextureLoader({ type: 'copper', repeat: [2, 2] });
+  const brassTexture = useTextureLoader({ type: 'brass', repeat: [2, 2] });
+  const knurlTexture = useTextureLoader({ type: 'knurl', repeat: [4, 2] });
+  const woodTexture = useTextureLoader({ type: 'wood', repeat: [2, 2] });
+  const marbleTexture = useTextureLoader({ type: 'marble', repeat: [2, 2] });
+  const wallTexture = useTextureLoader({ type: 'wall', repeat: [2, 2] });
+  const plasticTexture = useTextureLoader({ type: 'plastic', repeat: [2, 2] });
+  const defaultTexture = useTextureLoader({ type: 'default', repeat: [2, 2] });
 
   return {
     // ============ METALS ============
@@ -579,6 +585,17 @@ export function useMaterialConfigs() {
 }
 
 // Helper functions
+// ⚠️ These are broken regardless of the fix above: they call the
+// useMaterialConfigs() HOOK from inside a plain (non-hook, non-component)
+// function. That's also a Rules-of-Hooks violation — hooks can only be
+// called from React function components or other hooks, never from an
+// arbitrary helper you invoke imperatively (e.g. inside an event handler
+// or a .map()). If these are actually used anywhere outside a component's
+// render body, they'll throw "Invalid hook call" or contribute to further
+// hook-count mismatches. They're left here unchanged from the original,
+// but should be refactored to accept `materialConfigs` as a parameter
+// (like getMaterialByName/getMaterialNames already correctly do) rather
+// than calling the hook themselves.
 export function createMaterial(baseMaterial, overrides = {}) {
   const materials = useMaterialConfigs();
   const base = materials[baseMaterial] || materials.default;
@@ -606,3 +623,13 @@ export default {
   getMaterialByName,
   getMaterialNames,
 };
+
+// ─── If the error persists after this fix ──────────────────────────────
+// It means useTextureLoader() itself is throwing/suspending inconsistently
+// for a *reason other than* the try/catch above (e.g. it conditionally
+// calls its own internal hooks, or it's an async loader that resolves at
+// different points on different renders). If so, share textures.js and
+// I'll trace it from there — the pattern to look for is the same: any
+// hook (useState/useEffect/useMemo/useTexture/etc.) called behind an
+// `if`, inside a `try`, after an early `return`, or in a loop with a
+// variable iteration count.

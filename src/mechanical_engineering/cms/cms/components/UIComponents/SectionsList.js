@@ -10,7 +10,8 @@ const SectionsList = ({ title, items = [], accent, navigation, }) => {
       key={i}
       style={[
         styles.sectionRow,
-        styles.sectionShadow
+        styles.sectionShadow,
+        {borderBottomColor:i%2?'#fff':'#fa9160aa'}
       ]}
       activeOpacity={0.8}
       onPress={() => 
@@ -163,6 +164,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth:1,
+    borderTopColor:'#bab9fd',
+    // Remove shadow, add bottom border
+    borderBottomWidth: 2,
+    borderBottomColor: '#4ef393',
   },
   sectionShadow: {
     shadowColor: '#000',

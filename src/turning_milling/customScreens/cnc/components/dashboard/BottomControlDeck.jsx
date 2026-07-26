@@ -14,6 +14,10 @@ export default function BottomControlDeck({
   onToggleSpindle,
   feedOn,
   onToggleFeed,
+  passIndex = 0,
+  passCount = 0,
+  onPrevPass,
+  onNextPass,
 }) {
   const [coolant, setCoolant] = useState(true);
   const [tailstock, setTailstock] = useState(false);
@@ -25,6 +29,24 @@ export default function BottomControlDeck({
         <CycleBtn label="CYCLE START" icon="▮▮" color="#22c55e" onPress={onCycleStart} active={playing} />
         <CycleBtn label="FEED HOLD" icon="⏸" color="#ef4444" onPress={onFeedHold} />
         <CycleBtn label="STOP" icon="⏹" color="#ef4444" onPress={onStop} />
+      </View>
+
+      <View style={styles.stepCol}>
+        <Text style={styles.deckLabel}>STEP MODE</Text>
+        <View style={styles.stepRow}>
+          <TouchableOpacity style={styles.stepBtn} onPress={onPrevPass}>
+            <Text style={styles.stepBtnText}>⏮ PREV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.stepBtn} onPress={onNextPass}>
+            <Text style={styles.stepBtnText}>NEXT ⏭</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.stepReadout}>
+          PASS <Text style={styles.stepReadoutNum}>{Math.min(passIndex + 1, passCount)}</Text> / {passCount}
+        </Text>
+        <View style={styles.stepBar}>
+          <View style={[styles.stepBarFill, { width: `${passCount ? ((passIndex + 1) / passCount) * 100 : 0}%` }]} />
+        </View>
       </View>
 
       <View style={styles.jogCol}>
@@ -111,6 +133,15 @@ const styles = StyleSheet.create({
   jogBtn: { backgroundColor: '#2b2f36', borderRadius: 6, width: 40, height: 34, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
   jogBtnSmall: { width: 40, height: 26 },
   jogLabel: { color: '#e8eaed', fontSize: 10, fontWeight: '700' },
+
+  stepCol: { marginLeft: 10, width: 92, alignItems: 'center' },
+  stepRow: { flexDirection: 'row', marginBottom: 6 },
+  stepBtn: { backgroundColor: '#2b2f36', borderRadius: 6, paddingVertical: 6, paddingHorizontal: 6, marginHorizontal: 2, flex: 1 },
+  stepBtnText: { color: '#5aa8ff', fontSize: 8, fontWeight: '700', textAlign: 'center' },
+  stepReadout: { color: '#8a919c', fontSize: 9, marginBottom: 4 },
+  stepReadoutNum: { color: '#e8eaed', fontWeight: '700' },
+  stepBar: { width: '100%', height: 3, backgroundColor: '#2b2f36', borderRadius: 2 },
+  stepBarFill: { height: 3, backgroundColor: '#5aa8ff', borderRadius: 2 },
 
   dialCol: { marginLeft: 14, alignItems: 'center' },
   toggleBtn: { backgroundColor: '#2b2f36', borderRadius: 6, paddingVertical: 4, paddingHorizontal: 14, marginTop: 6 },

@@ -85,6 +85,28 @@ function radiusAtZForArc(from, to, center, z) {
 }
 
 /**
+ * Radius at a given Z for a threading move, using the move's `thread` metadata
+ * (see expandG76 in latheInterpreter.js). Modulates the radius into a
+ * symmetric triangular wave along Z - crest (majorRadius) at multiples of the
+ * pitch from `zOrigin`, root (minorRadius) at odd half-pitch offsets - instead
+ * of a flat constant-radius groove. This is a real V-thread PROFILE (correct
+ * crest/root geometry at every Z station), not a true helical toolpath -
+ * there's no X+Z+spindle-synchronized 3D motion here, just a radius-vs-Z
+ * function shaped like one. `angleDeg` isn't used in the wave shape itself
+ * (a symmetric triangle already approximates a standard V-thread reasonably
+ * for visualization) - it's kept in the metadata for a future upgrade that
+ * wants the true asymmetric flank geometry.
+ */
+function radiusAtZForThread(move, z) {
+  const { pitch, majorRadius, minorRadius, zOrigin } = move.thread;
+  const half = pitch / 2;
+  let rel = Math.abs(z - zOrigin) % pitch;
+  if (rel < 0) rel += pitch;
+  const t = rel <= half ? rel / half : (pitch - rel) / half; // 0 at crest, 1 at root
+  return majorRadius - (majorRadius - minorRadius) * t;
+}
+
+/**
  * Rasterize one cutting move onto the station grid, updating outer/inner radius arrays.
  * - "outer" cuts (tool approaches from stock OD inward) LOWER the outer radius.
  * - "bore" cuts (drilling/boring near/at centerline) RAISE the inner radius (hole size).
@@ -92,18 +114,19 @@ function radiusAtZForArc(from, to, center, z) {
  * AND it's primarily axial (Z-dominant) motion — i.e. drilling, not facing to center.
  */
 function applyMoveToProfile(move, stations, outerR, innerR, boreThreshold) {
-  const { from, to, center, type } = move;
+  const { from, to, center, type, thread } = move;
   const zLo = Math.min(from.z, to.z);
   const zHi = Math.max(from.z, to.z);
   const isAxialDominant = Math.abs(to.z - from.z) >= Math.abs(to.x - from.x);
   const avgX = (from.x + to.x) / 2;
   const isBoreCut = isAxialDominant && radiusOf(avgX) <= boreThreshold;
   const isArc = (type === 'arcCW' || type === 'arcCCW') && center;
+  const isThread = !!thread;
 
   for (let i = 0; i < stations.length; i++) {
     const z = stations[i];
     if (z < zLo - 1e-6 || z > zHi + 1e-6) continue;
-    const r = isArc ? radiusAtZForArc(from, to, center, z) : radiusAtZ(from, to, z);
+    const r = isThread ? radiusAtZForThread(move, z) : isArc ? radiusAtZForArc(from, to, center, z) : radiusAtZ(from, to, z);
     if (isBoreCut) {
       innerR[i] = Math.max(innerR[i], r);
     } else {

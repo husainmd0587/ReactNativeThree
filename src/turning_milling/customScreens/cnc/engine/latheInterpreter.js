@@ -63,7 +63,7 @@ function resolveTarget(state, a) {
   return { x, z };
 }
 
-function pushMove(moves, { lineIndex, type, from, to, center, state, cycle, isCutting }) {
+function pushMove(moves, { lineIndex, type, from, to, center, state, cycle, isCutting, thread }) {
   moves.push({
     lineIndex,
     type,
@@ -77,6 +77,7 @@ function pushMove(moves, { lineIndex, type, from, to, center, state, cycle, isCu
     toolNumber: state.toolNumber,
     cycle: cycle || 'manual',
     isCutting: !!isCutting,
+    thread: thread || null,
   });
 }
 
@@ -105,14 +106,19 @@ function expandG71(state, params, profileChain, moves, lineIndex) {
   const startX = state.x;
   const finishPoints = profileChain; // [{x,z}], first point should be near startX
 
-  // Find min/max X across finish contour to know how many passes needed
+  // Find min/max X across finish contour to know how many passes needed. The
+  // loop must continue until the DEEPEST (smallest-diameter) point in the
+  // whole contour is reached, not just the thickest one - otherwise a thin
+  // section of a stepped profile never gets enough passes to reach its own
+  // target, even though each individual pass now correctly clamps per-point.
   const maxFinishX = Math.max(...finishPoints.map((p) => p.x));
+  const minFinishX = Math.min(...finishPoints.map((p) => p.x));
   const stockX = Math.max(startX, maxFinishX + finishU * 2 + depthCut);
 
   let currentX = stockX;
   const passes = [];
-  while (currentX > maxFinishX + finishU) {
-    currentX = Math.max(maxFinishX + finishU, currentX - depthCut);
+  while (currentX > minFinishX + finishU) {
+    currentX = Math.max(minFinishX + finishU, currentX - depthCut);
     passes.push(currentX);
   }
 
@@ -123,10 +129,16 @@ function expandG71(state, params, profileChain, moves, lineIndex) {
     pushMove(moves, { lineIndex, type: 'rapid', from: cursor, to: { x: passX, z: startZ }, state, cycle: 'G71' });
     cursor = { x: passX, z: startZ };
 
-    // Follow the finish contour's Z path, but clamp X to passX (never cut deeper than this pass),
-    // offset by finish allowance in Z where the contour would go below passX.
+    // Follow the finish contour's Z path, clamped to whichever is SHALLOWER
+    // (larger diameter) of: this pass's overall step-down level (passX), or
+    // this point's own finish target - never cut deeper than either bound.
+    // This was previously Math.min(), which clamps straight to the finish
+    // target the moment it's smaller than passX - meaning any Z region whose
+    // local diameter is much smaller than the raw stock (e.g. a thin step on
+    // an otherwise thick shaft) jumped to (near) final depth on pass 1,
+    // ignoring the programmed per-pass step-down (U) entirely for that region.
     for (const pt of finishPoints) {
-      const cutX = Math.min(passX, pt.x + finishU); // don't cut into finish allowance
+      const cutX = Math.max(passX, pt.x + finishU); // don't cut past this pass's level OR the finish allowance, whichever is reached first
       const to = { x: Math.max(cutX, pt.x), z: pt.z + (pt.z <= finishPoints.at(-1).z ? finishW : 0) };
       pushMove(moves, { lineIndex, type: 'feed', from: cursor, to, state: { ...state, feed }, cycle: 'G71', isCutting: true });
       cursor = to;
@@ -274,6 +286,22 @@ function expandG75(state, params, moves, lineIndex) {
  * infeed threading, stepping the cut depth using the common sqrt(n) degressive-pass rule
  * so early passes are shallow and later passes are progressively deeper (standard practice).
  */
+/**
+ * G76 threading cycle.
+ * G76 X<minor diameter> Z<thread end> Q<first cut depth, diameter> F<lead/pitch> A<thread angle deg, default 60>
+ * Degressive-depth passes (depth_n = firstCut * sqrt(n), standard practice) same
+ * as before, but each pass now carries real V-THREAD PROFILE metadata (pitch,
+ * angle, major/minor radius) instead of just cutting a flat-bottom groove at
+ * that pass's depth. toolpathToPasses.js's radiusAtZForThread() uses this to
+ * modulate the radius profile into an actual triangular thread crest/root
+ * pattern along Z, not a rectangular slot.
+ *
+ * NOTE: this produces a correct STATIC thread profile (Stage 1 of a full
+ * threading upgrade) via profile modulation - it does NOT simulate true
+ * helical tool motion (X+Z+spindle rotation together). That's a materially
+ * bigger undertaking (real 3D helical toolpath, not just a radius-vs-Z
+ * function) and is intentionally out of scope here.
+ */
 function expandG76(state, params, moves, lineIndex) {
   const startX = state.x;
   const startZ = state.z;
@@ -281,19 +309,35 @@ function expandG76(state, params, moves, lineIndex) {
   const finalMinorX = params.X ?? startX; // diameter at root of thread
   const threadDepthTotal = Math.max(0, (startX - finalMinorX) / 2); // radius value
   const firstCutDepth = Math.max(0.01, (params.firstCut ?? 0.3) / 2); // radius, per pass 1
-  const feed = params.F ?? state.feed; // lead (mm/rev) - informational only here
+  // F is the thread LEAD/PITCH in a threading cycle (real controls interpret it
+  // this way, not as a machining feed rate) - e.g. F1.5 means 1.5mm pitch.
+  const pitch = Math.max(0.1, params.F ?? 1.5);
+  const angleDeg = params.angleDeg ?? 60; // standard metric/UN thread angle
 
-  // Degressive depth-of-cut passes using constant-area rule: depth_n = firstCut * sqrt(n)
+  // Degressive depth-of-cut passes using constant-area rule: depth_n = firstCut * sqrt(n).
+  // Bounded to a sane pass count for a teaching visualization (not real machining
+  // pass-count optimization) - the sqrt formula can require dozens of iterations
+  // to reach a modest total depth for some Q/depth combinations, and critically,
+  // the depth MUST actually reach threadDepthTotal: silently stopping short at a
+  // safety cap would under-cut the thread rather than just look less smooth.
+  const MAX_THREAD_PASSES = 10;
   const passes = [];
   let n = 1;
   let cumDepth = 0;
-  while (cumDepth < threadDepthTotal) {
+  while (cumDepth < threadDepthTotal && passes.length < MAX_THREAD_PASSES - 1) {
     const depth = Math.min(threadDepthTotal, firstCutDepth * Math.sqrt(n));
     cumDepth = depth;
     passes.push(depth);
     n += 1;
-    if (n > 60) break; // safety
   }
+  // Guarantee the thread reaches its full programmed depth regardless of how
+  // many passes the degressive formula alone would have needed.
+  if (passes.length === 0 || passes[passes.length - 1] < threadDepthTotal - 1e-6) {
+    passes.push(threadDepthTotal);
+  }
+
+  const majorRadius = startX / 2;
+  const threadZOrigin = Math.min(startZ, endZ); // crest reference point for the profile's phase
 
   let cursor = { x: startX, z: startZ };
   for (const depth of passes) {
@@ -305,9 +349,10 @@ function expandG76(state, params, moves, lineIndex) {
       type: 'feed',
       from: cursor,
       to: { x: passX, z: endZ },
-      state: { ...state, feed },
+      state: { ...state, feed: pitch },
       cycle: 'G76',
       isCutting: true,
+      thread: { pitch, angleDeg, majorRadius, minorRadius: passX / 2, zOrigin: threadZOrigin },
     });
     cursor = { x: passX, z: endZ };
     const retract = { x: startX, z: endZ };
@@ -490,7 +535,7 @@ export function interpretGCode(gcodeText, opts = {}) {
       continue;
     }
     if (a.G === 76) {
-      expandG76(state, { X: a.X, Z: a.Z, firstCut: a.Q, F: a.F }, moves, tok.lineIndex);
+      expandG76(state, { X: a.X, Z: a.Z, firstCut: a.Q, F: a.F, angleDeg: a.A }, moves, tok.lineIndex);
       continue;
     }
 

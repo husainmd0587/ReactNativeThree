@@ -1,5 +1,6 @@
 // portal.js
 import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
+import { View, StyleSheet } from 'react-native';
 
 const PortalContext = createContext(null);
 
@@ -25,13 +26,33 @@ export function PortalProvider({ children }) {
 
   return (
     <PortalContext.Provider value={contextValue}>
-      {children}
-      {Object.entries(portals).map(([key, node]) => (
-        <React.Fragment key={key}>{node}</React.Fragment>
-      ))}
+      <View style={styles.container} pointerEvents="box-none">
+        {children}
+        <View style={styles.portalHost} pointerEvents="box-none">
+          {Object.entries(portals).map(([key, node]) => (
+            <React.Fragment key={key}>{node}</React.Fragment>
+          ))}
+        </View>
+      </View>
     </PortalContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  portalHost: {
+    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99999,
+    elevation: 120,
+  },
+});
 
 export function usePortal() {
   const ctx = useContext(PortalContext);

@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager, ActivityIndicator, Alert } from 'react-native';
 import CNCLatheSimulator from './components/CNCLatheSimulator';
 import Chuck from './components/Chuck';
 import ProgrammEdit from './ProgrammEdit';
 import ToolMagazine from './ToolMagazine';
 import { simulateGCode } from './engine';
+import { validateProgram } from './programValidator';
 import { stationFromToolNumber } from './toolLibrary';
 import CanvaProvider from '../../../utils/ThreeJs_Utils/provider';
 
@@ -14,6 +15,7 @@ import CompactStatusStrip from './components/dashboard/CompactStatusStrip';
 import DROPanel from './components/dashboard/DROPanel';
 import LiveGCodePanel from './components/dashboard/LiveGCodePanel';
 import ToolWorkInfoPanel from './components/dashboard/ToolWorkInfoPanel';
+import OperationInfoPanel from './components/dashboard/OperationInfoPanel';
 import AnimationControlPanel from './components/dashboard/AnimationControlPanel';
 import BottomControlDeck from './components/dashboard/BottomControlDeck';
 
@@ -127,7 +129,10 @@ export default function CncSimulatorPro() {
   // holes), not mount/load and not "whichever pass happens to play next" -
   // stock/chuck/turret render immediately regardless, and this only runs (with a
   // visible loading indicator) if there's actually uncached work to do.
-  const handlePlay = useCallback(async () => {
+  // Program -> Parser -> Validator -> Safety & Geometry Checks -> Simulation.
+  // Runs before EVERY play attempt (not just once) since the program can change
+  // via the editor between runs.
+  const runValidatedPlay = useCallback(async () => {
     if (simRef.current?.hasUncachedWork?.()) {
       setPreparing(true);
       await simRef.current.precomputeAll();
@@ -135,6 +140,32 @@ export default function CncSimulatorPro() {
     }
     setPlaying(true);
   }, []);
+
+  const handlePlay = useCallback(() => {
+    const result = validateProgram(gcode, stockConfig);
+    if (!result.blocked) {
+      runValidatedPlay();
+      return;
+    }
+
+    const issue = result.blockingIssue;
+    const locationText = issue.location ? `\n\nX = ${issue.location.x?.toFixed?.(1)}\nZ = ${issue.location.z?.toFixed?.(2)}` : '';
+    Alert.alert(
+      'PROGRAM VALIDATION ERROR',
+      `${issue.message}${locationText}\n\nExecution blocked.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Show Error Location',
+          onPress: () => {
+            LayoutAnimation.configureNext(PANEL_EASE);
+            setOpenPanel('PROGRAM');
+          },
+        },
+        { text: 'Run Anyway', style: 'destructive', onPress: () => runValidatedPlay() },
+      ]
+    );
+  }, [gcode, stockConfig, runValidatedPlay]);
 
   const handleTogglePlay = useCallback(() => {
     if (playing) {
@@ -307,6 +338,8 @@ export default function CncSimulatorPro() {
 
         {openPanel === 'INFO' && (
           <View>
+            <OperationInfoPanel passes={preview.passes} passIndex={passIndex} telemetry={telemetry} />
+            <View style={{ height: 8 }} />
             <ToolWorkInfoPanel toolNumber={telemetry.toolNumber} stockConfig={stockConfig} />
             <TouchableOpacity style={styles.magazineBtn} onPress={() => setShowToolMagazine(true)}>
               <Text style={styles.magazineBtnText}>🗄  View Tool Magazine (8 stations)</Text>
@@ -344,6 +377,16 @@ export default function CncSimulatorPro() {
             onToggleSpindle={() => setSpindleOn((v) => !v)}
             feedOn={feedOn}
             onToggleFeed={() => setFeedOn((v) => !v)}
+            passIndex={passIndex}
+            passCount={preview.passes.length}
+            onPrevPass={() => {
+              setPlaying(false);
+              setPassIndex((p) => Math.max(0, p - 1));
+            }}
+            onNextPass={() => {
+              setPlaying(false);
+              setPassIndex((p) => Math.min(preview.passes.length - 1, p + 1));
+            }}
           />
         )}
       </View>

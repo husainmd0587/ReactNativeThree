@@ -213,11 +213,16 @@ const styles = StyleSheet.create({
   },
   cardOverlay: { 
     ...StyleSheet.absoluteFillObject, 
-    justifyContent: 'space-between', 
-    padding: 12 
+    justifyContent: 'flex-start', 
+    alignItems: 'flex-start',
+    padding: 12, 
+    paddingBottom: 32,
+    zIndex: 2,
+    elevation: 6,
   },
   textBlock: { 
-    maxWidth: '75%' 
+    maxWidth: '75%',
+    marginBottom: 8,
   },
   title: {
     fontSize: 14, 
@@ -236,16 +241,24 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   expandBtn: {
-    alignSelf: 'flex-start', 
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 28 : 22,
+    left: 12,
     flexDirection: 'row', 
     alignItems: 'center', 
     gap: 6,
     paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.55)', 
+    paddingVertical: 10, 
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.85)', 
     borderWidth: 1, 
-    borderColor: 'rgba(245,158,11,0.5)',
+    borderColor: 'rgba(245,158,11,0.65)',
+    zIndex: 20,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
   },
   expandIcon: { 
     fontSize: 13, 
@@ -261,8 +274,10 @@ const styles = StyleSheet.create({
     position: 'absolute', 
     top: 0, 
     left: 0, 
-    zIndex: 18, 
-    elevation: 24 
+    right: 0,
+    bottom: 0,
+    zIndex: 99999, 
+    elevation: 120,
   },
   backdrop: { 
     backgroundColor: 'rgba(0,0,0,0.85)' 

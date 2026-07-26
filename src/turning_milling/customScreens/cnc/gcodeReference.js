@@ -59,6 +59,7 @@ export const ADDRESS_WORDS = [
   { code: 'N', desc: 'Line/block number' },
   { code: 'O', desc: 'Program number' },
   { code: 'C', desc: 'Angular position in degrees (simulator extension for G184 radial drilling)' },
+  { code: 'A', desc: 'Thread flank angle in degrees, default 60 (simulator extension for G76)' },
 ];
 
 export const ALL_SUGGESTIONS = [...G_CODES, ...M_CODES];

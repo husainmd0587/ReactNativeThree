@@ -110,18 +110,7 @@ const cache = new LRUCache(5);
 let decoderInitialized = false;
 const loadingPromises = {};
 
-// Only patch console.log in development
-const __DEV__ = process.env.NODE_ENV !== 'production';
-if (__DEV__) {
-  const originalConsoleLog = console.log;
-  console.log = (...args) => {
-    if (args[0] && typeof args[0] === 'string' &&
-        args[0].includes('gl.pixelStorei()')) {
-      return;
-    }
-    originalConsoleLog(...args);
-  };
-}
+
 
 // Pre-configure the GLTFLoader with decoder
 const getLoader = () => {
@@ -255,18 +244,7 @@ export function useGLTF(url) {
           );
         });
 
-      // 🔍 DEBUG: check raw scene right after GLTFLoader.parse()
-            gltf.scene.traverse((c) => {
-              if (c.isMesh) {
-                const mat = Array.isArray(c.material) ? c.material[0] : c.material;
-            console.log(
-          '[RAW]', c.name,
-          'hasMap:', !!mat?.map,
-          'offset:', mat?.map?.offset?.x, mat?.map?.offset?.y,
-          'repeat:', mat?.map?.repeat?.x, mat?.map?.repeat?.y
-        );
-      }
-    });
+
 
         if (!isMounted.current) return;
 

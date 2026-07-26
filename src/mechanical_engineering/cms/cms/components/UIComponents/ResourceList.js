@@ -146,7 +146,13 @@ const ThreeDResource = ({ url, title, size,soundUrl, navigation }) => (
       <Text style={styles.resourceTitle}>{title}</Text>
       <Text style={styles.resourceMeta}>3D Model • {size}</Text>
     </View>
-    <Text style={styles.downloadIcon}>➤</Text>
+    <RNImage
+     source={require('../../../../../assets/images/icons/arrow.gif')}
+     style={styles.gif}
+    />
+    {/* <Text style={styles.downloadIcon}>
+
+    </Text> */}
   </TouchableOpacity>
 );
 
@@ -299,6 +305,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
+  gif:{
+     width: 35,
+    height: 20,
+  }
 });
 
 export default ResourceList;

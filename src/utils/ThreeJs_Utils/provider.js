@@ -2,7 +2,7 @@
 import React, { Suspense, useMemo, useEffect, useState, useCallback, useRef, createContext, useContext, memo } from 'react';
 import {
   View, TouchableOpacity, Text, useWindowDimensions, StyleSheet, Animated,
-  Platform, ScrollView, Alert,
+  Platform, ScrollView, Alert, Modal,
 } from 'react-native';
 import { Canvas, useThree, useFrame } from '@react-three/fiber/native';
 import {
@@ -10,9 +10,7 @@ import {
 } from 'three';
 import useControls from 'r3f-native-orbitcontrols';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import AnimatedReanimated, { useSharedValue, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
-import { useDispatch } from 'react-redux';
-import { updateGesture } from '../store/slices/gestureSlice';
+import AnimatedReanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Context for 3D scene state ────────────────────────────────────────────
@@ -147,8 +145,17 @@ export const CanvaOnCreated = (state) => {
   state.gl.localClippingEnabled = true;
   const gl = state.gl.getContext();
   const original = gl.pixelStorei.bind(gl);
+
+  // EXGL doesn't implement these unpack flags — swallow them silently
+  // instead of letting them fall through to the real (warning-logging) impl.
+  const UNSUPPORTED_PNAMES = new Set([
+    gl.UNPACK_FLIP_Y_WEBGL,
+    gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+    gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,
+  ]);
+
   gl.pixelStorei = (...args) => {
-    if (args[0] === gl.UNPACK_FLIP_Y_WEBGL) return;
+    if (UNSUPPORTED_PNAMES.has(args[0])) return;
     return original(...args);
   };
 };
@@ -161,17 +168,11 @@ export const Fallback = () => (
 
 // ─── useGestureBridge ──────────────────────────────────────────────────────
 export function useGestureBridge() {
-  const dispatch = useDispatch();
   const vx = useSharedValue(0);
   const vy = useSharedValue(0);
   const pinchScale = useSharedValue(1);
   const pinchActive = useSharedValue(false);
-  const lastSent = useSharedValue(0);
   const lastTranslation = useRef({ x: 0, y: 0 });
-
-  const sendToRedux = useCallback((dx, dy) => {
-    dispatch(updateGesture({ x: dx, y: dy }));
-  }, [dispatch]);
 
   const onPanChange = useCallback((e) => {
     'worklet';
@@ -182,12 +183,7 @@ export function useGestureBridge() {
     lastTranslation.current = { x: nextX, y: nextY };
     vx.value += dx;
     vy.value += dy;
-    const now = Date.now();
-    if (now - lastSent.value > 50) {
-      lastSent.value = now;
-      runOnJS(sendToRedux)(dx, dy);
-    }
-  }, [lastSent, vx, vy, sendToRedux]);
+  }, [vx, vy]);
 
   const onPanEnd = useCallback(() => {
     'worklet';
@@ -214,7 +210,6 @@ export function useGestureBridge() {
     vx, vy, pinchScale, pinchActive,
     onPanChange, onPanEnd,
     onPinchStart, onPinchChange, onPinchEnd,
-    sendToRedux,
   };
 }
 
@@ -287,16 +282,12 @@ export function CameraOrbitController({ vx, vy, pinchScale, pinchActive, enabled
           lastPinchScale.current = currentScale;
 
           if (orthographic) {
-            const newZoom = MathUtils.clamp(camera.zoom * deltaRatio, 0.1, 5.0);
+            const newZoom = camera.zoom * deltaRatio;
             camera.zoom = newZoom;
             camera.updateProjectionMatrix();
             emitZoom(newZoom);
           } else {
-            spherical.current.radius = MathUtils.clamp(
-              spherical.current.radius / deltaRatio,
-              10,
-              500
-            );
+            spherical.current.radius = spherical.current.radius / deltaRatio;
             dirty = true;
           }
         }
@@ -1033,7 +1024,7 @@ const CanvaProvider = ({
   // ─── Zoom Functions ─────────────────────────────────────────────────────
   const handleZoomIn = useCallback(() => {
     if (!cameraRef.current) return;
-    const newZoom = Math.min(zoomLevel * 1.15, 5.0);
+    const newZoom = zoomLevel * 1.15;
 
     if (orthographic) {
       cameraRef.current.zoom = newZoom;
@@ -1057,7 +1048,7 @@ const CanvaProvider = ({
 
   const handleZoomOut = useCallback(() => {
     if (!cameraRef.current) return;
-    const newZoom = Math.max(zoomLevel * 0.85, 0.1);
+    const newZoom = zoomLevel * 0.85;
 
     if (orthographic) {
       cameraRef.current.zoom = newZoom;
@@ -1284,56 +1275,56 @@ const CanvaProvider = ({
             }
           </View>
 
-          {panelOpen && (
+          <Modal transparent={true} visible={panelOpen} animationType="none" onRequestClose={closePanel}>
             <TouchableOpacity
               style={S.backdrop}
               activeOpacity={1}
               onPress={closePanel}
             />
-          )}
 
-          <AdvancedVerticalPanel
-            visible={panelOpen}
-            panelWidth={panelWidth}
-            activeView={activeView}
-            onViewChange={changePlane}
-            customGesture={customGesture}
-            onToggleGesture={toggleGesture}
-            showGrid={showGrid}
-            onShowGrid={toggleGrid}
-            gridSize={gridSize}
-            onGridSizeChange={setGridSize}
-            axesVisible={axesVisible}
-            onToggleAxes={toggleAxes}
-            camPos={camPos}
-            onClose={closePanel}
-            renderMode={renderMode}
-            onRenderModeChange={handleRenderModeChange}
-            wireframe={wireframe}
-            onToggleWireframe={toggleWireframe}
-            shadows={shadows}
-            onToggleShadows={toggleShadows}
-            autoRotate={autoRotate}
-            onToggleAutoRotate={toggleAutoRotate}
-            orthographic={orthographic}
-            onToggleOrthographic={toggleOrthographic}
-            measurements={measurements}
-            onToggleMeasurements={toggleMeasurements}
-            snapToGrid={snapToGrid}
-            onToggleSnapGrid={toggleSnapGrid}
-            backgroundColor={backgroundColor}
-            onBackgroundColorChange={setBackgroundColor}
-            transparency={transparency}
-            onToggleTransparency={toggleTransparency}
-            zoomLevel={zoomLevel}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onZoomReset={handleZoomReset}
-            onScreenshot={handleScreenshot}
-            onResetToDefault={handleResetView}
-            onClearMeasurements={handleClearMeasurements}
-            onMeasureToolPress={handleMeasureToolPress}
-          />
+            <AdvancedVerticalPanel
+              visible={panelOpen}
+              panelWidth={panelWidth}
+              activeView={activeView}
+              onViewChange={changePlane}
+              customGesture={customGesture}
+              onToggleGesture={toggleGesture}
+              showGrid={showGrid}
+              onShowGrid={toggleGrid}
+              gridSize={gridSize}
+              onGridSizeChange={setGridSize}
+              axesVisible={axesVisible}
+              onToggleAxes={toggleAxes}
+              camPos={camPos}
+              onClose={closePanel}
+              renderMode={renderMode}
+              onRenderModeChange={handleRenderModeChange}
+              wireframe={wireframe}
+              onToggleWireframe={toggleWireframe}
+              shadows={shadows}
+              onToggleShadows={toggleShadows}
+              autoRotate={autoRotate}
+              onToggleAutoRotate={toggleAutoRotate}
+              orthographic={orthographic}
+              onToggleOrthographic={toggleOrthographic}
+              measurements={measurements}
+              onToggleMeasurements={toggleMeasurements}
+              snapToGrid={snapToGrid}
+              onToggleSnapGrid={toggleSnapGrid}
+              backgroundColor={backgroundColor}
+              onBackgroundColorChange={setBackgroundColor}
+              transparency={transparency}
+              onToggleTransparency={toggleTransparency}
+              zoomLevel={zoomLevel}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onZoomReset={handleZoomReset}
+              onScreenshot={handleScreenshot}
+              onResetToDefault={handleResetView}
+              onClearMeasurements={handleClearMeasurements}
+              onMeasureToolPress={handleMeasureToolPress}
+            />
+          </Modal>
 
           <ProFAB onPress={togglePanel} isOpen={panelOpen} />
         </View>
@@ -1460,8 +1451,9 @@ fab: {
     borderColor: BORDER_SOFT,
     borderRightWidth: 0,
     overflow: 'hidden',
-    zIndex: 20,
+    zIndex: 30,
     elevation: 12,
+    
     shadowColor: '#000',
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.3,

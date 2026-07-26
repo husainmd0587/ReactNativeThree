@@ -113,25 +113,7 @@ const Modal3DScreen = ({ navigation, route }) => {
             </View>
           </View>
         </View>
-
-        {/* Bottom Controls */}
-        <View style={styles.bottomControls} pointerEvents="box-none">
-          <View style={styles.controlsContent}>
-            <TouchableOpacity style={styles.controlButton} onPress={closeModal}>
-              <Text style={styles.controlIcon}>←</Text>
-              <Text style={styles.controlText}>Back</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.controlGroup}>
-              <TouchableOpacity style={[styles.controlButton, styles.iconButton]}>
-                <Text style={styles.controlIcon}>⛶</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.controlButton, styles.iconButton]}>
-                <Text style={styles.controlIcon}>⟳</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+  
 
         {/* Model Info Badge */}
         <View style={styles.infoBadge} pointerEvents="none">
@@ -234,57 +216,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-
-  // Bottom Controls
-  bottomControls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-  },
-  controlsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    backdropFilter: Platform.OS === 'web' ? 'blur(20px)' : undefined,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  controlButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    gap: 8,
-  },
-  controlIcon: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  controlText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  controlGroup: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
 
   // Info Badge

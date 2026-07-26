@@ -3,22 +3,33 @@
 // Receives a tap-selected profile from the Sketcher (main.js) via:
 //   navigation.navigate('SketchToSolid', { profile })
 //
-// where `profile` is the { outer, holes } shape from
-// utils/profile/loopDetection.js (classifyLoops / hitTestProfiles).
+// IMPORTANT — division of responsibility with CanvaProvider:
+// CanvaProvider (utils/ThreeJs_Utils/provider.js) already owns EVERYTHING
+// about how the scene looks and how the camera moves: lighting, grid, axis
+// labels, background color, wireframe/shadows/orthographic, view presets
+// (Front/Back/Left/Right/Top/Bottom/Iso via its own FAB -> slide-in panel),
+// zoom, and orbit/pan gestures (via r3f-native-orbitcontrols' OrbitControls,
+// mounted inside its Canvas). This screen does NOT add a second lighting
+// rig, a second grid, or a second camera controller — doing so previously
+// caused duplicate grids and camera jitter (two things trying to own the
+// same camera each frame). If you want a different default starting view,
+// pass a different `instanceId` and/or `camPosition` prop to CanvaProvider
+// below — don't reach into the Canvas and move the camera directly.
 //
-// Flow: choose Extrude or Revolve -> tool panel with live preview -> Confirm
-// (keeps the native solid, returns to the sketch) or Cancel (discards the
-// native solid, returns to the sketch). Every step is a genuine Manifold
-// solid — this is the native-first replacement for 3d/main.js's
-// THREE.ExtrudeGeometry-only preview.
+// What THIS screen actually adds, which CanvaProvider has no concept of:
+// the CAD tool workflow (Extrude / Revolve / Hole, and the "More" list of
+// deferred B-Rep-dependent tools) — that's CAD-specific and belongs here,
+// not in a generic 3D viewer component.
 
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, StyleSheet, Text, Alert } from 'react-native'
 import CanvaProvider from '../../../../../utils/ThreeJs_Utils/provider.js'
 
 import { resetModel } from './CadApi.js'
 import ExtrudePanel from './ExtrudePanel.js'
 import RevolvePanel from './RevolvePanel.js'
+import HolePatternPanel from './HolePatternPanel.js'
+import TopToolbar from './ui/TopToolbar.js'
 
 function Model({ geometry }) {
   if (!geometry) return null
@@ -33,15 +44,14 @@ function Model({ geometry }) {
 export default function SketchToSolidScreen({ route, navigation }) {
   const profile = route?.params?.profile
 
-  const [tool, setTool] = useState(null) // 'extrude' | 'revolve' | null
+  const [tool, setTool] = useState(null) // 'extrude' | 'revolve' | 'hole' | null
   const [confirmed, setConfirmed] = useState(false)
   const [geometry, setGeometry] = useState(null)
   const geometryRef = useRef(null)
   useEffect(() => { geometryRef.current = geometry }, [geometry])
 
   // Any native solid built while this screen is open gets cleared if the
-  // user backs out without confirming, or navigates away entirely — no
-  // leftover preview geometry, native or THREE-side.
+  // user backs out without confirming, or navigates away entirely.
   useEffect(() => {
     return () => {
       geometryRef.current?.dispose?.()
@@ -61,66 +71,73 @@ export default function SketchToSolidScreen({ route, navigation }) {
     setGeometry(newGeometry)
   }
 
-  async function handleCancel() {
-    geometryRef.current?.dispose?.()
-    setGeometry(null)
-    setTool(null)
-    try {
-      await resetModel()
-    } catch {
-      // nothing to reset — fine
+  async function handleCancelTool() {
+    // Only relevant for extrude/revolve: their live preview may have left a
+    // rebuilt-from-scratch stock in place. Cancelling the FIRST feature
+    // (before anything is confirmed) means there's nothing worth keeping.
+    if (!confirmed) {
+      geometryRef.current?.dispose?.()
+      setGeometry(null)
+      try { await resetModel() } catch {}
     }
-    navigation.goBack()
+    setTool(null)
   }
 
-  function handleConfirm() {
-    // The last preview call already left the confirmed solid resident in
-    // native memory — nothing further to build. Close the tool panel and
-    // stay right here showing the finished solid, instead of bouncing back
-    // to the 2D sketch. Going back to 2D is still one tap away (the
-    // system back button / gesture), it's just no longer automatic.
+  function handleConfirmTool(newGeometry) {
+    if (newGeometry) handlePreview(newGeometry)
     setTool(null)
     setConfirmed(true)
   }
 
+  function selectTopTool(nextTool) {
+    if (!nextTool) { setTool(null); return }
+
+    if ((nextTool === 'extrude' || nextTool === 'revolve') && confirmed) {
+      // Both rebuild the stock from scratch off the original profile — with
+      // no feature history yet to rebuild from instead, re-running either
+      // one now would silently throw away any holes/features already cut.
+      Alert.alert(
+        'Base solid already created',
+        "Extrude and Revolve rebuild the whole solid from this sketch's profile — running one again now would discard the holes you've already cut. Undo/rebuild-from-history isn't available yet, so this is blocked to avoid losing work."
+      )
+      return
+    }
+
+    if (nextTool === 'hole' && !confirmed) {
+      Alert.alert('Nothing to cut yet', 'Extrude or Revolve this profile into a solid first, then cut holes into it.')
+      return
+    }
+
+    setTool(nextTool)
+  }
+
   return (
     <View style={styles.container}>
-      <CanvaProvider>
-        <ambientLight intensity={1} />
-        <directionalLight position={[10, 20, 10]} intensity={2} castShadow />
-        <Model geometry={geometry} />
-        <gridHelper args={[100, 20]} />
-      </CanvaProvider>
+      <TopToolbar
+        title="3D Model"
+        onBack={() => navigation.goBack()}
+        activeTool={tool}
+        onSelectTool={selectTopTool}
+      />
 
-      {!tool && !confirmed && (
-        <View style={styles.chooser}>
-          <Text style={styles.chooserTitle}>Build 3D from this profile</Text>
-          <View style={styles.chooserRow}>
-            <TouchableOpacity style={styles.chooserBtn} onPress={() => setTool('extrude')}>
-              <Text style={styles.chooserBtnText}>Extrude</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.chooserBtn} onPress={() => setTool('revolve')}>
-              <Text style={styles.chooserBtnText}>Revolve</Text>
-            </TouchableOpacity>
+      <View style={styles.viewport}>
+        <CanvaProvider instanceId="cad-sketch-to-solid">
+          <Model geometry={geometry} />
+        </CanvaProvider>
+
+        {!tool && !confirmed && (
+          <View style={styles.hintBar}>
+            <Text style={styles.hintText}>Tap Extrude or Revolve above to build a solid from this profile</Text>
           </View>
-        </View>
-      )}
-
-      {confirmed && (
-        <View style={styles.doneBar}>
-          <Text style={styles.doneText}>Solid created</Text>
-          <TouchableOpacity style={styles.doneBackBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.doneBackText}>Back to sketch</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
 
       {tool === 'extrude' && (
         <ExtrudePanel
           profile={profile}
           onPreview={handlePreview}
-          onCancel={handleCancel}
-          onConfirm={handleConfirm}
+          onCancel={handleCancelTool}
+          onConfirm={() => handleConfirmTool(null)}
         />
       )}
 
@@ -128,8 +145,15 @@ export default function SketchToSolidScreen({ route, navigation }) {
         <RevolvePanel
           profile={profile}
           onPreview={handlePreview}
-          onCancel={handleCancel}
-          onConfirm={handleConfirm}
+          onCancel={handleCancelTool}
+          onConfirm={() => handleConfirmTool(null)}
+        />
+      )}
+
+      {tool === 'hole' && (
+        <HolePatternPanel
+          onApplied={(newGeometry) => handleConfirmTool(newGeometry)}
+          onCancel={handleCancelTool}
         />
       )}
     </View>
@@ -140,7 +164,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#111',
-    justifyContent: 'flex-end',
+  },
+
+  viewport: {
+    flex: 1,
   },
 
   errorText: {
@@ -149,66 +176,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  chooser: {
-    backgroundColor: '#1c1c1e',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-  },
-
-  chooserTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-
-  chooserRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-
-  chooserBtn: {
-    flex: 1,
-    paddingVertical: 16,
+  hintBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 90, // clears CanvaProvider's own bottom-right FAB
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 10,
-    backgroundColor: '#ff9500',
-    alignItems: 'center',
-  },
-
-  chooserBtnText: {
-    color: '#1a1a1a',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  doneBar: {
-    backgroundColor: '#1c1c1e',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  doneText: {
-    color: '#9c9',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  doneBackBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 14,
   },
 
-  doneBackText: {
-    color: '#ddd',
-    fontSize: 14,
-    fontWeight: '600',
+  hintText: {
+    color: '#ccc',
+    fontSize: 12,
+    textAlign: 'center',
   },
 })
