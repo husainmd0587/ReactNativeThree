@@ -4,8 +4,8 @@ import { useFrame } from '@react-three/fiber/native';
 import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
-import CanvaProvider from '../ThreeJs_Utils/provider';
-// import CanvaProvider from '../../mechanical_engineering/testing/test.js'
+// import CanvaProvider from '../ThreeJs_Utils/provider';
+import CanvaProvider from '../../mechanical_engineering/testing/test.js'
 import { useMaterialConfigs } from '../materials/materialConfigs.js';
 import SoundPlayer from '../sound/soundPlayer';
 

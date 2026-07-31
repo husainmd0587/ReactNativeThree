@@ -19,7 +19,7 @@ import AutomobileHome from '../mechanical_engineering/automobile/index.js';
 import MaterialsHome from '../mechanical_engineering/materials/index.js';
 import ProductionManagement from '../mechanical_engineering/management/management';
 import MCQ from '../mechanical_engineering/management/mcq/index.js';
-import Testing from '../mechanical_engineering/testing/test.js'
+import Testing,{SliderExample} from '../mechanical_engineering/testing/testing2.js'
 
 import { Header } from '../components/common';
 
@@ -420,7 +420,13 @@ const AllScreens = [
     emoji: '📝',
     accent: '#3B82F6', 
     accentBg: '#ec138b',
-   
+  },{
+    name: 'SliderExample',
+    label: 'Slider Example',
+    component: SliderExample,
+    emoji: '🔽',
+    accent: '#3B82F6', 
+    accentBg: '#35b3ee',
   }
 ];
 

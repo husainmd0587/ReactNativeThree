@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from './meshopt_decoder_reference.js';
 
-//use for compression -  gltfpack -i robot.glb -o compressed_robot.glb -cc -kn -vtf -vpf
+
 class LRUCache {
   constructor(maxSize = 5) {
     this.maxSize = maxSize;

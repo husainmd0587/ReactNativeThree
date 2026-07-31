@@ -117,11 +117,7 @@ const Modal3DScreen = ({ navigation, route }) => {
 
         {/* Model Info Badge */}
         <View style={styles.infoBadge} pointerEvents="none">
-          <View style={styles.badgeContent}>
-            <Text style={styles.badgeText}>● Interactive 3D</Text>
-            <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>Drag to rotate</Text>
-          </View>
+  
         </View>
       </Animated.View>
     </SafeAreaView>
@@ -163,20 +159,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    height: 70,
+    paddingTop: Platform.OS === 'ios' ? 20 : 0,
+    justifyContent: 'center',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    backdropFilter: Platform.OS === 'web' ? 'blur(20px)' : undefined,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   headerLeft: {
     flex: 1,
@@ -226,28 +222,5 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 5,
     alignItems: 'center',
-  },
-  badgeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    backdropFilter: Platform.OS === 'web' ? 'blur(10px)' : undefined,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    gap: 8,
-  },
-  badgeText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontWeight: '500',
-  },
-  badgeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4CAF50',
   },
 });
