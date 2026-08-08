@@ -134,9 +134,11 @@ export function parseProgram(text, definition) {
 /**
  * Maps short program names (J1, J2, J3, ...) to the robot's actual
  * joint ids, in definition order - so this works for any joint count,
- * not just a hardcoded 3.
+ * not just a hardcoded 3. Exported so the Fanuc/ABB/KUKA dialect
+ * parsers (see engine/dialects/) can reuse the same mapping instead of
+ * each reimplementing it.
  */
-function buildJointNameMap(definition) {
+export function buildJointNameMap(definition) {
   const map = {};
   (definition?.joints || []).forEach((joint, index) => {
     map[`J${index + 1}`] = joint.id;

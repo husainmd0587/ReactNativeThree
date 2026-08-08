@@ -5,6 +5,27 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from './meshopt_decoder_reference.js';
 
+// ─── Optional map for exporters that emit generic names (Cube001, Mesh_45).
+// Fill this in per-model if your GLBs need it; entries stamp userData.part
+// onto the matching node once, right after load, so every cached clone
+// inherits the same labels. Safe to leave empty — untouched nodes just use
+// their own node.name as before.
+const PART_NAME_MAP = {
+  // Cube001: 'Head',
+  // Cube002: 'LeftArm',
+  // Mesh_45: 'RightHand',
+};
+
+function applyPartNameMap(scene) {
+  if (!PART_NAME_MAP || Object.keys(PART_NAME_MAP).length === 0) return;
+
+  scene.traverse((child) => {
+    const label = PART_NAME_MAP[child.name];
+    if (label) {
+      child.userData.part = label;
+    }
+  });
+}
 
 class LRUCache {
   constructor(maxSize = 5) {
@@ -79,6 +100,8 @@ function disposeScene(scene) {
 // Node/material name-lookup maps are rebuilt against the CLONE so any
 // downstream code indexing nodes/materials by name still gets objects that
 // actually belong to that instance's own scene graph.
+// userData (including userData.part set by applyPartNameMap) is preserved
+// automatically by cloneSkeleton/Object3D.clone, so labels survive cloning.
 function cloneResult(master) {
   if (!master || !master.scene) return master;
 
@@ -248,10 +271,16 @@ export function useGLTF(url) {
 
         if (!isMounted.current) return;
 
+        const scene = gltf.scene;
+
+        // Stamp explicit part labels onto the MASTER scene once, before it's
+        // cached — every subsequent cloneResult() call inherits these via
+        // userData, so this only ever runs once per model, not per instance.
+        applyPartNameMap(scene);
+
         // Process the master scene (this becomes the cached "template")
         const nodes = {};
         const materials = {};
-        const scene = gltf.scene;
 
         scene.traverse((child) => {
           if (child.name) {

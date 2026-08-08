@@ -20,7 +20,8 @@ const ResourceList = ({ title, items = [], viewAllItem, accent, navigation }) =>
       navigation,
       accent,
       thumbnail: resource.thumbnail,
-      soundUrl:resource.soundUrl
+      soundUrl:resource.soundUrl,
+      modelConfig:resource.modelConfig
     };
 
     switch (resource.type) {
@@ -134,13 +135,19 @@ const AudioResource = ({ url, title, size, navigation }) => (
   </TouchableOpacity>
 );
 
-const ThreeDResource = ({ url, title, size,soundUrl, navigation }) => (
+const ThreeDResource = ({ url, title, size,soundUrl,thumbnail,modelConfig, navigation }) => (
   <TouchableOpacity
     style={styles.resourceRow}
-    onPress={() => navigation.navigate('Modal3DScreen', { modelUrl: url,soundUrl, title })}
+    onPress={() => navigation.navigate('Modal3DScreen', { modelUrl: url,soundUrl, title, modelConfig })}
   >
     <View style={[styles.resourceIconWrap, { backgroundColor: '#E3F2FD' }]}> 
-      <Text style={styles.resourceIcon}>🧊</Text>
+      {
+        thumbnail ? (
+          <RNImage source={{ uri: thumbnail }} style={styles.resourceThumbnail} />
+        ) : (
+          <Text style={styles.resourceIcon}>🧊</Text>
+        ) 
+      }
     </View>
     <View style={styles.resourceContent}>
       <Text style={styles.resourceTitle}>{title}</Text>
@@ -223,6 +230,11 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
+  resourceThumbnail: {
+  width: 30,
+  height: 30,
+  borderRadius: 6,
+},
   downloadIcon: {
     fontSize: 16,
     color: '#ff8c7d',

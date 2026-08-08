@@ -26,7 +26,8 @@ import {
   resetBox,
 } from '../model/RobotState';
 import { MotionController } from './MotionController';
-import { parseProgram, INSTRUCTION_TYPES } from './ProgramInterpreter';
+import { INSTRUCTION_TYPES } from './ProgramInterpreter';
+import { getDialect } from './dialects';
 import {
   SIMULATION_MODES,
   GRIP_STATES,
@@ -45,6 +46,7 @@ export class RobotEngine {
 
     this.program = {
       sourceText: '',
+      dialect: 'simple',
       instructions: [],
       errors: [],
       pointer: -1,
@@ -142,13 +144,18 @@ export class RobotEngine {
 
   // ─── Program control ─────────────────────────────────────────────
   /**
-   * Parses program text against the current robot definition.
+   * Parses program text against the current robot definition, using
+   * the given dialect's parser (see engine/dialects/). Every dialect
+   * produces the same { instructions, errors } shape, so nothing else
+   * in the engine needs to know which syntax was used.
    * Does not run it - call runProgram() after a successful load.
    */
-  loadProgram(text) {
-    const { instructions, errors } = parseProgram(text, this.state.definition);
+  loadProgram(text, dialectId = 'simple') {
+    const dialect = getDialect(dialectId);
+    const { instructions, errors } = dialect.parse(text, this.state.definition);
     this.program = {
       sourceText: text,
+      dialect: dialect.id,
       instructions,
       errors,
       pointer: -1,

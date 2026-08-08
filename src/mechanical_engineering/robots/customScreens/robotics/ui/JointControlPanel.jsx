@@ -5,26 +5,32 @@
  * list of every joint's slider at once. Which joint is "selected" is
  * shared robot state (state.selectedJointId, already tracked by
  * RobotState/RobotEngine) - a dropdown on the right lets the user pick
- * a different joint to jog, then the stepper below controls only that
- * one.
+ * a different joint to jog.
  *
- * The -/+ buttons behave like a TV remote's channel button: a tap
- * moves one STEP, and holding it down repeats automatically after a
- * short delay, continuing until released. Uses Reanimated for the
- * press-scale feedback, the progress track fill, and the dropdown's
- * open animation - the app already has Reanimated available (see
- * CanvaProvider's gesture handling), so this stays on the same
- * animation system rather than mixing in the RN Animated API.
+ * The joint value itself is set with the app's real draggable Slider
+ * component (utils/ThreeJs_Utils/slider.js), imported the same way as
+ * CanvaProvider. Its min/max are bound to the selected joint's limits,
+ * and it stays in sync with engine-driven motion too (program
+ * execution, HOME, etc.) since its `value` prop tracks live state, not
+ * just manual drags.
  *
- * No slider/dropdown dependency otherwise - none is available in this
- * project. Swap this for real slider/dropdown components later if one
- * gets added.
+ * The -/+ buttons alongside it still behave like a TV remote's channel
+ * button (tap = one STEP, hold = repeat) for fine single-degree
+ * nudges the slider's drag precision can't easily hit. Uses Reanimated
+ * for the press-scale feedback and the dropdown's open animation - the
+ * app already has Reanimated available (see CanvaProvider's gesture
+ * handling), so this stays on the same animation system.
+ *
+ * IMPORT PATH NOTE: adjust to match this file's actual location if it
+ * differs from what's shown here (same depth as CanvaProvider's import
+ * in the screens).
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
+import Slider from '../../../../../utils/ThreeJs_Utils/slider';
 
 const STEP = 5;
 const HOLD_DELAY_MS = 350; // time before repeat kicks in, like a remote button
@@ -67,7 +73,6 @@ export function JointControlPanel() {
 
   const holdRef = useRef({ timeoutId: null, intervalId: null });
 
-  const progress = useSharedValue(0);
   const dropdownProgress = useSharedValue(0);
 
   useEffect(() => stopHold, []);
@@ -78,17 +83,10 @@ export function JointControlPanel() {
   const value = selectedJoint ? Math.round(jointValues[selectedJoint.id] ?? 0) : 0;
 
   useEffect(() => {
-    if (!selectedJoint) return;
-    progress.value = withTiming(rangePercent(value, selectedJoint.limits), { duration: 140 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, selectedJoint?.id]);
-
-  useEffect(() => {
     dropdownProgress.value = withTiming(dropdownOpen ? 1 : 0, { duration: 180 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dropdownOpen]);
 
-  const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value}%` }));
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${dropdownProgress.value * 90}deg` }],
   }));
@@ -164,21 +162,28 @@ export function JointControlPanel() {
       <View style={styles.controls}>
         <RemoteButton label="-" onPressIn={() => startHold(-1)} onPressOut={stopHold} />
 
-        <View style={styles.track}>
-          <Animated.View style={[styles.fill, fillStyle]} />
+        <View style={styles.sliderWrap}>
+          <Slider
+            key={selectedJoint.id}
+            value={value}
+            minimumValue={selectedJoint.limits.min}
+            maximumValue={selectedJoint.limits.max}
+            step={1}
+            minimumTrackTintColor="#5b8dd6"
+            maximumTrackTintColor="#2a2f3a"
+            thumbTintColor="#5b8dd6"
+            trackThickness={6}
+            thumbWidth={14}
+            thumbHeight={22}
+            thumbBorderRadius={5}
+            onValueChange={(v) => engine.setJointValue(selectedJoint.id, v)}
+          />
         </View>
 
         <RemoteButton label="+" onPressIn={() => startHold(1)} onPressOut={stopHold} />
       </View>
     </View>
   );
-}
-
-function rangePercent(value, limits) {
-  const { min, max } = limits;
-  if (max === min) return 0;
-  const pct = ((value - min) / (max - min)) * 100;
-  return Math.min(100, Math.max(0, pct));
 }
 
 const styles = StyleSheet.create({
@@ -265,16 +270,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  track: {
+  sliderWrap: {
     flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2a2f3a',
     marginHorizontal: 10,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: '#5b8dd6',
   },
 });

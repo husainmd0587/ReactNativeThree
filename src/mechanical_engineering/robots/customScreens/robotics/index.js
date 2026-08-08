@@ -25,8 +25,17 @@ export { RoboticsCanvasProvider, useRoboticsCanvas } from './providers/RoboticsC
 export { RobotEngine, createRobotEngine } from './engine/RobotEngine';
 export { MotionController, createMotionController } from './engine/MotionController';
 export { parseProgram, INSTRUCTION_TYPES } from './engine/ProgramInterpreter';
+export { DIALECTS, getDialect } from './engine/dialects';
 
 export { RobotProgramEditor } from './ui/RobotProgramEditor';
+export { ProgramFileManager } from './ui/ProgramFileManager';
+
+export {
+  listSavedPrograms,
+  getSavedProgram,
+  saveProgram,
+  deleteSavedProgram,
+} from './core/programStorage';
 
 export { PickableBox, DropZoneMarker } from './scene/PickableBox';
 

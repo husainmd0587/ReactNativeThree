@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, BackHandler,
-  useWindowDimensions, Platform, StatusBar,
+  useWindowDimensions, Platform, StatusBar, Image
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS, Easing,
@@ -18,14 +18,14 @@ const TEXT = '#f0f2f5';
 const MUTED = '#9aa1b0';
 const CARD_HEIGHT = 250;
 
-const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) => {
+const Workshop3DModal = ({ title, subtitle, modelUrl, soundUrl, thumbnail, materialConfig, modelConfig }) => {
   const [mounted, setMounted] = useState(false);
   const [fullscreenKey, setFullscreenKey] = useState(0);
   const { width, height } = useWindowDimensions();
   const progress = useSharedValue(0);
   const { addPortal, removePortal } = usePortal();
   const portalKey = usePortalKey('workshop3d');
-  
+
   // Stable refs to prevent effect re-runs
   const addPortalRef = useRef(addPortal);
   const removePortalRef = useRef(removePortal);
@@ -80,13 +80,13 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) 
   // Memoize the fullscreen content - NO extra View wrapper
   const fullscreenContent = useMemo(() => {
     if (!mounted) return null;
-    
+
     const uniqueKey = `fullscreen_${fullscreenKey}`;
-    
+
     return (
-      <View 
+      <View
         key={uniqueKey}
-        style={[styles.modalRoot, { width, height }]} 
+        style={[styles.modalRoot, { width, height }]}
         pointerEvents="box-none"
       >
         <StatusBar hidden={Platform.OS === 'ios'} animated />
@@ -96,14 +96,16 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) 
         </Animated.View>
 
         <Animated.View style={[styles.sheet, { width, height }, sheetStyle]}>
+          {/* Fullscreen always loads the actual 3D model — thumbnail is only a placeholder for the collapsed card */}
           <View style={styles.sheetCanvas}>
-            <Model3DPreview 
-              key={`fullscreen_model_${uniqueKey}`}
-              modelUrl={modelUrl} 
-              soundUrl={soundUrl}
-              materialConfig={ materialConfig}
-              camPosition={[3, 3, 7]} 
+            <Model3DPreview
+              key={`full_${modelUrl}`}
+              modelUrl={modelUrl}
+              materialConfig={materialConfig}
+              modelConfig={modelConfig}
+              camPosition={[2, 2, 5]}
               isFullscreen={true}
+              style={StyleSheet.absoluteFillObject}
               loadingTimeout={60000}
               onLoad={() => console.log('✅ Fullscreen model loaded')}
               onError={(err) => console.error('❌ Fullscreen model error:', err)}
@@ -116,9 +118,9 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) 
                 {!!title && <Text style={styles.sheetTitle} numberOfLines={1}>{title}</Text>}
                 {!!subtitle && <Text style={styles.sheetSubtitle} numberOfLines={1}>{subtitle}</Text>}
               </View>
-              <TouchableOpacity 
-                style={styles.closeBtn} 
-                onPress={closeModal} 
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={closeModal}
                 activeOpacity={0.7}
                 pointerEvents="auto"
               >
@@ -147,18 +149,27 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) 
   }, [mounted, fullscreenKey, portalKey, fullscreenContent]);
 
   return (
-    <View style={styles.card}>
-      <Model3DPreview 
-        key={`small_${modelUrl}`}
-        modelUrl={modelUrl}
-        materialConfig={materialConfig}
-        camPosition={[2, 2, 5]} 
-        isFullscreen={false}
-        style={styles.cardCanvas} 
-        loadingTimeout={60000}
-        onLoad={() => console.log('✅ Small model loaded')}
-        onError={(err) => console.error('❌ Small model error:', err)}
-      />
+    <TouchableOpacity style={styles.card}  activeOpacity={0.8}  onPress={openModal}>
+      {thumbnail ? (
+        <Image
+          source={{ uri: thumbnail }}
+          style={styles.cardCanvas}
+          resizeMode="cover"
+        />
+      ) : (
+        <Model3DPreview
+          key={`small_${modelUrl}`}
+          modelUrl={modelUrl}
+          materialConfig={materialConfig}
+          modelConfig={modelConfig}
+          camPosition={modelConfig?.cameraAngle || [2, 2, 5]}
+          isFullscreen={false}
+          style={styles.cardCanvas}
+          loadingTimeout={60000}
+          onLoad={() => console.log('✅ Small model loaded')}
+          onError={(err) => console.error('❌ Small model error:', err)}
+        />
+      )}
 
       <View style={styles.cardOverlay} pointerEvents="box-none">
         {(title || subtitle) && (
@@ -171,21 +182,24 @@ const Workshop3DModal = ({ title, subtitle, modelUrl,soundUrl,materialConfig }) 
         <TouchableOpacity
           style={styles.expandBtn}
           onPress={openModal}
-          activeOpacity={0.8}
+          activeOpacity={0.5}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.expandIcon}>⛶</Text>
           <Text style={styles.expandLabel}>View in 3D</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
 export default React.memo(Workshop3DModal, (prev, next) => {
-  return prev.modelUrl === next.modelUrl && 
-         prev.title === next.title && 
-         prev.subtitle === next.subtitle;
+  return prev.modelUrl === next.modelUrl &&
+         prev.modelConfig === next.modelConfig &&
+         prev.materialConfig === next.materialConfig &&
+         prev.title === next.title &&
+         prev.subtitle === next.subtitle &&
+         prev.thumbnail === next.thumbnail;
 });
 
 const styles = StyleSheet.create({
@@ -198,60 +212,60 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     marginVertical: 8,
   },
-  cardCanvas: { 
+  cardCanvas: {
     ...StyleSheet.absoluteFillObject,
     flex: 1,
   },
-  cardPlaceholder: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: SURFACE 
+  cardPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SURFACE
   },
-  placeholderIcon: { 
-    fontSize: 32, 
-    color: MUTED 
+  placeholderIcon: {
+    fontSize: 32,
+    color: MUTED
   },
-  cardOverlay: { 
-    ...StyleSheet.absoluteFillObject, 
-    justifyContent: 'flex-start', 
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    padding: 12, 
+    padding: 12,
     paddingBottom: 32,
     zIndex: 2,
     elevation: 6,
   },
-  textBlock: { 
+  textBlock: {
     maxWidth: '75%',
     marginBottom: 8,
   },
   title: {
-    fontSize: 14, 
-    fontWeight: '700', 
+    fontSize: 14,
+    fontWeight: '700',
     color: TEXT,
-    textShadowColor: 'rgba(0,0,0,0.6)', 
-    textShadowOffset: { width: 0, height: 1 }, 
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   subtitle: {
-    fontSize: 11, 
-    color: MUTED, 
+    fontSize: 11,
+    color: MUTED,
     marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.6)', 
-    textShadowOffset: { width: 0, height: 1 }, 
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   expandBtn: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 28 : 22,
     left: 12,
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.85)', 
-    borderWidth: 1, 
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.65)',
     zIndex: 20,
     elevation: 20,
@@ -260,30 +274,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
   },
-  expandIcon: { 
-    fontSize: 13, 
-    color: ACCENT 
+  expandIcon: {
+    fontSize: 13,
+    color: ACCENT
   },
-  expandLabel: { 
-    fontSize: 11, 
-    fontWeight: '700', 
-    color: TEXT 
+  expandLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: TEXT
   },
 
-  modalRoot: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
+  modalRoot: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 99999, 
+    zIndex: 99999,
     elevation: 120,
   },
-  backdrop: { 
-    backgroundColor: 'rgba(0,0,0,0.85)' 
+  backdrop: {
+    backgroundColor: 'rgba(0,0,0,0.85)'
   },
-  sheet: { 
-    flex: 1, 
+  sheet: {
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.05)',
     position: 'relative',
   },
@@ -303,25 +317,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   headerContent: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 54 : 18, 
+    paddingTop: Platform.OS === 'ios' ? 54 : 18,
     paddingBottom: 14,
-    borderBottomWidth: 1, 
+    borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     backdropFilter: Platform.OS === 'web' ? 'blur(20px)' : undefined,
   },
-  sheetTitle: { 
-    fontSize: 16, 
-    fontWeight: '700', 
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  sheetSubtitle: { 
-    fontSize: 12, 
+  sheetSubtitle: {
+    fontSize: 12,
     color: 'rgba(255,255,255,0.9)',
     marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.3)',
@@ -329,19 +343,19 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   closeBtn: {
-    width: 34, 
-    height: 34, 
-    borderRadius: 17, 
-    alignItems: 'center', 
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
     marginLeft: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
-  closeIcon: { 
-    fontSize: 16, 
-    fontWeight: '700', 
-    color: '#FFFFFF' 
+  closeIcon: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF'
   },
 });

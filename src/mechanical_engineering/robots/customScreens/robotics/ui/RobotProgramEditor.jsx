@@ -1,11 +1,15 @@
 /**
  * RobotProgramEditor.jsx
  *
- * Lets the user write a small robot program (HOME / MOVEJ / WAIT /
- * GRIP) and run it against the simulated arm. Talks only to the
- * RobotEngine via useRoboticsCanvas - loadProgram() parses+validates,
- * runProgram() starts stepping through it (RobotEngine.update() does
- * the actual stepping every frame; see engine/RobotEngine.js).
+ * Lets the user write a robot program in one of several syntaxes
+ * (Simple/Fanuc/ABB/KUKA - see engine/dialects/) and run it against
+ * the simulated arm. Talks only to the RobotEngine via
+ * useRoboticsCanvas - loadProgram(text, dialectId) parses+validates
+ * using the selected dialect's parser, runProgram() starts stepping
+ * through the resulting instructions (RobotEngine.update() does the
+ * actual stepping every frame; see engine/RobotEngine.js). Every
+ * dialect compiles down to the same instruction set, so switching
+ * dialects never changes how the engine runs the program.
  *
  * A plain TextInput can't highlight individual lines, so while a
  * program is running this swaps to a read-only line-by-line view
@@ -15,23 +19,20 @@
  * controller's moving line indicator. Editing resumes automatically
  * once the program stops. Also shows a Reanimated progress bar for how
  * far through the program execution is.
+ *
+ * Programs can be saved/opened via AsyncStorage (core/programStorage.js)
+ * - same dependency and single-JSON-blob-per-key pattern CanvaProvider
+ * already uses for its own settings persistence. ProgramFileManager
+ * provides the list/open/delete UI.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
-
-const EXAMPLE_PROGRAM = `HOME
-MOVEJ J1=-41 J2=-76 J3=-136 J4=96 SPEED=60
-WAIT 0.5
-GRIP CLOSE
-WAIT 0.3
-MOVEJ J1=-146 J2=-73 J3=-138 J4=74 SPEED=60
-WAIT 0.5
-GRIP OPEN
-WAIT 0.5
-HOME`;
+import { DIALECTS, getDialect } from '../engine/dialects';
+import { saveProgram } from '../core/programStorage';
+import { ProgramFileManager } from './ProgramFileManager';
 
 const LINE_HEIGHT = 22;
 
@@ -103,16 +104,102 @@ function ProgramProgressBar({ pointer, total }) {
   );
 }
 
+/** Same dropdown pattern as JointControlPanel's joint selector, for consistency. */
+function DialectSelector({ dialectId, onSelect, disabled }) {
+  const [open, setOpen] = useState(false);
+  const current = getDialect(dialectId);
+
+  return (
+    <View>
+      <TouchableOpacity
+        style={[styles.dropdownTrigger, disabled && styles.dropdownTriggerDisabled]}
+        onPress={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+      >
+        <Text style={styles.dropdownTriggerText}>{current.label}</Text>
+        <Text style={styles.chevron}>{open ? '⌄' : '›'}</Text>
+      </TouchableOpacity>
+
+      {open && (
+        <View style={styles.dropdownList}>
+          {Object.values(DIALECTS).map((dialect) => {
+            const isActive = dialect.id === dialectId;
+            return (
+              <TouchableOpacity
+                key={dialect.id}
+                style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
+                onPress={() => {
+                  onSelect(dialect.id);
+                  setOpen(false);
+                }}
+              >
+                <Text style={[styles.dropdownItemText, isActive && styles.dropdownItemTextActive]}>
+                  {dialect.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function RobotProgramEditor() {
   const { engine, programState } = useRoboticsCanvas();
-  const [text, setText] = useState(EXAMPLE_PROGRAM);
+  const [dialectId, setDialectId] = useState('simple');
+  const [text, setText] = useState(getDialect('simple').example);
 
-  const handleLoad = () => engine.loadProgram(text);
+  const [currentProgramId, setCurrentProgramId] = useState(null);
+  const [currentProgramName, setCurrentProgramName] = useState('');
+  const [saveBarOpen, setSaveBarOpen] = useState(false);
+  const [saveNameInput, setSaveNameInput] = useState('');
+  const [fileManagerVisible, setFileManagerVisible] = useState(false);
+
+  const handleSelectDialect = (id) => {
+    setDialectId(id);
+    setText(getDialect(id).example); // each dialect has its own example - mixing syntaxes in one box doesn't make sense
+    setCurrentProgramId(null);
+    setCurrentProgramName('');
+  };
+
+  const handleLoad = () => engine.loadProgram(text, dialectId);
   const handleRun = () => {
-    engine.loadProgram(text);
+    engine.loadProgram(text, dialectId);
     engine.runProgram();
   };
   const handleStop = () => engine.stopProgram();
+
+  const handleNew = () => {
+    setText(getDialect(dialectId).example);
+    setCurrentProgramId(null);
+    setCurrentProgramName('');
+  };
+
+  const openSaveBar = () => {
+    setSaveNameInput(currentProgramName || '');
+    setSaveBarOpen(true);
+  };
+
+  const confirmSave = async () => {
+    const record = await saveProgram({
+      id: currentProgramId,
+      name: saveNameInput,
+      dialect: dialectId,
+      text,
+    });
+    setCurrentProgramId(record.id);
+    setCurrentProgramName(record.name);
+    setSaveBarOpen(false);
+  };
+
+  const handleOpenProgram = (record) => {
+    setText(record.text);
+    setDialectId(record.dialect);
+    setCurrentProgramId(record.id);
+    setCurrentProgramName(record.name);
+    setFileManagerVisible(false);
+  };
 
   const currentLine = programState.running
     ? programState.instructions[programState.pointer]?.line
@@ -122,7 +209,17 @@ export function RobotProgramEditor() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Robot Program</Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Robot Program</Text>
+          <Text style={styles.subtitle}>{currentProgramName || 'Unsaved'}</Text>
+        </View>
+        <DialectSelector
+          dialectId={dialectId}
+          onSelect={handleSelectDialect}
+          disabled={programState.running}
+        />
+      </View>
 
       {programState.running ? (
         <CodeViewer text={text} activeLine={currentLine} errorLines={errorLines} />
@@ -132,11 +229,45 @@ export function RobotProgramEditor() {
           value={text}
           onChangeText={setText}
           multiline
-          autoCapitalize="characters"
+          autoCapitalize="none"
           autoCorrect={false}
-          placeholder={'HOME\nMOVEJ J1=30 SPEED=50\nWAIT 1\nGRIP OPEN'}
           placeholderTextColor="#5a6272"
         />
+      )}
+
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={styles.button} onPress={handleNew} disabled={programState.running}>
+          <Text style={styles.buttonText}>New</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={openSaveBar} disabled={programState.running}>
+          <Text style={styles.buttonText}>Save</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => setFileManagerVisible(true)}
+          disabled={programState.running}
+        >
+          <Text style={styles.buttonText}>Open</Text>
+        </TouchableOpacity>
+      </View>
+
+      {saveBarOpen && (
+        <View style={styles.saveBar}>
+          <TextInput
+            style={styles.saveBarInput}
+            value={saveNameInput}
+            onChangeText={setSaveNameInput}
+            placeholder="Program name"
+            placeholderTextColor="#5a6272"
+            autoFocus
+          />
+          <TouchableOpacity style={styles.saveBarConfirm} onPress={confirmSave}>
+            <Text style={styles.buttonText}>Save</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.saveBarCancel} onPress={() => setSaveBarOpen(false)}>
+            <Text style={styles.buttonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <View style={styles.buttonRow}>
@@ -176,6 +307,13 @@ export function RobotProgramEditor() {
           ))}
         </ScrollView>
       )}
+
+      <ProgramFileManager
+        visible={fileManagerVisible}
+        onClose={() => setFileManagerVisible(false)}
+        onSelect={handleOpenProgram}
+        currentProgramId={currentProgramId}
+      />
     </View>
   );
 }
@@ -184,10 +322,71 @@ const styles = StyleSheet.create({
   container: {
     padding: 12,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   title: {
     color: '#ffffff',
     fontWeight: '700',
-    marginBottom: 8,
+  },
+  subtitle: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a2f3a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  dropdownTriggerDisabled: {
+    opacity: 0.5,
+  },
+  dropdownTriggerText: {
+    color: '#c7cdd6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  chevron: {
+    color: '#e8791a',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    backgroundColor: '#14161b',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2a2f3a',
+    overflow: 'hidden',
+    zIndex: 10,
+    minWidth: 140,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c1f26',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#e8791a22',
+  },
+  dropdownItemText: {
+    color: '#c7cdd6',
+    fontSize: 13,
+  },
+  dropdownItemTextActive: {
+    color: '#e8791a',
+    fontWeight: '700',
   },
   editor: {
     minHeight: 140,
@@ -259,6 +458,35 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#ffffff',
     fontWeight: '700',
+  },
+  saveBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  saveBarInput: {
+    flex: 1,
+    backgroundColor: '#14161b',
+    color: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2a2f3a',
+    fontSize: 13,
+  },
+  saveBarConfirm: {
+    backgroundColor: '#2c8a4f',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  saveBarCancel: {
+    backgroundColor: '#2a2f3a',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   status: {
     color: '#8fd19e',

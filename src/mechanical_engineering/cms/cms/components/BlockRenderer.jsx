@@ -205,6 +205,8 @@ const _root = rootBlocks || blocks;
                subtitle={block.subtitle} 
                modelUrl={block.url}
                materialConfig={block.materialConfig}
+               modelConfig={block.modelConfig}
+               thumbnail={block.thumbnail}
                soundUrl={block.soundUrl}
               />
             );

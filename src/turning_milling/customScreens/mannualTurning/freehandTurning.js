@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle,memo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Dimensions, StatusBar, Platform,
-  Animated,
+  Animated, Modal,ImageBackground
 } from 'react-native';
 import {
   GestureDetector, Gesture,
@@ -11,8 +11,11 @@ import {
 
 import {
   Canvas as SkiaCanvas,
-  Path, Skia, Group, Line, Circle, Oval,
+  Path, Skia, Group, Line, Circle,
   LinearGradient,
+  ImageShader,
+  Shader,
+  useImage,
   vec,
   Text as SkiaText,
   matchFont,
@@ -22,32 +25,77 @@ import {
   runOnJS,
   useSharedValue,
   useDerivedValue,
+  withRepeat,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 
-import { useFrame as useR3FFrame } from '@react-three/fiber/native';
+import { useFrame as useR3FFrame,Canvas } from '@react-three/fiber/native';
 import useControls from 'r3f-native-orbitcontrols';
-import { useTextureLoader } from '../../../utils/materials/textures';
-import CanvaPovider from '../../../utils/ThreeJs_Utils/provider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTextureLoader, Textures } from '../../../utils/materials/textures';
+import CanvaPovider,{Lightings} from '../../../utils/ThreeJs_Utils/provider';
+import {Scene} from '../../../utils/components/glbPreview'
+import usetextureLoader from '../../../utils/materials/textures'
+import {degToRad} from '../../../utils/common'
 import * as THREE from 'three';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-// ── Updated Layout Constants ──
+// ── Layout Constants ──
 const HEADER_H = Platform.OS === 'ios' ? 96 : 58;
 const TOOLBAR_H = 108;
 const MAGAZINE_H = 150; // Height reserved for magazine
-const CANVAS_H = SH - HEADER_H - TOOLBAR_H - MAGAZINE_H; // Reduced height
+const CONTROL_STRIP_H = 44; // Height reserved for the accuracy/stats control strip
+const CANVAS_H = SH - HEADER_H - TOOLBAR_H - MAGAZINE_H - CONTROL_STRIP_H;
 const CANVAS_W = SW;
 
-// ── Updated Drawing space ─────────────────────────────────────────────
-const PROFILE_SEGS = 60; // Reduced from 80 for smaller geometry
-const STOCK_RADIUS = Math.min(CANVAS_H * 0.32, 100); // Reduced from 0.38
-const AXIS_Y = CANVAS_H * 0.45; // Moved up slightly
-const STOCK_LEFT = 40; // Increased padding
-const STOCK_RIGHT = CANVAS_W - 40; // Increased padding
+// ── Drawing space ─────────────────────────────────────────────
+const PROFILE_SEGS = 60;
+const STOCK_RADIUS = Math.min(CANVAS_H * 0.32, 100);
+const AXIS_Y = CANVAS_H * 0.45;
+const STOCK_LEFT = 65;
+const STOCK_RIGHT = CANVAS_W - 10;
 const STOCK_WIDTH = STOCK_RIGHT - STOCK_LEFT;
 
-// ── Updated Tools with smaller sizes ──────────────────────────
+// ── Chuck end-caps ──
+// Small rotating 3-jaw chucks bracketing the stock -- "[]==[]" -- so
+// the flat 2D profile still reads as the side view of a cylinder held
+// on a lathe, not a flat strip. They live in the margin already
+// reserved by STOCK_LEFT/STOCK_RIGHT, so no cutting-coordinate
+// constants need to change.
+const CHUCK_RADIUS = Math.min(30, STOCK_LEFT);
+const CHUCK_CENTER_L = STOCK_LEFT / 2;
+const CHUCK_CENTER_R = STOCK_RIGHT + (CANVAS_W - STOCK_RIGHT) / 2;
+
+// ── Real-world scale ─────────────────────────────────────────
+// Purely for HUD readouts (diameter callipers, thin-wall warning) --
+// the simulation itself still works in px. We treat the stock's full
+// starting radius as representing a real blank of this diameter.
+const REAL_STOCK_DIAMETER_MM = 100;
+const PX_TO_MM = REAL_STOCK_DIAMETER_MM / (STOCK_RADIUS * 2);
+const MIN_SAFE_RADIUS = STOCK_RADIUS * 0.12; // below this, wall is "thin" / at risk
+
+// ── Spindle speed ──────────────────────────────────────────────
+const BASE_RPM = 1200; // reference speed the base spin/rotation rates were tuned at
+const MIN_RPM = 200;
+const MAX_RPM = 3000;
+const RPM_STEP = 100;
+
+// ── Persisted parts (AsyncStorage) ──
+const SAVED_PARTS_KEY = '@pottery_studio/saved_parts';
+
+// ── Cutting accuracy tuning ──────────────────────────────────
+// Single place to retune the feel of catches, chatter, and wear
+// without hunting through the gesture/cut pipeline below.
+const CATCH_BASE_CHANCE = 0.006; // scaled by risk factors, then capped per-frame
+const CATCH_PROB_CAP = 0.035;
+const CATCH_LOCKOUT_MS = 220;    // brief "recoil" pause after a catch
+const WEAR_RATE = 0.00003;       // wear gained per px of cutting contact
+const WEAR_DEPTH_PENALTY = 0.55; // fully worn tool cuts up to 55% less
+const WEAR_CATCH_RISK = 1.6;     // dull edges are more likely to skid/catch
+
+// ── Tools ──────────────────────────────────────────────
 const TOOLS = [
   { id: 'roughing', name: 'Roughing', icon: '⚡', color: '#e67e22', width: 16, depth: 6, shape: 'round' },
   { id: 'gouge', name: 'Bowl Gouge', icon: '🔄', color: '#3498db', width: 10, depth: 3.5, shape: 'round' },
@@ -67,35 +115,20 @@ const MATERIALS = [
 ];
 
 // ── Handle → tip offset ────────────────────────────────────────
-// On a real lathe the tool tip is always pushed radially INWARD,
-// toward the spinning centerline -- never in a fixed screen direction.
-// We compute one continuous direction vector (finger → the workpiece
-// centerline) and reuse the exact same function for both rendering
-// the blade and for the cut itself, so they cannot diverge.
-const TOOL_REACH = 30; // px between grip (finger) and cutting tip
-const DEBUG_SHOW_TIP = true; // bright marker at the exact cut coordinate -- flip off once verified
+const TOOL_REACH = 30;
+const DEBUG_SHOW_TIP = true;
 
-// Given a raw finger position, returns { tx, ty }: the cutting tip.
-// Direction = normalized vector from the finger toward the workpiece
-// centerline point (CANVAS_W/2, AXIS_Y); this is a continuous function
-// of (fx, fy) -- no discrete side-flip, no fixed angle, so there is no
-// boundary where render and cut can disagree.
 function fingerToTip(fx, fy) {
   'worklet';
   const dx = CANVAS_W / 2 - fx;
   const dy = AXIS_Y - fy;
-  const len = Math.sqrt(dx * dx + dy * dy) || 1; // guard divide-by-zero
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
   const rawX = fx + (dx / len) * TOOL_REACH;
   const rawY = fy + (dy / len) * TOOL_REACH;
   const tx = rawX < STOCK_LEFT ? STOCK_LEFT : rawX > STOCK_RIGHT ? STOCK_RIGHT : rawX;
   return { tx, ty: rawY };
 }
 
-// ── Fixed-size Skia font for in-canvas labels ──────────────────
-// react-native-skia's <Text> requires a real Skia font object (via
-// matchFont / useFont) -- it does NOT accept `fontSize` / `textAlign`
-// props directly. Previously no font was supplied, so the tool-name
-// label on the handle silently failed to render.
 const toolLabelFont = matchFont({
   fontFamily: Platform.OS === 'ios' ? 'Helvetica' : 'sans-serif',
   fontSize: 7,
@@ -147,6 +180,21 @@ function smooth(profile, str = 0.4) {
   return o;
 }
 
+// Small random per-segment perturbation used to simulate tool chatter
+// (spindle/feed resonance) -- distinct from a catch: low-amplitude,
+// applied across a short span rather than a single deep gouge.
+function jitterProfile(profile, centerSeg, halfWidth, intensity) {
+  if (intensity <= 0) return profile;
+  const next = Float32Array.from(profile);
+  for (let di = -halfWidth; di <= halfWidth; di++) {
+    const s = centerSeg + di;
+    if (s < 0 || s >= PROFILE_SEGS) continue;
+    const j = (Math.random() - 0.5) * 2 * intensity;
+    next[s] = Math.max(1.5, next[s] + j);
+  }
+  return next;
+}
+
 // ── Skia path builders ────────────────────────────────────────
 function fillPath(profile) {
   const p = Skia.Path.Make();
@@ -170,12 +218,19 @@ function fillPath(profile) {
 const WORLD_H = 4.0;
 const WORLD_R = 1.8;
 
-function PotteryMesh({ profile, mat, autoRotate }) {
+function PotteryMesh({ profile, mat, autoRotate, rpm }) {
   const ref = useRef();
-  const texture = useTextureLoader({});
+  // `mat.id` is passed through so the texture actually tracks the
+  // selected material -- verify the exact param key against
+  // utils/materials/textures.js if your Textures entries are keyed
+  // differently (e.g. `name` instead of `type`).
+  const texture = useTextureLoader({ type: mat.id });
 
   useR3FFrame((_, dt) => {
-    if (autoRotate && ref.current) ref.current.rotation.y += dt * 1;
+    if (autoRotate && ref.current) {
+      // Rotation speed now tracks spindle RPM instead of a fixed rate.
+      ref.current.rotation.y += dt * (rpm / BASE_RPM);
+    }
   });
 
   const geo = useMemo(() => {
@@ -196,11 +251,11 @@ function PotteryMesh({ profile, mat, autoRotate }) {
 
   const material = useMemo(() => new THREE.MeshStandardMaterial({
     color: new THREE.Color(mat.color),
-    map: texture,
+    map: texture ?? null,
     roughness: mat.roughness,
     metalness: mat.metalness,
     side: THREE.DoubleSide,
-  }), [mat]);
+  }), [mat, texture]);
 
   useEffect(() => { return () => material.dispose(); }, [material]);
 
@@ -211,7 +266,7 @@ function PotteryMesh({ profile, mat, autoRotate }) {
   );
 }
 
-function Scene3D({ profile, mat, autoRotate }) {
+function Scene3D({ profile, mat, autoRotate, rpm }) {
   return (
     <>
       <color attach="background" args={['#0a0a18']} />
@@ -220,7 +275,7 @@ function Scene3D({ profile, mat, autoRotate }) {
       <directionalLight position={[-4, 3, -2]} intensity={0.45} color="#a0c8ff" />
       <pointLight position={[0, 6, 2]} intensity={0.8} color="#ffd0a0" distance={10} />
       <pointLight position={[0, -1, 4]} intensity={0.3} color="#ffffff" distance={6} />
-      <PotteryMesh profile={profile} mat={mat} autoRotate={autoRotate} />
+      <PotteryMesh profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -WORLD_H / 2, 0]} receiveShadow>
         <circleGeometry args={[4, 48]} />
         <meshStandardMaterial color="#141428" roughness={1} />
@@ -230,66 +285,454 @@ function Scene3D({ profile, mat, autoRotate }) {
 }
 
 // ── 2D canvas ─────────────────────────────────────────────────
-function DrawingCanvas({ profile, onProfile, tool }) {
-  // ── Rotation effect ──
-  const angleRef = useSharedValue(0);
+const SPIN_TEXTURE_CONFIG = {
+  MATERIAL: 'wood',
+  TILE_SIZE: 96,
+  WRAP_HEIGHT: 160,
+  SPEED: 22,
+  DIRECTION: 1,
+  CLOCK_RATE: 5, // base rate at BASE_RPM -- scaled live by rpm/BASE_RPM
+  MIN_BRIGHTNESS: 0.35,
+  MAX_BRIGHTNESS: 1.0,
+};
+
+const CYLINDER_SHADER_SKSL = `
+uniform shader image;
+uniform float axisY;
+uniform float radius;
+uniform float phase;
+uniform float direction;
+uniform float wrapHeight;
+uniform float minBrightness;
+uniform float maxBrightness;
+
+half4 main(vec2 pos) {
+  float dy = pos.y - axisY;
+  float t = clamp(dy / radius, -1.0, 1.0);
+  float phi = acos(t);
+
+  float twoPi = 6.28318530718;
+  float matAngle = phi + direction * phase;
+  float v = mod(matAngle, twoPi) / twoPi * wrapHeight;
+
+  float facing = sin(phi);
+  float brightness = mix(minBrightness, maxBrightness, facing);
+
+  half4 texColor = image.eval(vec2(pos.x, v));
+  return half4(texColor.rgb * brightness, texColor.a);
+}
+`;
+
+const cylinderEffect = Skia.RuntimeEffect.Make(CYLINDER_SHADER_SKSL);
+
+// ── Isolated HUD overlay ──────────────────────────────────────
+// The diameter callipers and catch-flash used to be plain useState
+// inside DrawingCanvas. Every update (hover ~16x/sec, catch flashes)
+// re-ran DrawingCanvas's whole render function, which reconciles a
+// 100+ element Skia tree -- on top of the profile/wear state updates
+// already firing during a cut, this saturated the JS thread and made
+// gesture input feel like it was hanging. Moving this state into its
+// own tiny component, updated imperatively via a ref instead of
+// props, means a hover tick only re-renders this small overlay --
+// never the canvas -- while the canvas itself only re-renders when
+// `profile`/`tool`/etc. actually change.
+const CutHUD = forwardRef(function CutHUD(_props, ref) {
+  const [hoverInfo, setHoverInfo] = useState(null);
+  const [flash, setFlash] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    setHover: (info) => setHoverInfo(info),
+    triggerFlash: () => {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 180);
+    },
+  }), []);
+
+  return (
+    <>
+      {flash && <View pointerEvents="none" style={styles.catchFlash} />}
+      {hoverInfo && (
+        <View pointerEvents="none" style={styles.hoverBadge}>
+          <Text style={[styles.hoverBadgeText, hoverInfo.thin && styles.hoverBadgeTextWarn]}>
+            ⌀ {hoverInfo.mm.toFixed(1)}mm{hoverInfo.thin ? '  ⚠ thin wall' : ''}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+});
+
+
+const RotatingPulley = memo(function RotatingPulley({
+  position = [0, 0, 0],
+  rotation = [0, 0, 0],
+
+  radius = 0.8,
+  thickness = 0.2,
+
+  speed = 4,
+  direction = 1,
+
+  color = '#aa6e6e',
+  texture = null,
+  rpmRef = null,
+}) {
+  const pulleyRef = useRef(null);
+
+  useR3FFrame((_, delta) => {
+    if (!pulleyRef.current) return;
+
+    // Rotation speed now tracks the same RPM control that drives the
+    // stock's spin -- read live via a ref (not a prop) so this stays
+    // in sync without needing this frozen preview to re-render.
+    const rpmFactor = (rpmRef?.current ?? BASE_RPM) / BASE_RPM;
+    pulleyRef.current.rotation.y += delta * speed * rpmFactor * direction;
+  });
+
+  return (
+    <group
+      position={position}
+      rotation={rotation}
+    >
+      {/* Animation wrapper */}
+      <group ref={pulleyRef}>
+
+        <mesh>
+          <cylinderGeometry
+            args={[
+              radius,
+              radius,
+              thickness,
+              24,
+            ]}
+          />
+
+          <meshStandardMaterial
+            color={color}
+            roughness={0.85}
+            metalness={0.05}
+            map={texture}
+          />
+        </mesh>
+
+      </group>
+    </group>
+  );
+});
+
+const VBelt = memo(function VBelt({
+  center = [0, -1, 0],
+  width = 0.10,
+  height = 3.68,
+  speed = 0.5,
+  color = '#888686',
+  rpmRef = null,
+}) {
+  const beltRef = useRef(null);
+
+  const loadedTexture = useTextureLoader({
+    flipY: false,
+    type: 'wall',
+    repeat: [1, 1],
+  });
+
+  const texture = useMemo(() => {
+    if (!loadedTexture) return null;
+
+    const cloned = loadedTexture.clone();
+
+    cloned.wrapS = THREE.RepeatWrapping;
+    cloned.wrapT = THREE.RepeatWrapping;
+    cloned.needsUpdate = true;
+
+    return cloned;
+  }, [loadedTexture]);
 
   useEffect(() => {
-    let last = performance.now();
-    let rafId;
-    const tick = (ts) => {
-      const dt = (ts - last) / 1000;
-      last = ts;
-      angleRef.value += dt * 5;
-      rafId = requestAnimationFrame(tick);
+    return () => {
+      texture?.dispose();
     };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+  }, [texture]);
+
+  useR3FFrame((_, delta) => {
+    if (!texture) return;
+
+    const rpmFactor =
+      (rpmRef?.current ?? BASE_RPM) / BASE_RPM;
+
+    texture.offset.y -= delta * speed * rpmFactor;
+  });
+
+  if (!texture) return null;
+ 
+  return (
+    <mesh ref={beltRef} position={center} >
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial
+        color={color}
+        map={texture}
+        side={THREE.DoubleSide}
+        roughness={0.9}
+        metalness={0}
+        depthTest={false}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+});
+
+const GearBox= memo(function GearBox({
+  position = [0, 0, 0],
+  rotation = [0, 10, 0],
+  size = 0.5,
+  color = '#fafafa'
+}) {
+  const texture = useTextureLoader({flipY: true, type: 'default', repeat : [1, 1]})
+  return (
+    <group
+      position={position}
+      rotation={degToRad(rotation)}
+    >
+      <mesh>
+        <boxGeometry
+
+          args={[
+            size/1.5,
+            size,
+            size
+          ]}
+        />
+        <meshStandardMaterial 
+        color={color}   
+        map={texture}
+        metalness={0.5}
+        />
+      </mesh>
+  
+    </group>
+  );
+});
+
+// =========================================================
+// Motor + Pulley System
+// =========================================================
+function MoterAndPulley({ rpmRef }) {
+  const texture = useTextureLoader({
+    type: 'wall',
+    flipY: false,
+    repeat: [1, 1],
+  });
+const AllPos={
+  motor:[-0.18, -1.4, 0],  //this is moter
+  pulley1:[-1.25, 0.9, 0],  //this is pulley1 that is connected to Stock
+  pulley2:[-1.1, 0.9, 0],   //this connected  to pullye1 and stock
+  pulley3:[-1.23, -1.5, 0], //this connected to motor
+  beltCenter:[-1.22, -0.098, 0],  //this is belt
+  gearBox:[-0.8, -1.5, 0],  //this is gear box 
+  pulley4:[-1.1, -1.5, 0]
+}
+
+
+  return (
+    <group>
+
+      {/* =================================================
+          MOTOR GLB
+          ================================================= */}
+      <Scene
+        modelUrl="https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/electricMoter.glb"
+        soundUrl="https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/electricMotor2.mp3"
+        soundPlayWithoutAnimation={true}
+        modelConfig={{
+          position: AllPos.motor,
+          scale: [0.5, 0.5, 0.5],
+          rotation: degToRad([0, -75, 0]),
+        }}
+      />
+  
+
+  <RotatingPulley
+  position={AllPos.pulley1}
+  rotation={degToRad([0, 18, 90])}
+  radius={0.8}
+  thickness={0.2}
+  speed={4}
+  direction={-1}
+  color="#aa6e6e"
+  texture={texture}
+  rpmRef={rpmRef}
+/>
+  {/* center pully */}
+  <RotatingPulley
+  position={AllPos.pulley2}
+  rotation={degToRad([0, 10, 90])}
+  radius={0.3}
+  thickness={0.29}
+  speed={4}
+  direction={-1}
+  color="#aa6e6e"
+  texture={texture}
+  rpmRef={rpmRef}
+/>
+
+<RotatingPulley
+  position={AllPos.pulley3}
+  rotation={degToRad([0, 18, 90])}
+  radius={0.4}
+  thickness={0.2}
+  speed={4}
+  direction={-1}
+  color="#aa6e6e"
+  texture={texture}
+  rpmRef={rpmRef}
+/>
+<VBelt center={AllPos.beltCenter} rpmRef={rpmRef} />
+   <GearBox position={AllPos.gearBox} rpmRef={rpmRef} />
+  <RotatingPulley
+  position={AllPos.pulley4}
+  rotation={degToRad([0, 18, 90])}
+  radius={0.1}
+  thickness={0.25}
+  speed={4}
+  direction={-1}
+  color="#aa6e6e"
+  texture={texture}
+  rpmRef={rpmRef}
+/>
+    </group>
+  );
+}
+
+
+// =========================================================
+// Frozen Motor Preview
+// =========================================================
+const MotorPreview = React.memo(
+  function MotorPreview({ rpmRef }) {
+    return (
+      <ImageBackground
+        source={{
+          uri:
+            'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/carpentryWorkshop.jpg',
+        }}
+        resizeMode="cover"
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: -1,
+        }}
+      >
+        {/* <View style={{position:'absolute',top:STOCK_RADIUS-20,width:SW,height:STOCK_RADIUS*2.2,
+          backgroundColor:'rgba(255, 255, 255,0.3)'}}>
+
+        </View> */}
+        <Canvas
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+          camera={{
+            position: [0, 0, 5],
+            fov: 50,
+          }}
+        >
+
+          {/* Optional lighting */}
+          <ambientLight intensity={1} />
+
+          <directionalLight
+            position={[5, 5, 5]}
+            intensity={2}
+          />
+
+          {/* Motor + rotating pulleys */}
+          <MoterAndPulley rpmRef={rpmRef} />
+
+        </Canvas>
+
+      </ImageBackground>
+    );
+  },
+
+  // Keep the entire preview isolated from parent re-renders. Live RPM
+  // changes still reach it via `rpmRef` (a stable ref object mutated
+  // in place, read every frame inside each useR3FFrame above) rather
+  // than through props/re-renders, so this memo staying "always equal"
+  // doesn't break the sync.
+  () => true
+);
+
+
+
+function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick }) {
+  const textureDef = useMemo(
+    () => Textures.find(t => t.name === SPIN_TEXTURE_CONFIG.MATERIAL) ?? null,
+    []
+  );
+  const texImage = useImage(textureDef?.image ?? null);
+
+  const angleRef = useSharedValue(0);
+
+
+  useEffect(() => {
+    const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM); // rad/sec
+    const sweep = 100000; // rad -- large enough to never visibly loop
+    const durationMs = (sweep / rate) * 1000;
+    angleRef.value = withRepeat(
+      withTiming(angleRef.value + sweep, { duration: durationMs, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, [rpm]);
+
+  const cylinderUniforms = useDerivedValue(() => ({
+    axisY: AXIS_Y,
+    radius: STOCK_RADIUS,
+    phase: angleRef.value,
+    direction: SPIN_TEXTURE_CONFIG.DIRECTION,
+    wrapHeight: SPIN_TEXTURE_CONFIG.WRAP_HEIGHT,
+    minBrightness: SPIN_TEXTURE_CONFIG.MIN_BRIGHTNESS,
+    maxBrightness: SPIN_TEXTURE_CONFIG.MAX_BRIGHTNESS,
+  }));
+
+  const gradStart = useMemo(() => {
+    const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
+    return vec(CANVAS_W / 2, AXIS_Y - halfLen);
+  }, []);
+  const gradEnd = useMemo(() => {
+    const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
+    return vec(CANVAS_W / 2, AXIS_Y + halfLen);
   }, []);
 
-  const gradStart = useDerivedValue(() => {
-    const centerX = CANVAS_W / 2;
-    const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
-    const amplitude = STOCK_RADIUS * 0.9;
-    const normalizedAngle = (angleRef.value / (2 * Math.PI)) % 1;
-    const t = normalizedAngle * 2 - 1;
-    const dy = amplitude * t;
-    return vec(centerX, (AXIS_Y - halfLen) + dy);
+  const grainPath = useDerivedValue(() => {
+    const GRAIN_SPACING = 9;
+    const p = Skia.Path.Make();
+    const offset = SPIN_TEXTURE_CONFIG.DIRECTION * (angleRef.value * SPIN_TEXTURE_CONFIG.SPEED) % GRAIN_SPACING;
+    for (let x = STOCK_LEFT - GRAIN_SPACING + offset; x < STOCK_RIGHT + GRAIN_SPACING; x += GRAIN_SPACING) {
+      p.moveTo(x, AXIS_Y - STOCK_RADIUS - 4);
+      p.lineTo(x, AXIS_Y + STOCK_RADIUS + 4);
+    }
+    return p;
   });
 
-  const gradEnd = useDerivedValue(() => {
-    const centerX = CANVAS_W / 2;
-    const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
-    const amplitude = STOCK_RADIUS * 0.9;
-    const normalizedAngle = (angleRef.value / (2 * Math.PI)) % 1;
-    const t = normalizedAngle * 2 - 1;
-    const dy = amplitude * t;
-    return vec(centerX, (AXIS_Y + halfLen) + dy);
-  });
-
-  // ── Finger (grip) position -- where the touch actually is ──
   const fingerX = useSharedValue(0);
   const fingerY = useSharedValue(0);
-  const TOOL_LENGTH = 100; // handle-graphic length, decorative only
+  const TOOL_LENGTH = 50;
 
-  // The tool BODY (blade + handle) is anchored at the cutting TIP,
-  // not the finger -- the blade's local origin is the cutting edge,
-  // so translating the whole group to the tip makes the blade render
-  // where it actually cuts. The handle graphic still points back
-  // toward the grip, and a connector line (drawn below) makes the
-  // finger → tip offset visible.
   const toolBodyTransform = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
     return [{ translateX: tx }, { translateY: ty }];
   });
 
-  // Cutting-tip crosshair -- this is the point that actually carves.
   const tipTransform = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
     return [{ translateX: tx }, { translateY: ty }];
   });
 
-  // Small grip marker at the raw finger position, for reference.
   const gripTransform = useDerivedValue(() => [
     { translateX: fingerX.value },
     { translateY: fingerY.value },
@@ -303,11 +746,43 @@ function DrawingCanvas({ profile, onProfile, tool }) {
   profileRef.current = profile;
   const toolRef = useRef(tool);
   useEffect(() => { toolRef.current = tool; }, [tool]);
+  const wearRef = useRef(wear);
+  useEffect(() => { wearRef.current = wear; }, [wear]);
+  const rpmRef = useRef(rpm);
+  useEffect(() => { rpmRef.current = rpm; }, [rpm]);
+
+  // ── Accuracy-system refs ──
+  const lastCutSample = useRef({ x: null, y: null, t: 0 });
+  const lockUntilRef = useRef(0);
+  const lastWearUpdate = useRef(0);
+  const lastHoverUpdate = useRef(0);
+  const lastChatterTick = useRef(0);
+
+  // ── HUD ref (diameter readout, catch feedback) ──
+  // Updating this never re-renders DrawingCanvas -- see CutHUD above.
+  const hudRef = useRef(null);
+  const shakeX = useRef(new Animated.Value(0)).current;
+
+  const triggerCatchFx = useCallback(() => {
+    hudRef.current?.triggerFlash();
+    Animated.sequence([
+      Animated.timing(shakeX, { toValue: 8, duration: 40, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: 5, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  }, [shakeX]);
 
   const updatePendingPoint = useCallback((x, y) => {
     pendingPoint.current = { x, y };
   }, []);
 
+  // ── Main per-frame cut processor ──
+  // Beyond just carving the profile, this now derives a "feed
+  // pressure" from how fast the finger is moving, feeds it (plus RPM
+  // and tool wear) into a per-frame catch-risk roll, applies chatter
+  // jitter under aggressive conditions, accrues tool wear, and
+  // publishes a live diameter readout.
   const processCut = useCallback(() => {
     if (!isProcessing.current) {
       rafRef.current = null;
@@ -319,23 +794,94 @@ function DrawingCanvas({ profile, onProfile, tool }) {
       rafRef.current = requestAnimationFrame(processCut);
       return;
     }
-
     pendingPoint.current = null;
-    if (point) {
-      const currentTool = toolRef.current;
-      let next = applyTool(profileRef.current, point.x, point.y, currentTool);
-      if (currentTool.id === 'scraper') next = smooth(next, 0.35);
-      profileRef.current = next;
 
-      const now = Date.now();
-      if (now - lastReactUpdate.current > 80) {
-        lastReactUpdate.current = now;
-        onProfile([...next]);
+    const now = Date.now();
+    const currentTool = toolRef.current;
+    const last = lastCutSample.current;
+    const dt = last.t ? Math.max(1, now - last.t) : 16;
+    const dist = last.x != null ? Math.hypot(point.x - last.x, point.y - last.y) : 0;
+    const velocity = dist / dt; // px/ms
+    lastCutSample.current = { x: point.x, y: point.y, t: now };
+
+    // Feed pressure: careful slow strokes cut light, brisk strokes cut
+    // aggressively (and risk a catch).
+    const pressureNorm = clamp(velocity / 1.4, 0, 1.6);
+    const pressureMul = 0.6 + pressureNorm * 0.8;
+
+    const rpmNow = rpmRef.current;
+    const rpmFactor = rpmNow / BASE_RPM;
+    const wearNow = wearRef.current;
+    const wearMul = 1 - wearNow * WEAR_DEPTH_PENALTY;
+
+    const seg = xToSeg(point.x);
+    const currentRadius = profileRef.current[seg] ?? STOCK_RADIUS;
+    const thinFactor = currentRadius < MIN_SAFE_RADIUS * 1.6 ? 1.6 : 1.0;
+    const shapeRisk = currentTool.shape === 'narrow' ? 1.5 : currentTool.shape === 'point' ? 1.2 : 1.0;
+    const wearRisk = 1 + wearNow * WEAR_CATCH_RISK;
+
+    const inLockout = now < lockUntilRef.current;
+
+    if (!inLockout) {
+      const catchRisk = shapeRisk * wearRisk * thinFactor * rpmFactor * Math.max(0, pressureNorm - 0.35);
+      const catchProb = clamp(CATCH_BASE_CHANCE * catchRisk, 0, CATCH_PROB_CAP);
+
+      if (pressureNorm > 0.35 && Math.random() < catchProb) {
+        // ── CATCH: the edge grabs and digs in ──
+        const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
+        const dug = applyTool(profileRef.current, point.x, point.y, digTool);
+        profileRef.current = dug;
+        lockUntilRef.current = now + CATCH_LOCKOUT_MS;
+        onCatch();
+        onWear(currentTool.id, clamp(wearNow + 0.05, 0, 1));
+        triggerCatchFx();
+        onProfile([...dug]);
+      } else {
+        const toolForCut = { ...currentTool, depth: currentTool.depth * pressureMul * wearMul };
+        let next = applyTool(profileRef.current, point.x, point.y, toolForCut);
+
+        const chatterOn = pressureNorm > 0.65 && rpmFactor > 1.15 &&
+          (currentTool.shape === 'round' || currentTool.shape === 'flat');
+        if (chatterOn) {
+          const intensity = 0.4 * (pressureNorm - 0.5) * (rpmFactor - 1);
+          next = jitterProfile(next, seg, Math.ceil(currentTool.width / 2) + 1, intensity);
+          if (now - lastChatterTick.current > 150) {
+            lastChatterTick.current = now;
+            onChatterTick();
+          }
+        }
+
+        if (currentTool.id === 'scraper') next = smooth(next, 0.35);
+        profileRef.current = next;
+
+        if (now - lastReactUpdate.current > 80) {
+          lastReactUpdate.current = now;
+          onProfile([...next]);
+        }
+      }
+
+      // Tool wear accrues while actually cutting (paused during lockout).
+      // Wear changes slowly and round-trips through parent state (it
+      // flows back down via the `wear` prop), so it's throttled looser
+      // than the visual updates to avoid adding another render source
+      // to the canvas during a cut.
+      if (now - lastWearUpdate.current > 300) {
+        lastWearUpdate.current = now;
+        const nextWear = clamp(wearNow + dist * WEAR_RATE * (currentTool.depth / 4), 0, 1);
+        onWear(currentTool.id, nextWear);
       }
     }
 
+    // Live diameter callipers under the tip -- goes through the HUD
+    // ref, not component state, so it can't stall the canvas render.
+    if (now - lastHoverUpdate.current > 100) {
+      lastHoverUpdate.current = now;
+      const r = profileRef.current[seg] ?? STOCK_RADIUS;
+      hudRef.current?.setHover({ mm: r * 2 * PX_TO_MM, thin: r < MIN_SAFE_RADIUS });
+    }
+
     rafRef.current = requestAnimationFrame(processCut);
-  }, [onProfile]);
+  }, [onProfile, onCatch, onChatterTick, onWear, triggerCatchFx]);
 
   const startProcessing = useCallback(() => {
     if (!isProcessing.current) {
@@ -351,6 +897,8 @@ function DrawingCanvas({ profile, onProfile, tool }) {
       rafRef.current = null;
     }
     pendingPoint.current = null;
+    lastCutSample.current = { x: null, y: null, t: 0 };
+    hudRef.current?.setHover(null);
   }, []);
 
   const syncReactState = useCallback(() => {
@@ -359,7 +907,9 @@ function DrawingCanvas({ profile, onProfile, tool }) {
       lastReactUpdate.current = now;
       onProfile([...profileRef.current]);
     }
-  }, [onProfile]);
+    // Commit once per stroke -- this is the undo/redo checkpoint.
+    onCommit([...profileRef.current]);
+  }, [onProfile, onCommit]);
 
   const gesture = Gesture.Pan()
     .minDistance(0)
@@ -510,16 +1060,6 @@ function DrawingCanvas({ profile, onProfile, tool }) {
   // ── Paths ─────────────────────────────────────────────────────
   const fp = useMemo(() => fillPath(profile), [profile]);
 
-  const rings = useMemo(() => {
-    const out = [];
-    for (let i = 4; i < PROFILE_SEGS - 4; i += 8) {
-      const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-      const ry = profile[i];
-      out.push({ x, ry, segIdx: i });
-    }
-    return out;
-  }, [profile]);
-
   const toolCursorPath = useMemo(() => buildToolCursor(), [buildToolCursor]);
   const toolHandlePath = useMemo(() => buildToolHandle(), [buildToolHandle]);
   const toolShadowPath = useMemo(() => buildToolShadow(), [buildToolShadow]);
@@ -528,6 +1068,74 @@ function DrawingCanvas({ profile, onProfile, tool }) {
   const axisLines = useMemo(() => Array.from({ length: 8 }), []);
   const depthLines = useMemo(() => Array.from({ length: 10 }), []);
 
+  // ── Chuck end-caps ──
+  // One jaw shape, drawn once and reused 3x per cap (rotated 120°
+  // apart via nested Group transforms) so the "[]==[]" chucks read as
+  // a real 3-jaw lathe chuck rather than a plain circle. Both caps
+  // spin together using the same angleRef shared value that drives the
+  // 2D cylinder shader's phase, so the ends visibly rotate in lockstep
+  // with the wood grain -- reinforcing that this is one spinning
+  // cylinder, not a flat strip with static end decorations.
+  const chuckJawPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    const r = CHUCK_RADIUS;
+    p.addRRect({ rect: { x: r * 0.28, y: -r * 0.13, width: r * 0.6, height: r * 0.26 }, rx: 2, ry: 2 });
+    return p;
+  }, []);
+
+  const chuckSpinTransform = useDerivedValue(() => [{ rotate: angleRef.value }]);
+  const chuckOriginL = useMemo(() => vec(CHUCK_CENTER_L, AXIS_Y), []);
+  const chuckOriginR = useMemo(() => vec(CHUCK_CENTER_R, AXIS_Y), []);
+
+  // ── Cut-area highlighting ──
+  // Freshly cut wood is lighter/rawer than the untouched surface, so
+  // any segment where material has actually been removed from the
+  // original STOCK_RADIUS gets a pale overlay -- the deeper the cut,
+  // the stronger the tint. Bucketed into 3 tiers (rather than one
+  // <Path> per segment) to keep this to 3 draw calls regardless of
+  // how many segments are cut.
+  const CUT_TINT_COLOR = '#faf6ed';
+  const cutOverlayPaths = useMemo(() => {
+    const light = Skia.Path.Make();
+    const medium = Skia.Path.Make();
+    const heavy = Skia.Path.Make();
+    const segW = STOCK_WIDTH / PROFILE_SEGS;
+    for (let i = 0; i < PROFILE_SEGS; i++) {
+      const removal = clamp((STOCK_RADIUS - profile[i]) / STOCK_RADIUS, 0, 1);
+      if (removal <= 0.03) continue; // untouched -- no tint
+      const x0 = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
+      const rect = { x: x0, y: AXIS_Y - STOCK_RADIUS - 2, width: segW + 0.5, height: STOCK_RADIUS * 2 + 4 };
+      if (removal > 0.35) heavy.addRect(rect);
+      else if (removal > 0.15) medium.addRect(rect);
+      else light.addRect(rect);
+    }
+    return { light, medium, heavy };
+  }, [profile]);
+
+  // ── Thin-wall danger zones ──
+  // Contiguous runs of the profile below MIN_SAFE_RADIUS get a
+  // translucent red overlay so a fragile section is visible before it
+  // snaps, matching the "min wall" stat in the control strip.
+  const dangerSegments = useMemo(() => {
+    const segs = [];
+    let start = null;
+    for (let i = 0; i < PROFILE_SEGS; i++) {
+      const isDanger = profile[i] < MIN_SAFE_RADIUS;
+      if (isDanger && start === null) start = i;
+      if (!isDanger && start !== null) { segs.push([start, i - 1]); start = null; }
+    }
+    if (start !== null) segs.push([start, PROFILE_SEGS - 1]);
+    return segs;
+  }, [profile]);
+
+  const dangerPaths = useMemo(() => dangerSegments.map(([s, e]) => {
+    const x0 = STOCK_LEFT + (s / PROFILE_SEGS) * STOCK_WIDTH;
+    const x1 = STOCK_LEFT + ((e + 1) / PROFILE_SEGS) * STOCK_WIDTH;
+    const p = Skia.Path.Make();
+    p.addRect({ x: x0, y: AXIS_Y - STOCK_RADIUS - 6, width: Math.max(1, x1 - x0), height: STOCK_RADIUS * 2 + 12 });
+    return p;
+  }), [dangerSegments]);
+
   const cuttingIndicator = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
     const p = Skia.Path.Make();
@@ -535,9 +1143,6 @@ function DrawingCanvas({ profile, onProfile, tool }) {
     return p;
   });
 
-  // Connector from grip (finger) to tip -- built in world space each
-  // frame since the tip's offset direction now depends on which side
-  // of the axis the finger is on, so it's no longer a fixed vector.
   const connectorPath = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
     const p = Skia.Path.Make();
@@ -547,295 +1152,290 @@ function DrawingCanvas({ profile, onProfile, tool }) {
   });
 
   return (
-    <GestureDetector gesture={gesture}>
-      <SkiaCanvas style={{ width: CANVAS_W, height: CANVAS_H }}>
-        {/* Lathe bed rails */}
-        <Line p1={vec(STOCK_LEFT - 6, AXIS_Y - 2)} p2={vec(STOCK_RIGHT + 6, AXIS_Y - 2)}
-          strokeWidth={4} color="#1e3a5f" />
-        <Line p1={vec(STOCK_LEFT - 6, AXIS_Y + 2)} p2={vec(STOCK_RIGHT + 6, AXIS_Y + 2)}
-          strokeWidth={4} color="#1e3a5f" />
-        <Line p1={vec(STOCK_LEFT - 6, AXIS_Y - 2)} p2={vec(STOCK_RIGHT + 6, AXIS_Y - 2)}
-          strokeWidth={1.5} color="#3b6fa0" />
-        <Line p1={vec(STOCK_LEFT - 6, AXIS_Y + 2)} p2={vec(STOCK_RIGHT + 6, AXIS_Y + 2)}
-          strokeWidth={1.5} color="#3b6fa0" />
+    <View style={{ width: CANVAS_W, height: CANVAS_H }}>
+      <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
+        <GestureDetector gesture={gesture}>
+          <SkiaCanvas style={{ width: CANVAS_W, height: CANVAS_H }}>
+            {texImage && cylinderEffect ? (
+              <Path path={fp} style="fill">
+                <Shader source={cylinderEffect} uniforms={cylinderUniforms}>
+                  <ImageShader
+                    image={texImage}
+                    tx="mirror"
+                    ty="mirror"
+                    fit="cover"
+                    rect={{ x: 0, y: 0, width: SPIN_TEXTURE_CONFIG.TILE_SIZE, height: SPIN_TEXTURE_CONFIG.WRAP_HEIGHT }}
+                  />
+                </Shader>
+              </Path>
+            ) : (
+              <>
+                <Path path={fp} style="fill">
+                  <LinearGradient
+                    start={gradStart}
+                    end={gradEnd}
+                    colors={[
+                      '#2a0e04',
+                      '#6a2c10',
+                      '#b86030',
+                      '#ecb898',
+                      '#fad0b0',
+                      '#d08858',
+                      '#7a3a18',
+                      '#2a0e04',
+                    ]}
+                    mode="clamp"
+                  />
+                </Path>
+                <Group clip={fp}>
+                  <Path
+                    path={grainPath}
+                    style="stroke"
+                    strokeWidth={1}
+                    color="rgba(20,8,2,0.16)"
+                  />
+                </Group>
+              </>
+            )}
 
-        {/* Center axis dashes */}
-        {axisLines.map((_, i) => (
-          <Line key={i}
-            p1={vec(STOCK_LEFT + i * (STOCK_WIDTH / 8), AXIS_Y)}
-            p2={vec(STOCK_LEFT + (i + 0.42) * (STOCK_WIDTH / 8), AXIS_Y)}
-            strokeWidth={0.8} color="rgba(59,130,246,0.3)" />
-        ))}
+            {/* Cut-area highlighting -- lighter tint where material has
+                actually been removed, intensity scaling with cut depth */}
+            <Group clip={fp}>
+              <Path path={cutOverlayPaths.light} style="fill" color={CUT_TINT_COLOR} opacity={0.14} />
+              <Path path={cutOverlayPaths.medium} style="fill" color={CUT_TINT_COLOR} opacity={0.26} />
+              <Path path={cutOverlayPaths.heavy} style="fill" color={CUT_TINT_COLOR} opacity={0.4} />
+            </Group>
 
-        <Path path={fp} style="fill">
-          <LinearGradient
-            start={gradStart}
-            end={gradEnd}
-            colors={[
-              '#2a0e04',
-              '#6a2c10',
-              '#b86030',
-              '#ecb898',
-              '#fad0b0',
-              '#d08858',
-              '#7a3a18',
-              '#2a0e04',
-            ]}
-            mode="clamp"
-          />
-        </Path>
+            {/* Thin-wall danger overlay */}
+            {dangerPaths.map((p, i) => (
+              <Group key={i} clip={fp}>
+                <Path path={p} style="fill" color="rgba(255,40,40,0.20)" />
+              </Group>
+            ))}
 
-        {/* Cutting area indicator */}
-        <Path
-          path={cuttingIndicator}
-          style="fill"
-          color={tool.color + '10'}
-        />
-        <Path
-          path={cuttingIndicator}
-          style="stroke"
-          strokeWidth={1}
-          color={tool.color + '30'}
-        />
-
-        {/* Cross-section depth lines */}
-        {depthLines.map((_, i) => {
-          const idx = Math.floor((i / 10) * PROFILE_SEGS);
-          const x = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
-          const r = profile[idx];
-          return (
-            <Line key={i}
-              p1={vec(x, AXIS_Y - r)}
-              p2={vec(x, AXIS_Y + r)}
-              strokeWidth={0.3} color="rgba(140,60,20,0.12)" />
-          );
-        })}
-
-        {/* Cross-section rings */}
-        <Group opacity={0.22}>
-          {rings.map((r, i) => (
-            <Oval
-              key={i}
-              x={r.x - r.ry * 0.12}
-              y={AXIS_Y - r.ry}
-              width={r.ry * 0.24}
-              height={r.ry * 2}
-              color="#ffcc88"
+            {/* Cutting area indicator */}
+            <Path
+              path={cuttingIndicator}
+              style="fill"
+              color={tool.color + '10'}
+            />
+            <Path
+              path={cuttingIndicator}
               style="stroke"
-              strokeWidth={0.7}
+              strokeWidth={1}
+              color={tool.color + '30'}
             />
-          ))}
-        </Group>
 
-        <Circle cx={CANVAS_W / 2} cy={AXIS_Y} r={2.5} color="#3b82f6" />
-        {Array.from({ length: 4 }).map((_, i) => {
-          const x = STOCK_LEFT + (i / 3) * STOCK_WIDTH;
-          return (
-            <Line key={i}
-              p1={vec(x, AXIS_Y - 8)}
-              p2={vec(x, AXIS_Y - 3)}
-              strokeWidth={1} color="rgba(70,110,160,0.45)" />
-          );
-        })}
+            {/* Cross-section depth lines */}
+            {depthLines.map((_, i) => {
+              const idx = Math.floor((i / 10) * PROFILE_SEGS);
+              const x = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
+              const r = profile[idx];
+              return (
+                <Line key={i}
+                  p1={vec(x, AXIS_Y - r)}
+                  p2={vec(x, AXIS_Y + r)}
+                  strokeWidth={0.3} color="rgba(140,60,20,0.12)" />
+              );
+            })}
 
-        {/* ── TOOL BODY ── */}
-        <Group opacity={1} transform={toolBodyTransform}>
-          {/* Shadow */}
-          <Path
-            path={toolShadowPath}
-            style="fill"
-            color="rgba(0,0,0,0.4)"
-            transform={[{ translateX: 3 }, { translateY: 3 }]}
-          />
+            <Circle cx={CANVAS_W / 2} cy={AXIS_Y} r={2.5} color="#3b82f6" />
+            {Array.from({ length: 4 }).map((_, i) => {
+              const x = STOCK_LEFT + (i / 3) * STOCK_WIDTH;
+              return (
+                <Line key={i}
+                  p1={vec(x, AXIS_Y - 8)}
+                  p2={vec(x, AXIS_Y - 3)}
+                  strokeWidth={1} color="rgba(70,110,160,0.45)" />
+              );
+            })}
 
-          {/* Ferrule */}
-          <Path
-            path={toolFerrulePath}
-            style="fill"
-            color="#8899aa"
-            transform={[{ translateX: 1 }, { translateY: 1 }]}
-          />
-          <Path
-            path={toolFerrulePath}
-            style="fill"
-            color="#aabbcc"
-          />
-          <Path
-            path={toolFerrulePath}
-            style="stroke"
-            strokeWidth={0.5}
-            color="#667788"
-          />
-
-          {/* Tool Handle */}
-          <Path
-            path={toolHandlePath}
-            style="fill"
-            color={tool.color + '90'}
-            transform={[{ translateX: 1.5 }, { translateY: 1.5 }]}
-          />
-          <Path
-            path={toolHandlePath}
-            style="fill"
-            color={tool.color + '70'}
-          />
-
-          {/* Handle wood grain */}
-          {Array.from({ length: 4 }).map((_, i) => {
-            const yPos = -TOOL_LENGTH * 0.2 * (i + 1);
-            const line = Skia.Path.Make();
-            const widthFactor = 0.15 + (i * 0.02);
-            line.moveTo(-tool.width * widthFactor, yPos);
-            line.quadTo(0, yPos + 2, tool.width * widthFactor, yPos);
-            return (
+            {/* ── TOOL BODY ── */}
+            <Group opacity={1} transform={toolBodyTransform}>
               <Path
-                key={i}
-                path={line}
-                style="stroke"
-                strokeWidth={0.4}
-                color="rgba(255,255,255,0.1)"
+                path={toolShadowPath}
+                style="fill"
+                color="rgba(0,0,0,0.4)"
+                transform={[{ translateX: 3 }, { translateY: 3 }]}
               />
-            );
-          })}
 
-          {/* Handle highlight */}
-          <Path
-            path={toolHandlePath}
-            style="fill"
-            color="#ffffff"
-            opacity={0.08}
-            transform={[{ translateX: -1 }, { translateY: -1 }]}
-          />
+              <Path
+                path={toolFerrulePath}
+                style="fill"
+                color="#8899aa"
+                transform={[{ translateX: 1 }, { translateY: 1 }]}
+              />
+              <Path
+                path={toolFerrulePath}
+                style="fill"
+                color="#aabbcc"
+              />
+              <Path
+                path={toolFerrulePath}
+                style="stroke"
+                strokeWidth={0.5}
+                color="#667788"
+              />
 
-          {/* Tool body glow */}
-          <Path
-            path={toolCursorPath}
-            style="fill"
-            color={tool.color + '15'}
-            transform={[{ translateX: 0 }, { translateY: 0 }]}
-          />
+              <Path
+                path={toolHandlePath}
+                style="fill"
+                color={tool.color + '90'}
+                transform={[{ translateX: 1.5 }, { translateY: 1.5 }]}
+              />
+              <Path
+                path={toolHandlePath}
+                style="fill"
+                color={tool.color + '70'}
+              />
 
-          {/* Tool body - main color */}
-          <Path
-            path={toolCursorPath}
-            style="fill"
-            color={tool.color + 'DD'}
-          />
+              {Array.from({ length: 4 }).map((_, i) => {
+                const yPos = -TOOL_LENGTH * 0.2 * (i + 1);
+                const line = Skia.Path.Make();
+                const widthFactor = 0.15 + (i * 0.02);
+                line.moveTo(-tool.width * widthFactor, yPos);
+                line.quadTo(0, yPos + 2, tool.width * widthFactor, yPos);
+                return (
+                  <Path
+                    key={i}
+                    path={line}
+                    style="stroke"
+                    strokeWidth={0.4}
+                    color="rgba(255,255,255,0.1)"
+                  />
+                );
+              })}
 
-          {/* Tool body - metallic highlight */}
-          <Path
-            path={toolCursorPath}
-            style="fill"
-            color={tool.color + '60'}
-            transform={[{ translateX: -1 }, { translateY: -1 }]}
-          />
+              <Path
+                path={toolHandlePath}
+                style="fill"
+                color="#ffffff"
+                opacity={0.08}
+                transform={[{ translateX: -1 }, { translateY: -1 }]}
+              />
 
-          {/* Tool outline */}
-          <Path
-            path={toolCursorPath}
-            style="stroke"
-            strokeWidth={1}
-            color="#ffffff"
-            opacity={0.3}
-          />
+              <Path
+                path={toolCursorPath}
+                style="fill"
+                color={tool.color + '15'}
+                transform={[{ translateX: 0 }, { translateY: 0 }]}
+              />
 
-          {/* Cutting edge glow */}
-          <Path
-            path={toolCursorPath}
-            style="stroke"
-            strokeWidth={2}
-            color={tool.color}
-            opacity={0.4}
-          />
+              <Path
+                path={toolCursorPath}
+                style="fill"
+                color={tool.color + 'DD'}
+              />
 
-          {/* Secondary cutting edge highlight */}
-          <Path
-            path={toolCursorPath}
-            style="stroke"
-            strokeWidth={0.6}
-            color="#ffffff"
-            opacity={0.2}
-          />
+              <Path
+                path={toolCursorPath}
+                style="fill"
+                color={tool.color + '60'}
+                transform={[{ translateX: -1 }, { translateY: -1 }]}
+              />
 
-          {/* Tool name on handle -- requires a real Skia font object */}
-          {toolLabelFont && (
-            <SkiaText
-              x={-tool.name.length * 1.8}
-              y={-TOOL_LENGTH + 12}
-              text={tool.name}
-              font={toolLabelFont}
-              color="rgba(255,255,255,0.12)"
+              <Path
+                path={toolCursorPath}
+                style="stroke"
+                strokeWidth={1}
+                color="#ffffff"
+                opacity={0.3}
+              />
+
+              <Path
+                path={toolCursorPath}
+                style="stroke"
+                strokeWidth={2}
+                color={tool.color}
+                opacity={0.4}
+              />
+
+              <Path
+                path={toolCursorPath}
+                style="stroke"
+                strokeWidth={0.6}
+                color="#ffffff"
+                opacity={0.2}
+              />
+
+              {toolLabelFont && (
+                <SkiaText
+                  x={-tool.name.length * 1.8}
+                  y={-TOOL_LENGTH + 12}
+                  text={tool.name}
+                  font={toolLabelFont}
+                  color="rgba(255,255,255,0.12)"
+                />
+              )}
+            </Group>
+
+            <Path
+              path={connectorPath}
+              style="stroke"
+              strokeWidth={1.5}
+              color="rgba(255,255,255,0.35)"
             />
-          )}
-        </Group>
+            <Group transform={gripTransform}>
+              <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.5)" />
+              <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.25)" style="stroke" strokeWidth={1} />
+            </Group>
 
-        {/* Grip marker (raw finger position) + connector to the tip */}
-        <Path
-          path={connectorPath}
-          style="stroke"
-          strokeWidth={1.5}
-          color="rgba(255,255,255,0.35)"
-        />
-        <Group transform={gripTransform}>
-          <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.5)" />
-          <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.25)" style="stroke" strokeWidth={1} />
-        </Group>
+            {/* ── CUTTING TIP INDICATOR ── */}
+            <Group transform={tipTransform}>
+              <Circle cx={0} cy={0} r={tool.width / 2 + 6} color={tool.color + '15'} />
+              <Circle cx={0} cy={0} r={tool.width / 2 + 3} color={tool.color + '25'} />
+              <Circle
+                cx={0}
+                cy={0}
+                r={tool.width / 2 + 1}
+                color={tool.color}
+                style="stroke"
+                strokeWidth={1.2}
+                opacity={0.5}
+              />
+              <Circle
+                cx={0}
+                cy={0}
+                r={tool.width / 2}
+                color={tool.color}
+                style="stroke"
+                strokeWidth={1.5}
+                opacity={0.7}
+              />
+              <Circle cx={0} cy={0} r={2} color="#ffffff" opacity={0.9} />
+              <Circle cx={0} cy={0} r={1.2} color={tool.color} opacity={0.8} />
 
-        {/* ── CUTTING TIP INDICATOR ── */}
-        <Group transform={tipTransform}>
-          <Circle cx={0} cy={0} r={tool.width / 2 + 6} color={tool.color + '15'} />
-          <Circle cx={0} cy={0} r={tool.width / 2 + 3} color={tool.color + '25'} />
-          <Circle
-            cx={0}
-            cy={0}
-            r={tool.width / 2 + 1}
-            color={tool.color}
-            style="stroke"
-            strokeWidth={1.2}
-            opacity={0.5}
-          />
-          <Circle
-            cx={0}
-            cy={0}
-            r={tool.width / 2}
-            color={tool.color}
-            style="stroke"
-            strokeWidth={1.5}
-            opacity={0.7}
-          />
-          <Circle cx={0} cy={0} r={2} color="#ffffff" opacity={0.9} />
-          <Circle cx={0} cy={0} r={1.2} color={tool.color} opacity={0.8} />
+              <Line
+                p1={vec(-tool.width / 2 - 3, 0)}
+                p2={vec(tool.width / 2 + 3, 0)}
+                strokeWidth={0.4}
+                color="rgba(255,255,255,0.15)"
+              />
+              <Line
+                p1={vec(0, -tool.width / 2 - 3)}
+                p2={vec(0, tool.width / 2 + 3)}
+                strokeWidth={0.4}
+                color="rgba(255,255,255,0.15)"
+              />
 
-          {/* Precision crosshair */}
-          <Line
-            p1={vec(-tool.width / 2 - 3, 0)}
-            p2={vec(tool.width / 2 + 3, 0)}
-            strokeWidth={0.4}
-            color="rgba(255,255,255,0.15)"
-          />
-          <Line
-            p1={vec(0, -tool.width / 2 - 3)}
-            p2={vec(0, tool.width / 2 + 3)}
-            strokeWidth={0.4}
-            color="rgba(255,255,255,0.15)"
-          />
+              <Circle cx={0} cy={0} r={8} color="rgba(255,255,255,0.04)" />
+              <Circle cx={0} cy={0} r={5} color="rgba(255,255,255,0.06)" />
 
-          <Circle cx={0} cy={0} r={8} color="rgba(255,255,255,0.04)" />
-          <Circle cx={0} cy={0} r={5} color="rgba(255,255,255,0.06)" />
-
-          {/* DEBUG: bright marker at the exact (tx, ty) fed to applyTool.
-              If a cut doesn't land exactly under this dot, the bug is in
-              applyTool/xToSeg, not in the finger→tip offset. Flip
-              DEBUG_SHOW_TIP to false once confirmed. */}
-          {DEBUG_SHOW_TIP && (
-            <>
-              <Circle cx={0} cy={0} r={3} color="#ff0044" />
-              <Circle cx={0} cy={0} r={6} color="#ff0044" style="stroke" strokeWidth={1.5} opacity={0.9} />
-            </>
-          )}
-        </Group>
-      </SkiaCanvas>
-    </GestureDetector>
+              {DEBUG_SHOW_TIP && (
+                <>
+                  <Circle cx={0} cy={0} r={3} color="#ff0044" />
+                  <Circle cx={0} cy={0} r={6} color="#ff0044" style="stroke" strokeWidth={1.5} opacity={0.9} />
+                </>
+              )}
+            </Group>
+          </SkiaCanvas>
+        </GestureDetector>
+      </Animated.View>
+   
+      {/* Catch flash + live diameter callipers -- isolated so their
+          frequent updates never trigger a re-render of the canvas above. */}
+      <CutHUD ref={hudRef} />
+    </View>
   );
 }
 
@@ -893,30 +1493,157 @@ export default function FreehandTurning() {
   const [tool, setTool] = useState(TOOLS[0]);
   const [is3D, setIs3D] = useState(false);
   const [matIdx, setMatIdx] = useState(0);
+  const mat = MATERIALS[matIdx];
   const [autoRotate, setAutoRot] = useState(true);
   const [OrbitControls, events] = useControls();
   const [showTooltip, setShowTooltip] = useState(null);
+
+  const orbitTarget = useMemo(() => new THREE.Vector3(0, 0, 0), []);
+
+  // ── Spindle speed ──
+  const [rpm, setRpm] = useState(BASE_RPM);
+  const adjustRpm = useCallback((delta) => {
+    setRpm(r => clamp(r + delta, MIN_RPM, MAX_RPM));
+  }, []);
+
+  // ── Live RPM ref for the frozen motor/pulley/belt preview ──
+  // MotorPreview is memoized to never re-render (see its comment), so
+  // it can't pick up rpm through props/state the normal way. A ref
+  // gives it a live value to read every frame inside its own
+  // useR3FFrame loops without ever needing to re-render.
+  const rpmRef = useRef(rpm);
+  useEffect(() => { rpmRef.current = rpm; }, [rpm]);
+
+  // ── Tool wear, catches, finish quality ──
+  const [toolWear, setToolWear] = useState({});
+  const [catches, setCatches] = useState(0);
+  const [finishScore, setFinishScore] = useState(100);
+  const currentWear = toolWear[tool.id] || 0;
+
+  const handleWear = useCallback((toolId, val) => {
+    setToolWear(w => ({ ...w, [toolId]: val }));
+  }, []);
+  const handleCatch = useCallback(() => {
+    setCatches(c => c + 1);
+    setFinishScore(s => clamp(s - 8, 0, 100));
+  }, []);
+  const handleChatterTick = useCallback(() => {
+    setFinishScore(s => clamp(s - 1, 0, 100));
+  }, []);
+  const handleSharpen = useCallback(() => {
+    setToolWear(w => ({ ...w, [tool.id]: 0 }));
+  }, [tool.id]);
+
+  // ── Undo / redo history ──
+  const historyRef = useRef([Array.from(makeProfile())]);
+  const historyIndexRef = useRef(0);
+  const [historyTick, setHistoryTick] = useState(0);
+
+  const pushHistory = useCallback((arr) => {
+    const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
+    trimmed.push(arr);
+    if (trimmed.length > 30) trimmed.shift();
+    historyRef.current = trimmed;
+    historyIndexRef.current = trimmed.length - 1;
+    setHistoryTick(t => t + 1);
+  }, []);
+
+  const handleCommit = useCallback((arr) => { pushHistory(arr); }, [pushHistory]);
+
+  const undo = useCallback(() => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current -= 1;
+      setProfile(Float32Array.from(historyRef.current[historyIndexRef.current]));
+      setHistoryTick(t => t + 1);
+    }
+  }, []);
+
+  const redo = useCallback(() => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current += 1;
+      setProfile(Float32Array.from(historyRef.current[historyIndexRef.current]));
+      setHistoryTick(t => t + 1);
+    }
+  }, []);
+
+  const canUndo = historyIndexRef.current > 0;
+  const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+
+  // ── Saved parts -- persisted via AsyncStorage ──
+  // A "part" is a complete snapshot of a finished piece: the carved
+  // profile AND which material/texture it was shown with, so loading
+  // one restores exactly what you saved -- not just the shape.
+  const [savedParts, setSavedParts] = useState([]);
+  const [isPartsOpen, setIsPartsOpen] = useState(false);
+  const hasLoadedPartsRef = useRef(false);
+
+  // Load once on mount.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SAVED_PARTS_KEY);
+        if (raw) setSavedParts(JSON.parse(raw));
+      } catch (e) {
+        console.warn('Pottery Studio: failed to load saved parts', e);
+      } finally {
+        hasLoadedPartsRef.current = true;
+      }
+    })();
+  }, []);
+
+  // Persist whenever the list changes -- skip the write the initial
+  // load itself triggers, so mount doesn't immediately re-write
+  // storage with the exact data it just read.
+  useEffect(() => {
+    if (!hasLoadedPartsRef.current) return;
+    AsyncStorage.setItem(SAVED_PARTS_KEY, JSON.stringify(savedParts)).catch((e) => {
+      console.warn('Pottery Studio: failed to save parts', e);
+    });
+  }, [savedParts]);
+
+  const savePart = useCallback(() => {
+    setSavedParts(p => [...p, {
+      id: Date.now(),
+      name: `Part ${p.length + 1}`,
+      profile: Array.from(profile),
+      matId: mat.id,
+      createdAt: Date.now(),
+    }]);
+  }, [profile, mat.id]);
+
+  // Loading a saved part restores both the shape and the material it
+  // was saved with, and switches to 3D so you immediately see the
+  // finished piece -- matching how it looked when you saved it.
+  const loadPart = useCallback((part) => {
+    const arr = Float32Array.from(part.profile);
+    setProfile(arr);
+    pushHistory(Array.from(arr));
+    const idx = MATERIALS.findIndex(m => m.id === part.matId);
+    if (idx >= 0) setMatIdx(idx);
+    setIs3D(true);
+    setIsPartsOpen(false);
+  }, [pushHistory]);
+
+  const deletePart = useCallback((id) => {
+    setSavedParts(p => p.filter(x => x.id !== id));
+  }, []);
 
   // Magazine state
   const [isMagazineOpen, setIsMagazineOpen] = useState(false);
   const magazineAnim = useRef(new Animated.Value(0)).current;
   const magazineHeight = TOOLBAR_H + 40;
 
-  // Toggle magazine with animation
   const toggleMagazine = useCallback(() => {
     const toValue = isMagazineOpen ? 0 : 1;
-
     Animated.spring(magazineAnim, {
       toValue,
       useNativeDriver: true,
       friction: 8,
       tension: 40,
     }).start();
-
     setIsMagazineOpen(!isMagazineOpen);
   }, [isMagazineOpen, magazineAnim]);
 
-  // Close magazine
   const closeMagazine = useCallback(() => {
     Animated.spring(magazineAnim, {
       toValue: 0,
@@ -927,10 +1654,8 @@ export default function FreehandTurning() {
     setIsMagazineOpen(false);
   }, [magazineAnim]);
 
-  // Auto-hide magazine after 5 seconds of inactivity
   useEffect(() => {
     let timeoutId;
-
     if (isMagazineOpen) {
       timeoutId = setTimeout(() => {
         if (isMagazineOpen) {
@@ -944,13 +1669,11 @@ export default function FreehandTurning() {
         }
       }, 5000);
     }
-
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isMagazineOpen, magazineAnim]);
 
-  // Re-open the magazine and restart its auto-hide timer (used on tool tap)
   const handleMagazineInteraction = useCallback(() => {
     Animated.spring(magazineAnim, {
       toValue: 1,
@@ -961,7 +1684,24 @@ export default function FreehandTurning() {
     setIsMagazineOpen(true);
   }, [magazineAnim]);
 
-  const mat = MATERIALS[matIdx];
+  const handleSmooth = useCallback(() => {
+    setProfile(p => {
+      const next = smooth(p, 0.5);
+      pushHistory(Array.from(next));
+      return next;
+    });
+  }, [pushHistory]);
+
+  const handleReset = useCallback(() => {
+    const fresh = makeProfile();
+    setProfile(fresh);
+    pushHistory(Array.from(fresh));
+    setToolWear({});
+    setCatches(0);
+    setFinishScore(100);
+  }, [pushHistory]);
+
+  const finishColor = finishScore > 70 ? '#4ade80' : finishScore > 40 ? '#f59e0b' : '#ef4444';
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -975,31 +1715,63 @@ export default function FreehandTurning() {
             <View>
               <Text style={styles.title}>Pottery Studio</Text>
               <Text style={styles.sub}>
-                {is3D ? `${mat.label} · drag to orbit` : `${tool.name} tool active`}
+                {is3D ? `${mat.label} · ${rpm} RPM · drag to orbit` : `${tool.name} tool active`}
               </Text>
             </View>
           </View>
 
           <View style={styles.hRight}>
-            {!is3D ? (
-              <>
-                <TouchableOpacity style={styles.aBtn} onPress={() => setProfile(p => smooth(p, 0.5))}>
-                  <Text style={styles.aTxt}>Smooth</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }} contentContainerStyle={styles.hRightScroll}>
+              <View style={styles.rpmBox}>
+                <TouchableOpacity onPress={() => adjustRpm(-RPM_STEP)} style={styles.rpmBtn}>
+                  <Text style={styles.rpmBtnTxt}>–</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.aBtn} onPress={() => setProfile(makeProfile())}>
-                  <Text style={styles.aTxt}>Reset</Text>
+                <Text style={styles.rpmVal}>{rpm}</Text>
+                <TouchableOpacity onPress={() => adjustRpm(RPM_STEP)} style={styles.rpmBtn}>
+                  <Text style={styles.rpmBtnTxt}>+</Text>
                 </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity
-                style={[styles.aBtn, autoRotate && { borderColor: '#f59e0b' }]}
-                onPress={() => setAutoRot(v => !v)}
-              >
-                <Text style={[styles.aTxt, autoRotate && { color: '#f59e0b' }]}>
-                  {autoRotate ? '⟳ Spin' : '⟳ Stop'}
-                </Text>
-              </TouchableOpacity>
-            )}
+              </View>
+
+              {!is3D ? (
+                <>
+                  <TouchableOpacity style={styles.aBtn} onPress={handleSmooth}>
+                    <Text style={styles.aTxt}>Smooth</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.aBtn} onPress={handleReset}>
+                    <Text style={styles.aTxt}>Reset</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.aBtn, autoRotate && { borderColor: '#f59e0b' }]}
+                  onPress={() => setAutoRot(v => !v)}
+                >
+                  <Text style={[styles.aTxt, autoRotate && { color: '#f59e0b' }]}>
+                    {autoRotate ? '⟳ Spin' : '⟳ Stop'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Save/browse saved parts -- 3D only. A profile alone
+                  isn't a finished "part" the way it looks with its
+                  material/texture applied, and that's only visible in
+                  3D, so these controls stay out of the 2D header. */}
+              {is3D && (
+                <>
+                  <TouchableOpacity style={styles.aBtn} onPress={savePart}>
+                    <Text style={styles.aTxt}>💾 Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.aBtn, isPartsOpen && { borderColor: '#3b82f6' }]}
+                    onPress={() => setIsPartsOpen(true)}
+                  >
+                    <Text style={[styles.aTxt, isPartsOpen && { color: '#3b82f6' }]}>
+                      📂 Parts{savedParts.length > 0 ? ` (${savedParts.length})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
 
             <TouchableOpacity
               style={[styles.toggle, is3D && styles.toggleOn]}
@@ -1012,20 +1784,59 @@ export default function FreehandTurning() {
           </View>
         </View>
 
-        {/* Body */}
-        <View style={[styles.body, { paddingBottom: is3D ? 0 : 80 }]}>
-          {is3D ? (
-            // `{...events}` wires the pan/pinch responder from
-            // r3f-native-orbitcontrols to this view -- without it the
-            // gesture handlers OrbitControls relies on never fire and
-            // the "drag to orbit" hint in the header does nothing.
-            <View style={{ flex: 1 }} {...events}>
-              <CanvaPovider camPosition={[0, 0, 7]}>
-                <OrbitControls enablePan={false} enableZoom target={[0, 0, 0]} />
-                <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} />
-              </CanvaPovider>
+        {/* Accuracy / stats control strip -- 2D only */}
+        {!is3D && (
+          <View style={styles.controlStrip}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.controlStripRow}>
+              <TouchableOpacity
+                style={[styles.ctrlBtn, !canUndo && styles.ctrlBtnDisabled]}
+                disabled={!canUndo}
+                onPress={undo}
+              >
+                <Text style={styles.ctrlTxt}>↶ Undo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ctrlBtn, !canRedo && styles.ctrlBtnDisabled]}
+                disabled={!canRedo}
+                onPress={redo}
+              >
+                <Text style={styles.ctrlTxt}>↷ Redo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ctrlBtn, currentWear < 0.05 && styles.ctrlBtnDisabled]}
+                disabled={currentWear < 0.05}
+                onPress={handleSharpen}
+              >
+                <Text style={styles.ctrlTxt}>🔪 Sharpen</Text>
+              </TouchableOpacity>
 
-              {/* Material selector */}
+              <View style={styles.statChip}>
+                <Text style={styles.statLabel2}>Finish</Text>
+                <Text style={[styles.statVal2, { color: finishColor }]}>{Math.round(finishScore)}%</Text>
+              </View>
+              <View style={styles.statChip}>
+                <Text style={styles.statLabel2}>Catches</Text>
+                <Text style={styles.statVal2}>{catches}</Text>
+              </View>
+              <View style={styles.statChip}>
+                <Text style={styles.statLabel2}>Wear</Text>
+                <Text style={styles.statVal2}>{Math.round(currentWear * 100)}%</Text>
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Body */}
+        <View style={[styles.body, { paddingBottom: is3D ? 0 : 60 }]}>
+          {is3D ? (
+            <View style={{ flex: 1 }}>
+              
+                <CanvaPovider camPosition={[0, 0, 7]}>
+                  <OrbitControls enablePan={false} enableZoom target={orbitTarget} />
+                  <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
+                </CanvaPovider>
+            
+
               <View style={styles.matBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.matRow}>
@@ -1044,7 +1855,19 @@ export default function FreehandTurning() {
             </View>
           ) : (
             <View style={{ flex: 1, backgroundColor: '#0c1018' }}>
-              <DrawingCanvas profile={profile} onProfile={setProfile} tool={tool} />
+              <DrawingCanvas
+                profile={profile}
+                onProfile={setProfile}
+                onCommit={handleCommit}
+                tool={tool}
+                mat={mat}
+                rpm={rpm}
+                wear={currentWear}
+                onWear={handleWear}
+                onCatch={handleCatch}
+                onChatterTick={handleChatterTick}
+              />
+              <MotorPreview rpmRef={rpmRef} />
               <View style={styles.hintWrap} pointerEvents="none">
                 <Text style={styles.hintTxt}>Draw toward center ↑↓ to carve · both sides cut</Text>
               </View>
@@ -1052,7 +1875,57 @@ export default function FreehandTurning() {
           )}
         </View>
 
-        {/* Magazine Toggle Button - Always visible */}
+        {/* Saved parts modal -- 3D only (see header). Lists every saved
+            part vertically with its material; tapping one loads it. */}
+        <Modal
+          visible={isPartsOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsPartsOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsPartsOpen(false)}
+          >
+            <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🏺 Saved Parts</Text>
+                <TouchableOpacity onPress={() => setIsPartsOpen(false)} style={styles.modalCloseBtn}>
+                  <Text style={styles.modalCloseTxt}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={savePart}>
+                <Text style={styles.modalSaveTxt}>+ Save Current Part</Text>
+              </TouchableOpacity>
+
+              <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
+                {savedParts.length === 0 && (
+                  <Text style={styles.partsEmptyTxt}>No saved parts yet -- carve something and tap Save.</Text>
+                )}
+                {savedParts.map(part => {
+                  const partMat = MATERIALS.find(m => m.id === part.matId) || MATERIALS[0];
+                  return (
+                    <View key={part.id} style={styles.partRow}>
+                      <TouchableOpacity style={styles.partRowMain} onPress={() => loadPart(part)}>
+                        <View style={[styles.swatch, { backgroundColor: partMat.color, width: 16, height: 16, borderRadius: 8 }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.partChipText}>{part.name}</Text>
+                          <Text style={styles.partChipSub}>{partMat.label}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deletePart(part.id)} style={styles.partDeleteBtn}>
+                        <Text style={styles.partDeleteTxt}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
         {!is3D && (
           <MagazineToggleButton
             isOpen={isMagazineOpen}
@@ -1061,7 +1934,6 @@ export default function FreehandTurning() {
           />
         )}
 
-        {/* Magazine-style Tool Bar - Animated */}
         {!is3D && (
           <Animated.View
             style={[
@@ -1176,10 +2048,8 @@ export default function FreehandTurning() {
 
 // ── Complete Styles ──────────────────────────────────────────
 const styles = StyleSheet.create({
-  // Root
   root: { flex: 1, backgroundColor: '#090910' },
 
-  // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: Platform.OS === 'ios' ? 52 : 12,
@@ -1188,7 +2058,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#182030',
   },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  hRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  hRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  hRightScroll: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logo: { fontSize: 24 },
   title: { fontSize: 15, fontWeight: '700', color: '#e2c9a0', letterSpacing: 0.3 },
   sub: { fontSize: 10, color: '#4a6080', marginTop: 1 },
@@ -1209,9 +2080,101 @@ const styles = StyleSheet.create({
   toggleTxt: { color: '#3b82f6', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
   toggleTxtOn: { color: '#fff' },
 
+  // ── RPM stepper ──
+  rpmBox: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#182030', borderRadius: 7,
+    borderWidth: 1, borderColor: '#253050',
+    paddingHorizontal: 4,
+  },
+  rpmBtn: { paddingHorizontal: 7, paddingVertical: 5 },
+  rpmBtnTxt: { color: '#7a9ab8', fontSize: 14, fontWeight: '700' },
+  rpmVal: { color: '#e2c9a0', fontSize: 11, fontWeight: '700', minWidth: 34, textAlign: 'center' },
+
+  // ── Accuracy control strip ──
+  controlStrip: {
+    height: CONTROL_STRIP_H,
+    backgroundColor: '#0d1220',
+    borderBottomWidth: 1, borderBottomColor: '#182030',
+    justifyContent: 'center',
+  },
+  controlStripRow: {
+    paddingHorizontal: 12, gap: 8, alignItems: 'center',
+  },
+  ctrlBtn: {
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 7, backgroundColor: '#141c2a',
+    borderWidth: 1, borderColor: '#253050',
+  },
+  ctrlBtnDisabled: { opacity: 0.35 },
+  ctrlTxt: { color: '#7a9ab8', fontSize: 11, fontWeight: '600' },
+  statChip: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 7, backgroundColor: '#141c2a',
+    borderWidth: 1, borderColor: '#1e2a3c',
+    alignItems: 'center', minWidth: 54,
+  },
+  statLabel2: { fontSize: 7, color: '#4a6080', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '600' },
+  statVal2: { fontSize: 11, color: '#7a9ab8', fontWeight: '700', marginTop: 1 },
+
+  // ── Catch flash / diameter callipers ──
+  catchFlash: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,0,40,0.16)',
+  },
+  hoverBadge: {
+    position: 'absolute', top: 8, alignSelf: 'center',
+    backgroundColor: 'rgba(9,9,16,0.82)',
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 20, borderWidth: 1, borderColor: '#253050',
+  },
+  hoverBadgeText: { fontSize: 11, color: '#e2c9a0', fontWeight: '700' },
+  hoverBadgeTextWarn: { color: '#ff6b6b' },
+
+  // ── Saved parts modal (persisted via AsyncStorage) ──
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  modalCard: {
+    width: '100%', maxWidth: 420, maxHeight: '75%',
+    backgroundColor: '#0d1220', borderRadius: 16,
+    borderWidth: 1.5, borderColor: '#253050',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#182030',
+  },
+  modalTitle: { fontSize: 15, fontWeight: '700', color: '#e2c9a0' },
+  modalCloseBtn: { padding: 4 },
+  modalCloseTxt: { color: '#7a9ab8', fontSize: 16, fontWeight: '600' },
+  modalSaveBtn: {
+    margin: 14, marginBottom: 8,
+    paddingVertical: 10, borderRadius: 9,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderWidth: 1.5, borderColor: '#3b82f6',
+    alignItems: 'center',
+  },
+  modalSaveTxt: { color: '#3b82f6', fontSize: 12, fontWeight: '700' },
+  modalList: { paddingHorizontal: 14 },
+  modalListContent: { paddingBottom: 14, gap: 8 },
+  partsEmptyTxt: { color: '#4a6080', fontSize: 11, fontStyle: 'italic', textAlign: 'center', paddingVertical: 20 },
+  partRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 10, backgroundColor: '#141c2a',
+    borderWidth: 1, borderColor: '#253050',
+  },
+  partRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  partChipText: { color: '#e2c9a0', fontSize: 13, fontWeight: '700' },
+  partChipSub: { color: '#4a6080', fontSize: 10, fontWeight: '600', marginTop: 1 },
+  partDeleteBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  partDeleteTxt: { color: '#4a6080', fontSize: 16, fontWeight: '700' },
+
   body: { flex: 1, overflow: 'hidden' },
 
-  // ── Magazine Toggle Button ──
   magazineToggle: {
     position: 'absolute',
     bottom: 10,
@@ -1273,7 +2236,6 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '180deg' }],
   },
 
-  // ── Magazine Toolbar ──
   toolBarMagazine: {
     position: 'absolute',
     bottom: 70,
@@ -1486,7 +2448,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#182030',
   },
 
-  // ── 3D Material Bar ──
   matBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0, height: 48,
     backgroundColor: 'rgba(9,9,16,0.88)',
@@ -1503,7 +2464,6 @@ const styles = StyleSheet.create({
   swatch: { width: 11, height: 11, borderRadius: 6 },
   matTxt: { fontSize: 11, fontWeight: '600', color: '#4a6080' },
 
-  // ── 2D Hint ──
   hintWrap: {
     position: 'absolute', bottom: 10,
     left: 0, right: 0, alignItems: 'center',
@@ -1515,7 +2475,6 @@ const styles = StyleSheet.create({
     borderRadius: 20, overflow: 'hidden',
   },
 
-  // ── Tool Count Badge ──
   toolCountBadge: {
     backgroundColor: '#1a2538',
     paddingHorizontal: 8,

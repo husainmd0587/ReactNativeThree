@@ -1,5 +1,5 @@
 // textures.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useLoader } from '@react-three/fiber/native';
 import * as THREE from 'three';
 
