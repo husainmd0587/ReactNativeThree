@@ -530,7 +530,7 @@ const GearBox= memo(function GearBox({
 // =========================================================
 // Motor + Pulley System
 // =========================================================
-function MoterAndPulley({ rpmRef }) {
+function MoterAndPulley({ rpmRef, onLoad }) {
   const texture = useTextureLoader({
     type: 'wall',
     flipY: false,
@@ -562,6 +562,8 @@ const AllPos={
           scale: [0.5, 0.5, 0.5],
           rotation: degToRad([0, -75, 0]),
         }}
+        autoFit={false}
+        onLoad={onLoad}
       />
   
 
@@ -622,7 +624,7 @@ const AllPos={
 // Frozen Motor Preview
 // =========================================================
 const MotorPreview = React.memo(
-  function MotorPreview({ rpmRef }) {
+  function MotorPreview({ rpmRef, onLoad }) {
     return (
       <ImageBackground
         source={{
@@ -664,7 +666,7 @@ const MotorPreview = React.memo(
           />
 
           {/* Motor + rotating pulleys */}
-          <MoterAndPulley rpmRef={rpmRef} />
+          <MoterAndPulley rpmRef={rpmRef} onLoad={onLoad} />
 
         </Canvas>
 
@@ -783,7 +785,7 @@ const ChipLayer = memo(function ChipLayer({ chipSnapshot }) {
 });
 
 
-function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick }) {
+function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick, spinEnabled }) {
   const textureDef = useMemo(
     () => Textures.find(t => t.name === SPIN_TEXTURE_CONFIG.MATERIAL) ?? null,
     []
@@ -903,6 +905,11 @@ const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, stren
 }, [startChipLoop]);
 
   useEffect(() => {
+    // Stay static until the 3D motor/pulley assembly (MotorPreview)
+    // has actually loaded and is on screen -- otherwise the stock
+    // starts "spinning" before there's any visible drive mechanism
+    // turning it, which reads as broken rather than intentional.
+    if (!spinEnabled) return;
     const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM);
     const sweep = 100000;
     const durationMs = (sweep / rate) * 1000;
@@ -911,7 +918,7 @@ const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, stren
       -1,
       false
     );
-  }, [rpm]);
+  }, [rpm, spinEnabled]);
 
   const cylinderUniforms = useDerivedValue(() => ({
     axisY: AXIS_Y,
@@ -1702,6 +1709,24 @@ export default function FreehandTurning() {
 
   const orbitTarget = useMemo(() => new THREE.Vector3(0, 0, 0), []);
 
+  // ── Motor/pulley load gating ──
+  // The 2D stock's spin texture shouldn't start until the 3D motor +
+  // pulley assembly (MotorPreview, the frozen background behind the
+  // 2D canvas) has actually loaded and is visible -- otherwise the
+  // stock appears to spin with no visible drive mechanism behind it.
+  // `Scene` (utils/components/glbPreview) is passed an `onLoad` here
+  // on the assumption it supports one, the same way most GLB-loader
+  // wrappers do -- unverified against that file's actual implementation.
+  // The timeout is a safety net either way: if `onLoad` never fires
+  // (unsupported prop, slow network, etc.) the stock still unblocks on
+  // its own after a few seconds instead of staying frozen forever.
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const handleModelsLoaded = useCallback(() => setModelsLoaded(true), []);
+  useEffect(() => {
+    const t = setTimeout(() => setModelsLoaded(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
   // ── Spindle speed ──
   const [rpm, setRpm] = useState(BASE_RPM);
   const adjustRpm = useCallback((delta) => {
@@ -2033,7 +2058,7 @@ export default function FreehandTurning() {
           {is3D ? (
             <View style={{ flex: 1 }}>
               
-                <CanvaPovider camPosition={[0, 0, 7]}>
+                <CanvaPovider camPosition={[0, 0, 2]}>
                   <OrbitControls enablePan={false} enableZoom target={orbitTarget} />
                   <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
                 </CanvaPovider>
@@ -2068,8 +2093,9 @@ export default function FreehandTurning() {
                 onWear={handleWear}
                 onCatch={handleCatch}
                 onChatterTick={handleChatterTick}
+                spinEnabled={modelsLoaded}
               />
-              <MotorPreview rpmRef={rpmRef} />
+              <MotorPreview rpmRef={rpmRef} onLoad={handleModelsLoaded} />
               <View style={styles.hintWrap} pointerEvents="none">
                 <Text style={styles.hintTxt}>Draw toward center ↑↓ to carve · both sides cut</Text>
               </View>

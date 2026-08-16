@@ -8,6 +8,6 @@ git add .
 git commit -m "Initial commit"
 # git push -f origin master  ///fresh upload new
 # git remote add origin git@github.com:Husain644/ReactNativeThree.git
-# git push -u origin master
+git push -u origin master
 
-git push -u neworigin master
+# git push -u neworigin master

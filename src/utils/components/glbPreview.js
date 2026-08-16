@@ -1,3 +1,5 @@
+// SceneModel.js - Clean Version (No Backward Compatibility)
+
 import React, {
   useMemo,
   useRef,
@@ -13,15 +15,14 @@ import { useFrame } from '@react-three/fiber/native';
 import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
-import CanvaProvider,{AutoFitCamera} from '../ThreeJs_Utils/provider';
-// import CanvaProvider from '../../mechanical_engineering/testing/test.js'
-import * as THREE from 'three'
+import CanvaProvider, { AutoFitCamera } from '../ThreeJs_Utils/provider';
+import * as THREE from 'three';
 import { useMaterialConfigs } from '../materials/materialConfigs.js';
 import SoundPlayer from '../sound/soundPlayer';
 
 const EMPTY_OBJECT = Object.freeze({});
 const EMPTY_ARRAY = Object.freeze([]);
-// helper — put above SceneModel, or inline as a useCallback
+
 function applyJointRotation(joint, rotation) {
   if (!joint || !rotation) return;
   if (rotation.x !== undefined && rotation.x !== null) {
@@ -34,8 +35,6 @@ function applyJointRotation(joint, rotation) {
     joint.rotation.z = THREE.MathUtils.degToRad(rotation.z);
   }
 }
-
-
 
 const SceneModel = forwardRef(function SceneModel(
   {
@@ -53,9 +52,11 @@ const SceneModel = forwardRef(function SceneModel(
     onMeshPress,
     onLoad,
     onError,
+    autoFit=true,
     onClipFinished,
     onSoundLoaded,
     onSoundError,
+    controller = null,
     ...props
   },
   ref
@@ -74,115 +75,78 @@ const SceneModel = forwardRef(function SceneModel(
   const componentMountedRef = useRef(true);
   const animationStartedRef = useRef(false);
   const soundLoadedRef = useRef(false);
-  const modelLoadedRef = useRef(false); // Track when model is fully loaded
+  const modelLoadedRef = useRef(false);
+  const controllerInitializedRef = useRef(false);
 
   const materialConfigs = useMaterialConfigs();
-
-useImperativeHandle(ref, () => ({
-
-  setJointAngle(jointName, rotation) { const joint = jointRefs.current[jointName];
-    if (!joint) {
-      console.warn(`[ROBOT] Joint "${jointName}" not found`);
-      return;
-    }
-    applyJointRotation(joint, rotation);
-  },
-
-  setJointAngles(joints) {
-    Object.entries(joints).forEach(([jointName, rotation]) => {
-      applyJointRotation(jointRefs.current[jointName], rotation);
-    });
-  },
-  // NEW — apply (or re-apply) config defaults on demand
-  applyDefaultPose() { Object.entries(jointConfig || {}).forEach(([jointName, cfg]) => {
-    applyJointRotation(jointRefs.current[jointName], cfg?.default);
-    });
-  },
+  console.log('Auto Fit',autoFit)
   // ==========================================
-  // GRIPPER
+  // GENERIC API SYSTEM
   // ==========================================
-
-  setGripperState(state) {
-
-    const gripperConfig =  jointConfig?.GRIPPER;
-   console.log('gripper congig',gripperConfig)
-    if (!gripperConfig) {
-      console.warn(
-        '[ROBOT] GRIPPER configuration not found'
-      );
-      return;
-    }
-    const target = state === 'closed' ? gripperConfig.closed : gripperConfig.open;
-    Object.values(target).forEach(
-      (fingerConfig) => { const object = jointRefs.current[ fingerConfig.object ];
-        if (!object) { console.warn(`[ROBOT] Gripper object "${fingerConfig.object}" not found` );
-          return;
-        }
-        const axis = fingerConfig.axis || 'x';
-        object.rotation[axis] =
-          THREE.MathUtils.degToRad(
-            fingerConfig.value ?? 0
-          );
-
+  const apiRef = useRef({
+    // Core properties
+    getScene: () => scene,
+    getGroup: () => group.current,
+    getJoint: (name) => jointRefs.current[name],
+    getJoints: () => jointRefs.current,
+    getMesh: (name) => meshRefs.current[name],
+    getMeshes: () => meshRefs.current,
+    getMixer: () => mixerRef.current,
+    isReady: () => ready,
+    getConfig: () => ({ jointConfig, modelConfig }),
+    
+    // Utility methods
+    applyJointRotation: (joint, rotation) => {
+      applyJointRotation(joint, rotation);
+    },
+    
+    // Method registry
+    _registry: {},
+    register: (name, method) => {
+      apiRef.current._registry[name] = method;
+    },
+    unregister: (name) => {
+      delete apiRef.current._registry[name];
+    },
+    call: (methodName, ...args) => {
+      if (apiRef.current._registry[methodName]) {
+        return apiRef.current._registry[methodName](...args);
       }
-    );
-
-  },
-
-
-  // ==========================================
-  // CONVENIENCE METHODS
-  // ==========================================
-
-  gripOpen() {
-    this.setGripperState('open');
-  },
-
-
-  gripClosed() {
-    this.setGripperState('closed');
-  },
-
-  getJoint(jointName) {
-
-    return (
-      jointRefs.current[jointName] ||
-      null
-    );
-
-  },
-
-
-  getJoints() {
-
-    return jointRefs.current;
-
-  },
-
+      console.warn(`[SceneModel] Method "${methodName}" not registered`);
+      return null;
+    }
+  });
 
   // ==========================================
-  // RESET
+  // INITIALIZE CONTROLLER
   // ==========================================
+  useEffect(() => {
+    if (!controller || controllerInitializedRef.current) return;
+    
+    controllerInitializedRef.current = true;
+    
+    if (typeof controller === 'function') {
+      controller(apiRef.current);
+    } else if (controller && typeof controller.init === 'function') {
+      controller.init(apiRef.current);
+    }
+    
+    return () => {
+      if (controller && typeof controller.destroy === 'function') {
+        controller.destroy();
+      }
+      controllerInitializedRef.current = false;
+    };
+  }, [controller]);
 
-  resetJoints() {
+  // ==========================================
+  // EXPOSE API TO PARENT
+  // ==========================================
+  useImperativeHandle(ref, () => apiRef.current, []);
 
-    Object.values(
-      jointRefs.current
-    ).forEach((joint) => {
-
-      joint.rotation.set(
-        0,
-        0,
-        0
-      );
-
-    });
-
-  },
-
-}), [jointConfig, modelConfig]);
-
-
+  // ==========================================
+  // MATERIAL CONFIG
+  // ==========================================
   const { mainMaterial, meshConfigs } = useMemo(() => {
     if (typeof materialConfig === 'string') {
       return { mainMaterial: materialConfig, meshConfigs: {} };
@@ -194,20 +158,12 @@ useImperativeHandle(ref, () => ({
     return { mainMaterial: null, meshConfigs: materialConfig || {} };
   }, [materialConfig]);
 
-const animationClips =
-  ready && scene && playClipAnimations
-    ? clips
-    : EMPTY_ARRAY;
-
-const animationRoot =
-  ready && scene
-    ? group
-    : null;
-
-const { actions, names, mixer } = useAnimations(
-  animationClips,
-  animationRoot
-);
+  // ==========================================
+  // ANIMATIONS
+  // ==========================================
+  const animationClips = ready && scene && playClipAnimations ? clips : EMPTY_ARRAY;
+  const animationRoot = ready && scene ? group : null;
+  const { actions, names, mixer } = useAnimations(animationClips, animationRoot);
 
   useEffect(() => {
     if (mixer) {
@@ -215,6 +171,9 @@ const { actions, names, mixer } = useAnimations(
     }
   }, [mixer]);
 
+  // ==========================================
+  // SOUND MANAGEMENT
+  // ==========================================
   useEffect(() => {
     componentMountedRef.current = true;
     soundUrlRef.current = soundUrl;
@@ -284,11 +243,10 @@ const { actions, names, mixer } = useAnimations(
         soundLoadedRef.current = true;
         if (!timedOut) onSoundLoadedRef.current?.();
 
-        // Check if sound should play based on animation state or model load state
         const shouldPlaySound = 
           soundPlayWithoutAnimation 
-            ? modelLoadedRef.current // Play when model is loaded
-            : animationStartedRef.current; // Play when animation starts
+            ? modelLoadedRef.current
+            : animationStartedRef.current;
 
         if (shouldPlaySound && soundUrlRef.current === soundUrl) {
           startSound();
@@ -328,31 +286,26 @@ const { actions, names, mixer } = useAnimations(
     }
   }, [soundUrl, soundLoop]);
 
+  // ==========================================
+  // MODEL LOAD HANDLER
+  // ==========================================
   useEffect(() => {
     if (error) {
       onErrorRef.current?.(error);
     } else if (ready && scene) {
       onLoadRef.current?.();
       
-      // Model is ready
       modelLoadedRef.current = true;
       
-      // If soundPlayWithoutAnimation is true, play sound immediately when model loads
       if (soundPlayWithoutAnimation && soundLoadedRef.current && soundUrl) {
         startSound();
       }
     }
   }, [ready, error, scene, soundPlayWithoutAnimation, soundUrl, startSound]);
 
-
-useEffect(() => {
-  if (!processedScene || !jointConfig) return;
-  Object.entries(jointConfig).forEach(([jointName, cfg]) => {
-    applyJointRotation(jointRefs.current[jointName], cfg?.default);
-  });
-}, [processedScene, jointConfig]);
-
-  // Process scene with material configs
+  // ==========================================
+  // PROCESS SCENE
+  // ==========================================
   const processedScene = useMemo(() => {
     if (!scene || error || !ready) return null;
 
@@ -362,20 +315,42 @@ useEffect(() => {
     try {
       meshRefs.current = {};
       const meshes = [];
-        jointRefs.current = {};
-
-        scene.traverse((child) => {
-          console.log(child.type, child.name);
-          if (child.isMesh) {
-            meshes.push(child);
-          }
-          // Register robot joints
-          if (child.isObject3D && /^J\d+$/.test(child.name)) {
-            jointRefs.current[child.name] = child;
-            console.log(child.name, 'rest rotation (rad):', child.rotation.toArray());
-          }
-          
+      jointRefs.current = {};
+     
+            // Get all gripper object names from config
+      const gripperObjectNames = new Set();
+      if (jointConfig?.GRIPPER) {
+        const { open, closed } = jointConfig.GRIPPER;
+        Object.values(open).forEach(finger => {
+          if (finger.object) gripperObjectNames.add(finger.object);
         });
+        Object.values(closed).forEach(finger => {
+          if (finger.object) gripperObjectNames.add(finger.object);
+        });
+      }
+
+      scene.traverse((child) => {
+        if (child.isMesh) {
+          meshes.push(child);
+        }
+            // Register robot joints (J1, J2, etc.)
+        if (child.isObject3D && /^J\d+$/.test(child.name)) {
+          jointRefs.current[child.name] = child;
+          console.log('[SceneModel] Found joint:', child.name);
+        }
+        
+        // Register gripper objects
+        if (child.isObject3D && gripperObjectNames.has(child.name)) {
+          jointRefs.current[child.name] = child;
+          console.log('[SceneModel] Found gripper part:', child.name);
+        }
+      });
+    // Log all found joints and gripper parts
+      console.log('[SceneModel] All registered objects:', Object.keys(jointRefs.current));
+      // Notify controller when joints are found
+      if (controller && typeof controller.onJointsReady === 'function') {
+        controller.onJointsReady(jointRefs.current);
+      }
 
       meshes.forEach((mesh) => {
         const key = mesh.name || mesh.uuid;
@@ -440,9 +415,31 @@ useEffect(() => {
       onErrorRef.current?.(err);
       return null;
     }
-  }, [scene, meshConfigs, error, ready, mainMaterial, materialConfigs]);
+  }, [scene, meshConfigs, error, ready, mainMaterial, materialConfigs, controller]);
 
-  // Clip animation playback
+  // ==========================================
+  // APPLY DEFAULT JOINT CONFIG
+  // ==========================================
+  useEffect(() => {
+    if (!processedScene || !jointConfig) return;
+    
+    // Let controller handle default pose if it exists
+    if (controller && typeof controller.applyDefaultPose === 'function') {
+      controller.applyDefaultPose();
+    } else {
+      // Fallback: apply default pose directly
+      Object.entries(jointConfig).forEach(([jointName, cfg]) => {
+        const joint = jointRefs.current[jointName];
+        if (joint && cfg?.default) {
+          applyJointRotation(joint, cfg.default);
+        }
+      });
+    }
+  }, [processedScene, jointConfig, controller]);
+
+  // ==========================================
+  // CLIP ANIMATION PLAYBACK
+  // ==========================================
   useEffect(() => {
     if (animationStartedRef.current || !playClipAnimations || !actions || Object.keys(actions).length === 0) {
       return;
@@ -475,7 +472,6 @@ useEffect(() => {
 
     animationStartedRef.current = true;
 
-    // Only play sound with animation if soundPlayWithoutAnimation is false
     if (!soundPlayWithoutAnimation && soundLoadedRef.current && soundUrl) {
       startSound();
     }
@@ -505,7 +501,9 @@ useEffect(() => {
     };
   }, [actions, playClipAnimations, clipNames, animationTimeScale, soundUrl, startSound, soundPlayWithoutAnimation]);
 
-  // Manual per-mesh rotation animations
+  // ==========================================
+  // MANUAL PER-MESH ROTATION ANIMATIONS
+  // ==========================================
   useFrame((state, delta) => {
     const safeDelta = Math.min(delta, 0.03);
 
@@ -522,33 +520,42 @@ useEffect(() => {
     }
   });
 
+  // ==========================================
+  // RENDER
+  // ==========================================
   if (!processedScene) return null;
 
   const children = processedScene.children || [];
   if (children.length === 0) return null;
 
-return (
-  <>
-    <AutoFitCamera
-      groupRef={group}
-      trigger={processedScene}
-      enabled={modelConfig?.autoFit !== false}
-    />
-    <group ref={group} {...props} position={modelConfig?.position || [0,0,0]} 
-    rotation={modelConfig?.rotation || [0,0,0]}  scale={modelConfig?.scale || [1,1,1]}>  
-      {children.map((child, index) => (
-        <primitive
-          key={`${child.name || child.uuid || index}`}
-          object={child}
-          onClick={(e) => {
-            e.stopPropagation();
-            onMeshPress?.(e.object?.name || e.object?.uuid, e);
-          }}
-        />
-      ))}
-    </group>
-  </>
-);})
+  return (
+    <>
+      <AutoFitCamera
+        groupRef={group}
+        trigger={processedScene}
+        enabled={autoFit && modelConfig?.autoFit !== false}
+      />
+      <group 
+        ref={group} 
+        {...props} 
+        position={modelConfig?.position || [0, 0, 0]} 
+        rotation={modelConfig?.rotation || [0, 0, 0]} 
+        scale={modelConfig?.scale || [1, 1, 1]}
+      >
+        {children.map((child, index) => (
+          <primitive
+            key={`${child.name || child.uuid || index}`}
+            object={child}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMeshPress?.(e.object?.name || e.object?.uuid, e);
+            }}
+          />
+        ))}
+      </group>
+    </>
+  );
+});
 
 export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
   const prevConfig = JSON.stringify(prevProps.materialConfig);
@@ -557,6 +564,7 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
   return (
     prevProps.modelUrl === nextProps.modelUrl &&
     prevProps.modelConfig === nextProps.modelConfig &&
+    prevProps.autoFit === nextProps.autoFit &&
     prevConfig === nextConfig &&
     prevProps.animations === nextProps.animations &&
     prevProps.playClipAnimations === nextProps.playClipAnimations &&
@@ -564,42 +572,46 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
     prevProps.soundUrl === nextProps.soundUrl &&
     prevProps.soundPlayWithoutAnimation === nextProps.soundPlayWithoutAnimation &&
     prevProps.soundLoop === nextProps.soundLoop &&
-    JSON.stringify(prevProps.clipNames) === JSON.stringify(nextProps.clipNames)
+    JSON.stringify(prevProps.clipNames) === JSON.stringify(nextProps.clipNames) &&
+    prevProps.controller === nextProps.controller
   );
 });
 
+// ==========================================
 // Model3DPreview Component
+// ==========================================
 
 const Model3DPreview = forwardRef(function Model3DPreview(
   {
-  modelUrl,
-  materialConfig = EMPTY_OBJECT,
-  modelConfig = EMPTY_OBJECT,
-  camPosition = [2, 2, 5],
-  animations = EMPTY_ARRAY,
-  playClipAnimations = true,
-  clipNames,
-  animationTimeScale = 1,
-  soundUrl = null,
-  soundLoop = true,
-  style,
-  onLoad,
-  onError,
-  onClipFinished,
-  onSoundLoaded,
-  onSoundError,
-  onMeshPress,             
-  showTouchLabel = true,
-  touchLabelDuration = 1500,
-  loadingTimeout = 60000,
-  isFullscreen = false,
-  ...props
+    modelUrl,
+    materialConfig = EMPTY_OBJECT,
+    modelConfig = EMPTY_OBJECT,
+    camPosition = [2, 2, 5],
+    animations = EMPTY_ARRAY,
+    playClipAnimations = true,
+    clipNames,
+    animationTimeScale = 1,
+    soundUrl = null,
+    soundLoop = true,
+    style,
+    onLoad,
+    onError,
+    onClipFinished,
+    onSoundLoaded,
+    onSoundError,
+    onMeshPress,
+    showTouchLabel = true,
+    touchLabelDuration = 1500,
+    loadingTimeout = 60000,
+    isFullscreen = false,
+    controller,
+    ...props
   },
   ref
 ) {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
-  const [touchedPart, setTouchedPart] = useState(null); // display string only — never store the raw object here
+  const [touchedPart, setTouchedPart] = useState(null);
   const timeoutRef = useRef(null);
   const isMountedRef = useRef(true);
   const loadCalledRef = useRef(false);
@@ -609,6 +621,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   const onMeshPressRef = useRef(onMeshPress);
+  
   useEffect(() => {
     onLoadRef.current = onLoad;
     onErrorRef.current = onError;
@@ -619,10 +632,8 @@ const Model3DPreview = forwardRef(function Model3DPreview(
     return `preview_${modelUrl}_${isFullscreen ? 'fs' : 'sm'}`;
   }, [modelUrl, isFullscreen]);
 
-
   const handlePartPress = useCallback((part, hit) => {
     const label = part?.customName ?? null;
-    console.log('Mesh touched:', label ?? '(unmapped part)');
 
     if (showTouchLabel && label) {
       setTouchedPart(label);
@@ -642,8 +653,6 @@ const Model3DPreview = forwardRef(function Model3DPreview(
       }, touchLabelDuration);
     }
 
-    // Forward the full part object (plus the raw intersection) to the
-    // consumer — they may want .details, .mesh, etc, not just the label.
     onMeshPressRef.current?.(part, hit);
   }, [showTouchLabel, touchLabelDuration, touchFade]);
 
@@ -718,6 +727,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
     onClipFinished,
     onSoundLoaded,
     onSoundError,
+    controller,
     ...props
   }), [modelUrl, materialConfig, animations, playClipAnimations, clipNames, animationTimeScale,
      soundUrl, soundLoop, handleLoad, handleError, onClipFinished, onSoundLoaded, onSoundError, props]);
@@ -729,19 +739,20 @@ const Model3DPreview = forwardRef(function Model3DPreview(
       </View>
     );
   }
+  
   return (
     <View style={[styles.container, style]}>
       <CanvaProvider
         camPosition={modelConfig?.cameraAngle || [2, 2, 5]}
         instanceId={instanceId}
         onPartPress={handlePartPress}
-        parts ={modelConfig?.parts || []}
+        parts={modelConfig?.parts || []}
       >
-              <Scene
-              ref={ref}
-              key={`scene_${instanceId}`}
-              {...sceneProps}
-              />
+        <Scene
+          ref={ref}
+          key={`scene_${instanceId}`}
+          {...sceneProps}
+        />
       </CanvaProvider>
 
       {status === 'loading' && (
@@ -768,8 +779,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
       )}
     </View>
   );
-})
-
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -817,7 +827,7 @@ const styles = StyleSheet.create({
   },
   touchLabelContainer: {
     position: 'absolute',
-    bottom:30,
+    bottom: 30,
     alignSelf: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
     paddingHorizontal: 14,
