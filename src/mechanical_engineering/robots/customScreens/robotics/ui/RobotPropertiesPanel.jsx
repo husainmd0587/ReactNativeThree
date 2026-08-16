@@ -10,6 +10,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRoboticsEngine } from '../providers/RoboticsEngineProvider';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT } from '../core/theme';
 
 export function RobotPropertiesPanel() {
   const { state } = useRoboticsEngine();
@@ -22,12 +23,10 @@ export function RobotPropertiesPanel() {
       <Text style={styles.title}>Properties</Text>
 
       {selectedJoint ? (
-        <View>
-          <Text style={styles.row}>Name: {selectedJoint.name}</Text>
-          <Text style={styles.row}>Type: {selectedJoint.type}</Text>
-          <Text style={styles.row}>
-            Limits: {selectedJoint.limits.min}° to {selectedJoint.limits.max}°
-          </Text>
+        <View style={styles.card}>
+          <PropertyRow label="Name" value={selectedJoint.name} />
+          <PropertyRow label="Type" value={selectedJoint.type} />
+          <PropertyRow label="Limits" value={`${selectedJoint.limits.min}° to ${selectedJoint.limits.max}°`} />
         </View>
       ) : (
         <Text style={styles.placeholder}>No joint selected</Text>
@@ -36,21 +35,50 @@ export function RobotPropertiesPanel() {
   );
 }
 
+function PropertyRow({ label, value }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
-    padding: 12,
+    padding: SPACING.lg,
   },
   title: {
-    color: '#ffffff',
-    fontWeight: '700',
-    marginBottom: 8,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.lg,
+    marginBottom: SPACING.md,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
   },
   row: {
-    color: '#c7cdd6',
-    marginBottom: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.xs + 2,
+  },
+  rowLabel: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+  },
+  rowValue: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: 'monospace',
   },
   placeholder: {
-    color: '#6b7280',
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.md,
     fontStyle: 'italic',
   },
 });

@@ -1,64 +1,132 @@
-// hooks/useGLTFonline.js
+// hooks/useGltfOnline.js
+
 import { useEffect, useState, useRef } from 'react';
 import { LoadingManager } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from './meshopt_decoder_reference.js';
 
-// ─── Optional map for exporters that emit generic names (Cube001, Mesh_45).
-// Fill this in per-model if your GLBs need it; entries stamp userData.part
-// onto the matching node once, right after load, so every cached clone
-// inherits the same labels. Safe to leave empty — untouched nodes just use
-// their own node.name as before.
+/**
+ * ============================================================
+ * CONFIG
+ * ============================================================
+ */
+
+// Keep this VERY small for React Native.
+// A large cache can easily keep hundreds of MB alive.
+const CACHE_SIZE = 1;
+
+// Optional model-name mapping.
 const PART_NAME_MAP = {
   // Cube001: 'Head',
   // Cube002: 'LeftArm',
   // Mesh_45: 'RightHand',
 };
 
+/**
+ * ============================================================
+ * PART NAME MAP
+ * ============================================================
+ */
+
 function applyPartNameMap(scene) {
-  if (!PART_NAME_MAP || Object.keys(PART_NAME_MAP).length === 0) return;
+  if (!PART_NAME_MAP || Object.keys(PART_NAME_MAP).length === 0) {
+    return;
+  }
 
   scene.traverse((child) => {
     const label = PART_NAME_MAP[child.name];
     if (label) {
+      child.userData = child.userData || {};
       child.userData.part = label;
     }
   });
 }
 
+/**
+ * ============================================================
+ * DISPOSE THREE.JS SCENE
+ * ============================================================
+ * Only ever called on the MASTER scene stored in the cache (on
+ * eviction/clear), never on a per-instance clone — clones share
+ * geometry/materials with the master, so disposing a clone's
+ * resources would break every other clone.
+ */
+
+function disposeScene(scene) {
+  if (!scene) return;
+
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+
+    if (child.geometry) {
+      child.geometry.dispose();
+    }
+
+    if (!child.material) return;
+
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+    materials.forEach((material) => {
+      if (!material) return;
+
+      if (material.map) material.map.dispose();
+      if (material.roughnessMap) material.roughnessMap.dispose();
+      if (material.metalnessMap) material.metalnessMap.dispose();
+      if (material.normalMap) material.normalMap.dispose();
+      if (material.alphaMap) material.alphaMap.dispose();
+      if (material.emissiveMap) material.emissiveMap.dispose();
+      material.dispose();
+    });
+  });
+}
+
+/**
+ * ============================================================
+ * VERY SMALL LRU CACHE
+ * ============================================================
+ */
+
 class LRUCache {
-  constructor(maxSize = 5) {
+  constructor(maxSize = 1) {
     this.maxSize = maxSize;
     this.cache = new Map();
   }
 
   get(key) {
     const item = this.cache.get(key);
-    if (item) {
-      this.cache.delete(key);
-      this.cache.set(key, item);
-    }
+    if (!item) return undefined;
+
+    // Move to newest position.
+    this.cache.delete(key);
+    this.cache.set(key, item);
+
     return item;
   }
 
   set(key, value) {
     if (this.cache.has(key)) {
       this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      const [oldestKey] = this.cache.keys();
+    }
+
+    while (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey === undefined) break;
+
       const oldest = this.cache.get(oldestKey);
-      if (oldest && oldest.scene) {
+      if (oldest?.scene) {
         disposeScene(oldest.scene);
       }
+
       this.cache.delete(oldestKey);
     }
+
     this.cache.set(key, value);
   }
 
   clear() {
-    for (const [key, value] of this.cache.entries()) {
-      if (value && value.scene) {
+    for (const value of this.cache.values()) {
+      if (value?.scene) {
         disposeScene(value.scene);
       }
     }
@@ -66,57 +134,53 @@ class LRUCache {
   }
 }
 
-// Dispose function for Three.js objects.
-// Only ever called on the MASTER scene stored in the cache (on eviction/clear),
-// never on a per-instance clone — clones share geometry/materials with the
-// master, so disposing a clone's resources would break every other clone.
-function disposeScene(scene) {
-  if (!scene) return;
+/** Only keep ONE model in memory. */
+const cache = new LRUCache(CACHE_SIZE);
 
-  scene.traverse((child) => {
-    if (child.isMesh) {
-      if (child.geometry) {
-        child.geometry.dispose();
-      }
-      if (child.material) {
-        const materials = Array.isArray(child.material)
-          ? child.material
-          : [child.material];
-        materials.forEach(material => {
-          if (material.map) material.map.dispose();
-          if (material.roughnessMap) material.roughnessMap.dispose();
-          if (material.metalnessMap) material.metalnessMap.dispose();
-          if (material.normalMap) material.normalMap.dispose();
-          if (material.alphaMap) material.alphaMap.dispose();
-          if (material.emissiveMap) material.emissiveMap.dispose();
-          material.dispose();
-        });
-      }
-    }
-  });
-}
+/**
+ * ============================================================
+ * CLONE RESULT
+ * ============================================================
+ *
+ * IMPORTANT: use SkeletonUtils.clone here, NOT scene.clone(true).
+ *
+ * Plain Object3D.clone(true) deep-clones the node hierarchy
+ * (including Bone nodes) but does NOT rebind each SkinnedMesh's
+ * `.skeleton` / bone references to point at the newly cloned bones —
+ * they keep pointing at the ORIGINAL scene's bones. Every clone then
+ * silently shares (and fights over) the same skeleton, so animations
+ * either don't move the clone at all or move every clone in lockstep
+ * with whichever one last updated the shared bones.
+ *
+ * SkeletonUtils.clone() exists specifically to walk the hierarchy,
+ * clone bones, and rebuild each SkinnedMesh's skeleton/bindMatrix
+ * against the cloned bones. Required for any rigged/animated model
+ * (robot joints included, if they're driven by an actual bone
+ * hierarchy rather than plain Object3D/Group nodes).
+ */
 
-// Clone a master result into a fresh, independent instance for one consumer.
-// Node/material name-lookup maps are rebuilt against the CLONE so any
-// downstream code indexing nodes/materials by name still gets objects that
-// actually belong to that instance's own scene graph.
-// userData (including userData.part set by applyPartNameMap) is preserved
-// automatically by cloneSkeleton/Object3D.clone, so labels survive cloning.
 function cloneResult(master) {
-  if (!master || !master.scene) return master;
+  if (!master || !master.scene) {
+    return master;
+  }
 
   const clonedScene = cloneSkeleton(master.scene);
 
   const nodes = {};
   const materials = {};
+
   clonedScene.traverse((child) => {
     if (child.name) {
       nodes[child.name] = child;
     }
+
     if (child.isMesh && child.material) {
-      const mats = Array.isArray(child.material) ? child.material : [child.material];
-      mats.forEach(mat => {
-        if (mat.name) materials[mat.name] = mat;
+      const materialsArray = Array.isArray(child.material) ? child.material : [child.material];
+
+      materialsArray.forEach((material) => {
+        if (material?.name) {
+          materials[material.name] = material;
+        }
       });
     }
   });
@@ -129,41 +193,80 @@ function cloneResult(master) {
   };
 }
 
-const cache = new LRUCache(5);
+/**
+ * ============================================================
+ * FETCH GLB AS ARRAYBUFFER
+ * ============================================================
+ * RN's fetch/Blob bridge handles the binary transfer natively for
+ * both remote and local file:// URLs — no manual base64 chunking.
+ */
+
+async function fetchArrayBuffer(url) {
+  let response;
+
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    throw new Error(`Failed to fetch GLB: ${error?.message || error}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GLB. HTTP ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    throw new Error('Fetched GLB is empty');
+  }
+
+  return arrayBuffer;
+}
+
+/**
+ * ============================================================
+ * GLTF LOADER
+ * ============================================================
+ */
+
+let loaderInstance = null;
 let decoderInitialized = false;
-const loadingPromises = {};
 
-
-
-// Pre-configure the GLTFLoader with decoder
-const getLoader = () => {
+function getLoader() {
   const manager = new LoadingManager();
-  manager.onStart = () => {};
-  manager.onLoad = () => {};
-  manager.onProgress = () => {};
-  manager.onError = () => {};
-
   const loader = new GLTFLoader(manager);
 
-  if (MeshoptDecoder) {
-    try {
+  try {
+    if (MeshoptDecoder) {
       loader.setMeshoptDecoder(MeshoptDecoder);
-    } catch (e) {
-      // Silent fail
     }
+  } catch (error) {
+    // Silent fail for non-critical decoder setup.
   }
 
   return loader;
-};
+}
 
-let loaderInstance = null;
-
-const getLoaderInstance = () => {
+function getLoaderInstance() {
   if (!loaderInstance) {
     loaderInstance = getLoader();
   }
   return loaderInstance;
-};
+}
+
+/**
+ * ============================================================
+ * PROMISE DEDUPLICATION
+ * ============================================================
+ */
+
+const loadingPromises = {};
+
+/**
+ * ============================================================
+ * MAIN HOOK
+ * ============================================================
+ */
 
 export function useGLTF(url) {
   const [state, setState] = useState({
@@ -172,113 +275,132 @@ export function useGLTF(url) {
     animations: [],
     scene: null,
     ready: false,
-    error: null
+    error: null,
   });
 
-  const isMounted = useRef(true);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    isMounted.current = true;
+    mountedRef.current = true;
     return () => {
-      isMounted.current = false;
+      mountedRef.current = false;
     };
   }, []);
 
   useEffect(() => {
-    // Reset state when URL changes
+    let cancelled = false;
+
+    // Reset state when URL changes.
     setState({
       nodes: {},
       materials: {},
       animations: [],
       scene: null,
       ready: false,
-      error: null
+      error: null,
     });
 
     if (!url) {
-      setState(prev => ({
-        ...prev,
+      setState({
+        nodes: {},
+        materials: {},
+        animations: [],
+        scene: null,
         ready: false,
-        error: new Error('No URL provided')
-      }));
-      return;
+        error: new Error('No GLB URL provided'),
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    // Check cache — clone before handing to this consumer
+    // ---- CACHE ----
     const cached = cache.get(url);
     if (cached) {
-      setState(cloneResult(cached));
-      return;
+      if (!cancelled && mountedRef.current) {
+        setState(cloneResult(cached));
+      }
+      return () => {
+        cancelled = true;
+      };
     }
 
+    // ---- ALREADY LOADING ----
     if (loadingPromises[url]) {
-      loadingPromises[url].then((result) => {
-        if (isMounted.current) {
+      loadingPromises[url]
+        .then((result) => {
+          if (cancelled || !mountedRef.current) return;
           setState(cloneResult(result));
-        }
-      }).catch((error) => {
-        if (isMounted.current) {
+        })
+        .catch((error) => {
+          if (cancelled || !mountedRef.current) return;
           setState({
             nodes: {},
             materials: {},
             animations: [],
             scene: null,
             ready: false,
-            error: error
+            error,
           });
-        }
-      });
-      return;
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }
 
-    async function load() {
+    // ---- LOAD ----
+    const load = async () => {
+      let arrayBuffer = null;
+
       try {
-        if (!decoderInitialized) {
-          if (MeshoptDecoder.ready) {
-            await MeshoptDecoder.ready;
+        if (!decoderInitialized && MeshoptDecoder) {
+          try {
+            if (MeshoptDecoder.ready) {
+              await MeshoptDecoder.ready;
+            }
+            decoderInitialized = true;
+          } catch (error) {
+            // Silent fail for non-critical meshopt setup.
           }
-          decoderInitialized = true;
         }
 
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.status}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
+        // No download-to-disk step, no base64 stream reading, no
+        // manual byte decoder — RN's fetch/Blob bridge handles this
+        // natively for both remote and local file:// URLs.
+        arrayBuffer = await fetchArrayBuffer(url);
+
+        if (cancelled || !mountedRef.current) return null;
 
         const loader = getLoaderInstance();
 
         try {
           loader.setMeshoptDecoder(MeshoptDecoder);
-        } catch (e) {
-          // Silent fail
+        } catch (error) {
+          // Silent fail for non-critical meshopt setup.
         }
 
-  const gltf = await new Promise((resolve, reject) => {
+        const gltf = await new Promise((resolve, reject) => {
           loader.parse(
             arrayBuffer,
             '',
-            (result) => {
-              resolve(result);
-            },
-            (error) => {
-              reject(error);
-            }
+            (result) => resolve(result),
+            (error) => reject(error)
           );
         });
 
+        // Allow GC to reclaim the binary buffer once parsed.
+        arrayBuffer = null;
 
-
-        if (!isMounted.current) return;
+        if (cancelled || !mountedRef.current) return null;
 
         const scene = gltf.scene;
+        if (!scene) {
+          throw new Error('GLTF contains no scene');
+        }
 
-        // Stamp explicit part labels onto the MASTER scene once, before it's
-        // cached — every subsequent cloneResult() call inherits these via
-        // userData, so this only ever runs once per model, not per instance.
         applyPartNameMap(scene);
 
-        // Process the master scene (this becomes the cached "template")
         const nodes = {};
         const materials = {};
 
@@ -286,15 +408,11 @@ export function useGLTF(url) {
           if (child.name) {
             nodes[child.name] = child;
           }
-
           if (child.isMesh && child.material) {
-            const mats = Array.isArray(child.material)
-              ? child.material
-              : [child.material];
-
-            mats.forEach(mat => {
-              if (mat.name) {
-                materials[mat.name] = mat;
+            const materialsArray = Array.isArray(child.material) ? child.material : [child.material];
+            materialsArray.forEach((material) => {
+              if (material?.name) {
+                materials[material.name] = material;
               }
             });
           }
@@ -304,39 +422,70 @@ export function useGLTF(url) {
           nodes,
           materials,
           animations: gltf.animations || [],
-          scene: scene,
+          scene,
           ready: true,
-          error: null
+          error: null,
         };
 
+        // Only ONE model is cached.
         cache.set(url, result);
         delete loadingPromises[url];
 
-        if (isMounted.current) {
-          // Give THIS consumer its own clone, never the master directly
-          setState(cloneResult(result));
-        }
+        if (cancelled || !mountedRef.current) return null;
 
+        // Give consumer its own scene, with bones correctly rebound.
+        setState(cloneResult(result));
+
+        return result;
       } catch (error) {
-        console.error('GLTF Load Error:', error);
+        arrayBuffer = null;
         delete loadingPromises[url];
 
-        if (isMounted.current) {
+        if (!cancelled && mountedRef.current) {
           setState({
             nodes: {},
             materials: {},
             animations: [],
             scene: null,
             ready: false,
-            error: error
+            error,
           });
         }
+
+        throw error;
       }
-    }
+    };
 
-    loadingPromises[url] = load();
+    const promise = load();
+    loadingPromises[url] = promise;
 
+    // Prevent unhandled promise warnings — consumer gets the error via state.
+    promise.catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
 
   return state;
+}
+
+/**
+ * ============================================================
+ * OPTIONAL CACHE CONTROL
+ * ============================================================
+ */
+
+export function clearGLTFCache() {
+  cache.clear();
+}
+
+export function clearGLTF(url) {
+  if (!url) return;
+
+  const item = cache.cache.get(url);
+  if (item?.scene) {
+    disposeScene(item.scene);
+  }
+  cache.cache.delete(url);
 }

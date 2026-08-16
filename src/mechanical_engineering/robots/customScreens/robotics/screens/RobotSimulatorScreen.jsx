@@ -2,9 +2,11 @@
  * RobotSimulatorScreen.jsx
  *
  * Two control panels below the same canvas/scene: Manual (joint
- * sliders, from the earlier phase) and Program (write/run HOME/MOVEJ/
- * WAIT/GRIP code, from this phase). Switching tabs doesn't change how
- * the robot is rendered - both panels drive the same RobotEngine.
+ * control) and Program (write/run in Simple/Fanuc/ABB/KUKA syntax).
+ * Switching tabs doesn't change how the robot is rendered - both
+ * panels drive the same RobotEngine. SimulationControlsBar sits above
+ * the canvas and governs the whole simulation clock regardless of
+ * which tab is active.
  */
 
 import React, { useState } from 'react';
@@ -14,7 +16,9 @@ import { RoboticsScene } from '../scene/RoboticsScene';
 import { RoboticsToolbar } from '../ui/RoboticsToolbar';
 import { JointControlPanel } from '../ui/JointControlPanel';
 import { RobotProgramEditor } from '../ui/RobotProgramEditor';
+import { SimulationControlsBar } from '../ui/SimulationControlsBar';
 import { DEFAULT_CAM_POSITION, GRIP_STATES } from '../core/robotConstants';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
 import CanvaProvider from '../../../../../utils/ThreeJs_Utils/provider';
 
 const TABS = { MANUAL: 'manual', PROGRAM: 'program' };
@@ -59,6 +63,8 @@ function SimulatorContent() {
         onResetBox={() => engine.resetBox()}
       />
 
+      <SimulationControlsBar />
+
       <View style={styles.canvasArea}>
         <CanvaProvider camPosition={DEFAULT_CAM_POSITION}>
           <RoboticsScene
@@ -91,7 +97,7 @@ export function RobotSimulatorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f1115',
+    backgroundColor: COLORS.bg,
   },
   canvasArea: {
     flex: 1,
@@ -99,25 +105,26 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#1c1f26',
+    borderTopColor: COLORS.border,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: TOUCH_TARGET_MIN + 6,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#14161b',
+    backgroundColor: COLORS.surfaceAlt,
   },
   tabActive: {
-    backgroundColor: '#1c1f26',
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 2,
-    borderBottomColor: '#e8791a',
+    borderBottomColor: COLORS.accent,
   },
   tabText: {
-    color: '#6b7280',
-    fontWeight: '600',
-    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.md,
   },
   tabTextActive: {
-    color: '#ffffff',
+    color: COLORS.textPrimary,
   },
 });

@@ -1,44 +1,72 @@
-import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+} from 'react';
+
 import { View, ActivityIndicator, Text, StyleSheet, Animated } from 'react-native';
 import { useFrame } from '@react-three/fiber/native';
 import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
-import CanvaProvider from '../ThreeJs_Utils/provider';
+import CanvaProvider,{AutoFitCamera} from '../ThreeJs_Utils/provider';
 // import CanvaProvider from '../../mechanical_engineering/testing/test.js'
+import * as THREE from 'three'
 import { useMaterialConfigs } from '../materials/materialConfigs.js';
 import SoundPlayer from '../sound/soundPlayer';
 
 const EMPTY_OBJECT = Object.freeze({});
 const EMPTY_ARRAY = Object.freeze([]);
+// helper — put above SceneModel, or inline as a useCallback
+function applyJointRotation(joint, rotation) {
+  if (!joint || !rotation) return;
+  if (rotation.x !== undefined && rotation.x !== null) {
+    joint.rotation.x = THREE.MathUtils.degToRad(rotation.x);
+  }
+  if (rotation.y !== undefined && rotation.y !== null) {
+    joint.rotation.y = THREE.MathUtils.degToRad(rotation.y);
+  }
+  if (rotation.z !== undefined && rotation.z !== null) {
+    joint.rotation.z = THREE.MathUtils.degToRad(rotation.z);
+  }
+}
 
-function SceneModel({
-  modelUrl,
-  modelConfig = EMPTY_OBJECT,
-  materialConfig = EMPTY_OBJECT,
-  animations = EMPTY_ARRAY,
-  playClipAnimations = true,
-  clipNames = null,
-  animationTimeScale = 1,
-  soundUrl = null,
-  soundPlayWithoutAnimation = false,
-  soundLoop = true,
-  onMeshPress,
-  onLoad,
-  onError,
-  onClipFinished,
-  onSoundLoaded,
-  onSoundError,
-  ...props
-}) {
+
+
+const SceneModel = forwardRef(function SceneModel(
+  {
+    modelUrl,
+    modelConfig = EMPTY_OBJECT,
+    jointConfig = EMPTY_OBJECT,
+    materialConfig = EMPTY_OBJECT,
+    animations = EMPTY_ARRAY,
+    playClipAnimations = true,
+    clipNames = null,
+    animationTimeScale = 1,
+    soundUrl = null,
+    soundPlayWithoutAnimation = false,
+    soundLoop = true,
+    onMeshPress,
+    onLoad,
+    onError,
+    onClipFinished,
+    onSoundLoaded,
+    onSoundError,
+    ...props
+  },
+  ref
+) {
   const group = useRef();
   const meshRefs = useRef({});
+  const jointRefs = useRef({});
   const previousSceneRef = useRef(null);
   const processedRef = useRef(false);
-
   const { scene, ready, error, animations: rawClips } = useGLTF(modelUrl);
   const clips = rawClips ?? EMPTY_ARRAY;
-
   const mixerRef = useRef(null);
   const soundLoadTimeoutRef = useRef(null);
   const isPlayingRef = useRef(false);
@@ -49,6 +77,111 @@ function SceneModel({
   const modelLoadedRef = useRef(false); // Track when model is fully loaded
 
   const materialConfigs = useMaterialConfigs();
+
+useImperativeHandle(ref, () => ({
+
+  setJointAngle(jointName, rotation) { const joint = jointRefs.current[jointName];
+    if (!joint) {
+      console.warn(`[ROBOT] Joint "${jointName}" not found`);
+      return;
+    }
+    applyJointRotation(joint, rotation);
+  },
+
+  setJointAngles(joints) {
+    Object.entries(joints).forEach(([jointName, rotation]) => {
+      applyJointRotation(jointRefs.current[jointName], rotation);
+    });
+  },
+  // NEW — apply (or re-apply) config defaults on demand
+  applyDefaultPose() { Object.entries(jointConfig || {}).forEach(([jointName, cfg]) => {
+    applyJointRotation(jointRefs.current[jointName], cfg?.default);
+    });
+  },
+  // ==========================================
+  // GRIPPER
+  // ==========================================
+
+  setGripperState(state) {
+
+    const gripperConfig =  jointConfig?.GRIPPER;
+   console.log('gripper congig',gripperConfig)
+    if (!gripperConfig) {
+      console.warn(
+        '[ROBOT] GRIPPER configuration not found'
+      );
+      return;
+    }
+    const target = state === 'closed' ? gripperConfig.closed : gripperConfig.open;
+    Object.values(target).forEach(
+      (fingerConfig) => { const object = jointRefs.current[ fingerConfig.object ];
+        if (!object) { console.warn(`[ROBOT] Gripper object "${fingerConfig.object}" not found` );
+          return;
+        }
+        const axis = fingerConfig.axis || 'x';
+        object.rotation[axis] =
+          THREE.MathUtils.degToRad(
+            fingerConfig.value ?? 0
+          );
+
+      }
+    );
+
+  },
+
+
+  // ==========================================
+  // CONVENIENCE METHODS
+  // ==========================================
+
+  gripOpen() {
+    this.setGripperState('open');
+  },
+
+
+  gripClosed() {
+    this.setGripperState('closed');
+  },
+
+  getJoint(jointName) {
+
+    return (
+      jointRefs.current[jointName] ||
+      null
+    );
+
+  },
+
+
+  getJoints() {
+
+    return jointRefs.current;
+
+  },
+
+
+  // ==========================================
+  // RESET
+  // ==========================================
+
+  resetJoints() {
+
+    Object.values(
+      jointRefs.current
+    ).forEach((joint) => {
+
+      joint.rotation.set(
+        0,
+        0,
+        0
+      );
+
+    });
+
+  },
+
+}), [jointConfig, modelConfig]);
+
 
   const { mainMaterial, meshConfigs } = useMemo(() => {
     if (typeof materialConfig === 'string') {
@@ -61,10 +194,20 @@ function SceneModel({
     return { mainMaterial: null, meshConfigs: materialConfig || {} };
   }, [materialConfig]);
 
-  const { actions, names, mixer } = useAnimations(
-    playClipAnimations ? clips : EMPTY_ARRAY,
-    group
-  );
+const animationClips =
+  ready && scene && playClipAnimations
+    ? clips
+    : EMPTY_ARRAY;
+
+const animationRoot =
+  ready && scene
+    ? group
+    : null;
+
+const { actions, names, mixer } = useAnimations(
+  animationClips,
+  animationRoot
+);
 
   useEffect(() => {
     if (mixer) {
@@ -201,6 +344,14 @@ function SceneModel({
     }
   }, [ready, error, scene, soundPlayWithoutAnimation, soundUrl, startSound]);
 
+
+useEffect(() => {
+  if (!processedScene || !jointConfig) return;
+  Object.entries(jointConfig).forEach(([jointName, cfg]) => {
+    applyJointRotation(jointRefs.current[jointName], cfg?.default);
+  });
+}, [processedScene, jointConfig]);
+
   // Process scene with material configs
   const processedScene = useMemo(() => {
     if (!scene || error || !ready) return null;
@@ -210,13 +361,21 @@ function SceneModel({
 
     try {
       meshRefs.current = {};
-
       const meshes = [];
-      scene.traverse((child) => {
-        if (child.isMesh) {
-          meshes.push(child);
-        }
-      });
+        jointRefs.current = {};
+
+        scene.traverse((child) => {
+          console.log(child.type, child.name);
+          if (child.isMesh) {
+            meshes.push(child);
+          }
+          // Register robot joints
+          if (child.isObject3D && /^J\d+$/.test(child.name)) {
+            jointRefs.current[child.name] = child;
+            console.log(child.name, 'rest rotation (rad):', child.rotation.toArray());
+          }
+          
+        });
 
       meshes.forEach((mesh) => {
         const key = mesh.name || mesh.uuid;
@@ -368,8 +527,15 @@ function SceneModel({
   const children = processedScene.children || [];
   if (children.length === 0) return null;
 
-  return (
-    <group ref={group} {...props} position={modelConfig?.position || [0,0,0]} rotation={modelConfig?.rotation || [0,0,0]} scale={modelConfig?.scale || [1,1,1]}>
+return (
+  <>
+    <AutoFitCamera
+      groupRef={group}
+      trigger={processedScene}
+      enabled={modelConfig?.autoFit !== false}
+    />
+    <group ref={group} {...props} position={modelConfig?.position || [0,0,0]} 
+    rotation={modelConfig?.rotation || [0,0,0]}  scale={modelConfig?.scale || [1,1,1]}>  
       {children.map((child, index) => (
         <primitive
           key={`${child.name || child.uuid || index}`}
@@ -381,8 +547,8 @@ function SceneModel({
         />
       ))}
     </group>
-  );
-}
+  </>
+);})
 
 export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
   const prevConfig = JSON.stringify(prevProps.materialConfig);
@@ -403,7 +569,9 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
 });
 
 // Model3DPreview Component
-function Model3DPreview({
+
+const Model3DPreview = forwardRef(function Model3DPreview(
+  {
   modelUrl,
   materialConfig = EMPTY_OBJECT,
   modelConfig = EMPTY_OBJECT,
@@ -426,7 +594,9 @@ function Model3DPreview({
   loadingTimeout = 60000,
   isFullscreen = false,
   ...props
-}) {
+  },
+  ref
+) {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
   const [touchedPart, setTouchedPart] = useState(null); // display string only — never store the raw object here
@@ -449,10 +619,7 @@ function Model3DPreview({
     return `preview_${modelUrl}_${isFullscreen ? 'fs' : 'sm'}`;
   }, [modelUrl, isFullscreen]);
 
-  // Fires once per confirmed tap. CanvasProvider now passes the mapped
-  // { mesh, customName, details } object (or null if the tapped mesh
-  // wasn't registered in `parts`) instead of a raw string — so pull out
-  // the display label here rather than storing/rendering the object.
+
   const handlePartPress = useCallback((part, hit) => {
     const label = part?.customName ?? null;
     console.log('Mesh touched:', label ?? '(unmapped part)');
@@ -552,7 +719,8 @@ function Model3DPreview({
     onSoundLoaded,
     onSoundError,
     ...props
-  }), [modelUrl, materialConfig, animations, playClipAnimations, clipNames, animationTimeScale, soundUrl, soundLoop, handleLoad, handleError, onClipFinished, onSoundLoaded, onSoundError, props]);
+  }), [modelUrl, materialConfig, animations, playClipAnimations, clipNames, animationTimeScale,
+     soundUrl, soundLoop, handleLoad, handleError, onClipFinished, onSoundLoaded, onSoundError, props]);
 
   if (!modelUrl) {
     return (
@@ -569,7 +737,11 @@ function Model3DPreview({
         onPartPress={handlePartPress}
         parts ={modelConfig?.parts || []}
       >
-        <Scene key={`scene_${instanceId}`} {...sceneProps} />
+              <Scene
+              ref={ref}
+              key={`scene_${instanceId}`}
+              {...sceneProps}
+              />
       </CanvaProvider>
 
       {status === 'loading' && (
@@ -596,7 +768,8 @@ function Model3DPreview({
       )}
     </View>
   );
-}
+})
+
 
 const styles = StyleSheet.create({
   container: {

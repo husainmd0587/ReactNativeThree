@@ -2,9 +2,12 @@
  * RobotBuilderScreen.jsx
  *
  * Base builder screen: preview area (reuses the same canvas/scene
- * pipeline as the simulator) plus a read-only properties panel. Actual
- * add/edit joint & link operations (RobotBuilder engine) are added in
- * the next phase - this only proves the layout and data flow.
+ * pipeline as the simulator) plus a read-only properties panel and
+ * the same simulation clock controls the simulator has (the preview
+ * still runs box physics/motion, so pausing it here is meaningful
+ * too). Actual add/edit joint & link operations (RobotBuilder engine)
+ * are added in the next phase - this only proves the layout and data
+ * flow.
  *
  * Uses the app's existing shared CanvaProvider directly (no robotics-
  * specific wrapper).
@@ -18,7 +21,9 @@ import { View, StyleSheet } from 'react-native';
 import { RoboticsCanvasProvider, useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import { RoboticsScene } from '../scene/RoboticsScene';
 import { RobotPropertiesPanel } from '../ui/RobotPropertiesPanel';
+import { SimulationControlsBar } from '../ui/SimulationControlsBar';
 import { DEFAULT_CAM_POSITION } from '../core/robotConstants';
+import { COLORS } from '../core/theme';
 import CanvaProvider from '../../../../../utils/ThreeJs_Utils/provider';
 
 function BuilderContent() {
@@ -26,6 +31,8 @@ function BuilderContent() {
 
   return (
     <View style={styles.container}>
+      <SimulationControlsBar />
+
       <View style={styles.previewArea}>
         <CanvaProvider camPosition={DEFAULT_CAM_POSITION}>
           <RoboticsScene
@@ -58,7 +65,7 @@ export function RobotBuilderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f1115',
+    backgroundColor: COLORS.bg,
   },
   previewArea: {
     flex: 2,
@@ -66,6 +73,6 @@ const styles = StyleSheet.create({
   panelArea: {
     flex: 1,
     borderTopWidth: 1,
-    borderTopColor: '#1c1f26',
+    borderTopColor: COLORS.border,
   },
 });

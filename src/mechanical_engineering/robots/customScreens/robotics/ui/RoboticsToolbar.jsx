@@ -2,21 +2,15 @@
  * RoboticsToolbar.jsx
  *
  * Displays the current mode plus a gripper open/close toggle and a box
- * reset button - the simplest possible "pick and drop" controls until
- * real pick/place task logic exists. Buttons use Reanimated for a
- * quick press-scale, consistent with the other robotics UI (see
- * JointControlPanel's RemoteButton and RobotProgramEditor's animated
- * bars).
- *
- * NOTE: styling here uses plain React Native primitives. Swap in the
- * app's real theme/UI components once this module is wired into the
- * existing app.
+ * reset button. Buttons use Reanimated for a quick press-scale.
+ * Uses shared theme tokens (core/theme.js) for sizing/colors.
  */
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { GRIP_STATES } from '../core/robotConstants';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
 
 function PressScaleButton({ style, textStyle, label, onPress }) {
   const scale = useSharedValue(1);
@@ -42,7 +36,7 @@ export function RoboticsToolbar({ mode, grip, onToggleGrip, onResetBox }) {
   return (
     <View style={styles.container}>
       <View style={styles.modeGroup}>
-        <Text style={styles.label}>Mode:</Text>
+        <Text style={styles.label}>Mode</Text>
         <Text style={styles.value}>{mode}</Text>
       </View>
 
@@ -74,48 +68,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#1c1f26',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   modeGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    gap: SPACING.xs,
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
   },
   resetButton: {
-    backgroundColor: '#2a2f3a',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.md,
   },
   resetButtonText: {
-    color: '#c7cdd6',
-    fontWeight: '700',
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.sm,
   },
   label: {
-    color: '#9aa4b2',
-    marginRight: 6,
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   value: {
-    color: '#ffffff',
-    fontWeight: '600',
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.md,
     textTransform: 'capitalize',
   },
   gripButton: {
-    backgroundColor: '#e8791a',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADII.md,
   },
   gripButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 12,
+    color: '#1a0f05',
+    fontWeight: FONT_WEIGHT.black,
+    fontSize: FONT_SIZE.sm,
   },
 });

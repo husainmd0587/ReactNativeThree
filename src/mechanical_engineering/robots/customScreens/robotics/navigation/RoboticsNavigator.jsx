@@ -18,6 +18,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RoboticsHomeScreen } from '../screens/RoboticsHomeScreen';
 import { RobotSimulatorScreen } from '../screens/RobotSimulatorScreen';
 import { RobotBuilderScreen } from '../screens/RobotBuilderScreen';
+import { LanguageReferenceScreen } from '../screens/LanguageReferenceScreen';
+import { NewProgramScreen } from '../screens/NewProgramScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +40,16 @@ export function RoboticsNavigator() {
         name="RobotBuilder"
         component={RobotBuilderScreen}
         options={{ title: 'Robot Builder' }}
+      />
+      <Stack.Screen
+        name="LanguageReference"
+        component={LanguageReferenceScreen}
+        options={{ title: 'Language Reference' }}
+      />
+      <Stack.Screen
+        name="NewProgram"
+        component={NewProgramScreen}
+        options={{ title: 'New Program' }}
       />
     </Stack.Navigator>
   );

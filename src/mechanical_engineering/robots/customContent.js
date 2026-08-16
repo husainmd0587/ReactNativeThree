@@ -1,5 +1,5 @@
 import {RoboticsNavigator} from './customScreens/robotics/navigation/RoboticsNavigator'
-
+import RobotTestScreen from './customScreens/robotTestScreen';
 
 import {CustomCard} from './customCard/card'
 
@@ -7,7 +7,7 @@ import {CustomCard} from './customCard/card'
 export const CustomScreensList = [
   {
     name: "RoboticsSimulations",
-    component: RoboticsNavigator,
+    component: RobotTestScreen,
   },
 ];
 

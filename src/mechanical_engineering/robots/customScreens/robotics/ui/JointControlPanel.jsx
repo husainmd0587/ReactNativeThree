@@ -31,6 +31,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import Slider from '../../../../../utils/ThreeJs_Utils/slider';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
 
 const STEP = 5;
 const HOLD_DELAY_MS = 350; // time before repeat kicks in, like a remote button
@@ -169,13 +170,13 @@ export function JointControlPanel() {
             minimumValue={selectedJoint.limits.min}
             maximumValue={selectedJoint.limits.max}
             step={1}
-            minimumTrackTintColor="#5b8dd6"
-            maximumTrackTintColor="#2a2f3a"
-            thumbTintColor="#5b8dd6"
-            trackThickness={6}
-            thumbWidth={14}
-            thumbHeight={22}
-            thumbBorderRadius={5}
+            minimumTrackTintColor={COLORS.accent2}
+            maximumTrackTintColor={COLORS.surfaceRaised}
+            thumbTintColor={COLORS.accent2}
+            trackThickness={8}
+            thumbWidth={18}
+            thumbHeight={28}
+            thumbBorderRadius={6}
             onValueChange={(v) => engine.setJointValue(selectedJoint.id, v)}
           />
         </View>
@@ -188,69 +189,71 @@ export function JointControlPanel() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 12,
+    padding: SPACING.lg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: SPACING.md,
   },
   label: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
   },
   dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2f3a',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
+    minHeight: TOUCH_TARGET_MIN,
+    backgroundColor: COLORS.surfaceRaised,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: SPACING.xs,
   },
   dropdownTriggerText: {
-    color: '#c7cdd6',
-    fontSize: 13,
-    fontWeight: '600',
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
   },
   chevron: {
-    color: '#e8791a',
-    fontSize: 14,
-    fontWeight: '700',
+    color: COLORS.accentText,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
   },
   dropdownList: {
-    backgroundColor: '#14161b',
-    borderRadius: 8,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: '#2a2f3a',
-    marginBottom: 10,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.md,
     overflow: 'hidden',
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    minHeight: TOUCH_TARGET_MIN,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#1c1f26',
+    borderBottomColor: COLORS.border,
   },
   dropdownItemActive: {
-    backgroundColor: '#e8791a22',
+    backgroundColor: COLORS.accentSoft,
   },
   dropdownItemText: {
-    color: '#c7cdd6',
-    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.md,
   },
   dropdownItemTextActive: {
-    color: '#e8791a',
-    fontWeight: '700',
+    color: COLORS.accentText,
+    fontWeight: FONT_WEIGHT.bold,
   },
   dropdownItemValue: {
-    color: '#6b7280',
-    fontSize: 12,
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.sm,
     fontFamily: 'monospace',
   },
   controls: {
@@ -258,20 +261,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   button: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#2a2f3a',
+    width: 48,
+    height: 48,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: FONT_WEIGHT.bold,
   },
   sliderWrap: {
     flex: 1,
-    marginHorizontal: 10,
+    marginHorizontal: SPACING.md,
   },
 });

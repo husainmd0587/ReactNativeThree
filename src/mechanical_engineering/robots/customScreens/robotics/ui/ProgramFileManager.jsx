@@ -14,6 +14,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Modal, Alert, StyleSheet } from 'react-native';
 import { listSavedPrograms, deleteSavedProgram } from '../core/programStorage';
 import { getDialect } from '../engine/dialects';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
 
 export function ProgramFileManager({ visible, onClose, onSelect, currentProgramId }) {
   const [programs, setPrograms] = useState([]);
@@ -111,83 +112,87 @@ function formatDate(timestamp) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#14161b',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '70%',
-    paddingBottom: 20,
+    backgroundColor: COLORS.surfaceAlt,
+    borderTopLeftRadius: RADII.xl,
+    borderTopRightRadius: RADII.xl,
+    maxHeight: '75%',
+    paddingBottom: SPACING.xl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#2a2f3a',
+    borderBottomColor: COLORS.border,
   },
   title: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.xl,
+    fontWeight: FONT_WEIGHT.black,
   },
   closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: TOUCH_TARGET_MIN,
+    height: TOUCH_TARGET_MIN,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2a2f3a',
+    backgroundColor: COLORS.surfaceRaised,
   },
   closeButtonText: {
-    color: '#c7cdd6',
-    fontSize: 14,
-    fontWeight: '700',
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
   },
   emptyText: {
-    color: '#6b7280',
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.md,
     textAlign: 'center',
-    paddingVertical: 24,
+    paddingVertical: SPACING.xl,
   },
   list: {
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    backgroundColor: '#1c1f26',
+    minHeight: TOUCH_TARGET_MIN + 20,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.md,
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   rowActive: {
-    borderWidth: 1,
-    borderColor: '#e8791a',
+    borderColor: COLORS.accent,
   },
   rowInfo: {
     flex: 1,
   },
   rowName: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
   },
   rowMeta: {
-    color: '#6b7280',
-    fontSize: 12,
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.sm,
     marginTop: 2,
   },
   deleteButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minWidth: TOUCH_TARGET_MIN,
+    minHeight: TOUCH_TARGET_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteButtonText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.xl,
   },
 });

@@ -33,7 +33,12 @@ export function RoboticsEngineProvider({ presetId = 'pick_drop_arm', children })
   }, [engine]);
 
   const value = useMemo(
-    () => ({ engine, state, programState: engine.getProgramState() }),
+    () => ({
+      engine,
+      state,
+      programState: engine.getProgramState(),
+      playbackState: engine.getPlaybackState(),
+    }),
     [engine, state]
   );
 

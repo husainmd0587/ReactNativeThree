@@ -95,6 +95,8 @@ const WEAR_RATE = 0.00003;       // wear gained per px of cutting contact
 const WEAR_DEPTH_PENALTY = 0.55; // fully worn tool cuts up to 55% less
 const WEAR_CATCH_RISK = 1.6;     // dull edges are more likely to skid/catch
 
+
+
 // ── Tools ──────────────────────────────────────────────
 const TOOLS = [
   { id: 'roughing', name: 'Roughing', icon: '⚡', color: '#e67e22', width: 16, depth: 6, shape: 'round' },
@@ -115,7 +117,8 @@ const MATERIALS = [
 ];
 
 // ── Handle → tip offset ────────────────────────────────────────
-const TOOL_REACH = 30;
+const TOOL_REACH = 10;
+const TOOL_LENGTH = 50;
 const DEBUG_SHOW_TIP = true;
 
 function fingerToTip(fx, fy) {
@@ -171,6 +174,17 @@ function applyTool(profile, cx, cy, tool) {
     }
   }
   return next;
+}
+
+function footprintRemoval(before, after, seg, half) {
+  let total = 0;
+  for (let di = -half; di <= half; di++) {
+    const s = seg + di;
+    if (s < 0 || s >= PROFILE_SEGS) continue;
+    const d = before[s] - after[s];
+    if (d > 0) total += d;
+  }
+  return total;
 }
 
 function smooth(profile, str = 0.4) {
@@ -666,6 +680,107 @@ const MotorPreview = React.memo(
   () => true
 );
 
+// chips helper ==========================================
+// ── Chip particle system ──
+// chips helper ==========================================
+// ── Chip particle system ──
+const CHIP_POOL_SIZE = 50;
+const CHIP_GRAVITY = 520;          // px/s² -- stronger fall for a punchier arc
+const CHIP_MAX_LIFE = 800;         // ms, randomized per chip
+const CHIP_MIN_REMOVAL = 0.05;     // ignore near-zero radius changes -- hovering/edge-grazing shouldn't spawn chips
+
+function chipStyleForMaterial(mat) {
+  switch (mat.id) {
+    case 'wood':    return { kind: 'shaving', color: mat.color, size: [16, 34] };
+    case 'clay':    return { kind: 'blob',    color: mat.color, size: [5, 10] };
+    case 'ceramic':
+    case 'glazed':  return { kind: 'chip',    color: mat.color, size: [4, 9]  };
+    case 'bronze':  return { kind: 'spark',   color: '#ffd27a', size: [3, 6]  };
+    default:        return { kind: 'blob',    color: mat.color, size: [4, 8]  };
+  }
+}
+
+function makeChipPool(n) {
+  return Array.from({ length: n }, () => ({
+    active: false, x: 0, y: 0, vx: 0, vy: 0, rot: 0, vr: 0,
+    life: 0, maxLife: 1, size: 3, kind: 'blob', color: '#fff',
+  }));
+}
+
+function ChipParticle({ chipSnapshot, index }) {
+  const transform = useDerivedValue(() => {
+    const c = chipSnapshot.value[index];
+    return [{ translateX: c.x }, { translateY: c.y }, { rotate: c.rot }];
+  });
+  const opacity = useDerivedValue(() => chipSnapshot.value[index].opacity);
+  const color = useDerivedValue(() => chipSnapshot.value[index].color);
+
+  // Geometry rebuilt per-frame from live size/kind -- cheap since each
+  // path is 3-6 points, and it's only rebuilt for active particles.
+  const path = useDerivedValue(() => {
+    const c = chipSnapshot.value[index];
+    const s = c.size / 2;
+    const p = Skia.Path.Make();
+
+    switch (c.kind) {
+      case 'shaving': {
+        // Curled wood ribbon -- a tapered S-curve instead of a straight sliver
+        p.moveTo(-s * 1.6, 0);
+        p.quadTo(-s * 0.4, -s * 0.9, s * 0.6, -s * 0.3);
+        p.quadTo(s * 1.3, 0.1, s * 1.6, s * 0.6);
+        p.quadTo(s * 0.9, s * 0.35, s * 0.3, s * 0.5);
+        p.quadTo(-s * 0.6, s * 0.7, -s * 1.6, 0);
+        p.close();
+        break;
+      }
+      case 'chip': {
+        // Angular ceramic/glazed fragment -- irregular quad
+        p.moveTo(-s, -s * 0.6);
+        p.lineTo(s * 0.8, -s);
+        p.lineTo(s, s * 0.5);
+        p.lineTo(-s * 0.6, s * 0.9);
+        p.close();
+        break;
+      }
+      case 'spark': {
+        // Small bright diamond -- reads as a metal spark, not a dot
+        p.moveTo(0, -s);
+        p.lineTo(s * 0.55, 0);
+        p.lineTo(0, s);
+        p.lineTo(-s * 0.55, 0);
+        p.close();
+        break;
+      }
+      case 'blob':
+      default: {
+        // Soft clay/ceramic crumb -- irregular rounded triangle, not a perfect circle
+        p.moveTo(0, -s);
+        p.quadTo(s, -s * 0.5, s * 0.7, s * 0.6);
+        p.quadTo(0, s * 1.1, -s * 0.7, s * 0.6);
+        p.quadTo(-s, -s * 0.5, 0, -s);
+        p.close();
+        break;
+      }
+    }
+    return p;
+  });
+
+  return (
+    <Group transform={transform} opacity={opacity}>
+      <Path path={path} style="fill" color={color} />
+    </Group>
+  );
+}
+
+const ChipLayer = memo(function ChipLayer({ chipSnapshot }) {
+  return (
+    <>
+      {Array.from({ length: CHIP_POOL_SIZE }).map((_, i) => (
+        <ChipParticle key={i} chipSnapshot={chipSnapshot} index={i} />
+      ))}
+    </>
+  );
+});
 
 
 function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick }) {
@@ -674,13 +789,122 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     []
   );
   const texImage = useImage(textureDef?.image ?? null);
-
   const angleRef = useSharedValue(0);
 
+  const matRef = useRef(mat);
+  useEffect(() => { matRef.current = mat; }, [mat]);
+
+  // ── Chip particle pool ──
+  const chipPoolRef = useRef(makeChipPool(CHIP_POOL_SIZE));
+  const chipCursorRef = useRef(0);
+  const chipsActiveCountRef = useRef(0);
+  const chipSnapshot = useSharedValue(
+    Array.from({ length: CHIP_POOL_SIZE }, () => ({ x: 0, y: 0, rot: 0, opacity: 0, size: 0, kind: 'blob', color: '#fff' }))
+  );
+  const chipRafRef = useRef(null);
+  const chipRunningRef = useRef(false);
+  const lastChipFrameT = useRef(0);
+
+  const updateChips = useCallback((dt) => {
+    const pool = chipPoolRef.current;
+    let anyActive = false;
+    const snap = chipSnapshot.value.slice();
+    const dts = dt / 1000;
+    for (let i = 0; i < pool.length; i++) {
+      const p = pool[i];
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.active = false;
+        chipsActiveCountRef.current = Math.max(0, chipsActiveCountRef.current - 1);
+        snap[i] = { ...snap[i], opacity: 0 };
+        continue;
+      }
+      p.vy += CHIP_GRAVITY * dts;
+      p.x += p.vx * dts;
+      p.y += p.vy * dts;
+      p.rot += p.vr * dts;
+      anyActive = true;
+      const lifeRatio = p.life / p.maxLife;
+      snap[i] = {
+        x: p.x, y: p.y, rot: p.rot,
+        opacity: Math.min(1, lifeRatio * 1.6),
+        size: p.size * (0.7 + lifeRatio * 0.3),
+        kind: p.kind, color: p.color,
+      };
+    }
+    chipSnapshot.value = snap;
+    return anyActive;
+  }, []);
+
+  const chipLoop = useCallback((t) => {
+    const last = lastChipFrameT.current || t;
+    const dt = Math.min(48, t - last);
+    lastChipFrameT.current = t;
+    const stillActive = updateChips(dt);
+    if (stillActive || chipsActiveCountRef.current > 0) {
+      chipRafRef.current = requestAnimationFrame(chipLoop);
+    } else {
+      chipRunningRef.current = false;
+      chipRafRef.current = null;
+      lastChipFrameT.current = 0;
+    }
+  }, [updateChips]);
+
+  const startChipLoop = useCallback(() => {
+    if (!chipRunningRef.current) {
+      chipRunningRef.current = true;
+      lastChipFrameT.current = 0;
+      chipRafRef.current = requestAnimationFrame(chipLoop);
+    }
+  }, [chipLoop]);
+
+  useEffect(() => () => { if (chipRafRef.current) cancelAnimationFrame(chipRafRef.current); }, []);
+
+  // Spawns `count` chips at (tx, ty). `strength` (0-1+) scales how hard
+  // they're flung -- driven by how much material was actually removed,
+  // not just gesture speed, so a light scrape flings dust and a deep
+  // roughing pass flings real debris.
+const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, strength) => {
+  const pool = chipPoolRef.current;
+  const kick = 1 + clamp(strength, 0, 1) * 1.4;
+  for (let i = 0; i < count; i++) {
+    const idx = chipCursorRef.current;
+    chipCursorRef.current = (idx + 1) % CHIP_POOL_SIZE;
+    const p = pool[idx];
+    if (!p.active) chipsActiveCountRef.current += 1;
+
+    const side = ty < AXIS_Y ? -1 : 1;
+
+    // Surface (tangential) velocity flips direction between the top
+    // and bottom of a spinning cylinder -- top and bottom of a wheel
+    // move opposite ways on screen even though the wheel spins one way.
+    const tangentialBase = spindleDir * side * (0.6 + Math.random() * 0.6);
+
+    // Wide random cone so chips genuinely scatter left/right, not just
+    // jitter around one dominant direction. This term is now comparable
+    // in magnitude to the tangential term, not a minor jitter on top of it.
+    const scatter = (Math.random() - 0.5) * 2; // -1..1
+
+    p.active = true;
+    p.x = tx + (Math.random() - 0.5) * tool.width * 0.6;
+    p.y = ty;
+    p.vx = (tangentialBase * 140 + scatter * 130) * kick;
+    p.vy = side * (-170 - Math.random() * 130) * kick;
+    p.rot = Math.random() * Math.PI * 2;
+    p.vr = (Math.random() - 0.5) * 14;
+    p.maxLife = CHIP_MAX_LIFE * (0.6 + Math.random() * 0.8);
+    p.life = p.maxLife;
+    p.size = matStyle.size[0] + Math.random() * (matStyle.size[1] - matStyle.size[0]);
+    p.kind = matStyle.kind;
+    p.color = matStyle.color;
+  }
+  startChipLoop();
+}, [startChipLoop]);
 
   useEffect(() => {
-    const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM); // rad/sec
-    const sweep = 100000; // rad -- large enough to never visibly loop
+    const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM);
+    const sweep = 100000;
     const durationMs = (sweep / rate) * 1000;
     angleRef.value = withRepeat(
       withTiming(angleRef.value + sweep, { duration: durationMs, easing: Easing.linear }),
@@ -721,7 +945,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
 
   const fingerX = useSharedValue(0);
   const fingerY = useSharedValue(0);
-  const TOOL_LENGTH = 50;
 
   const toolBodyTransform = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
@@ -751,15 +974,12 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
   const rpmRef = useRef(rpm);
   useEffect(() => { rpmRef.current = rpm; }, [rpm]);
 
-  // ── Accuracy-system refs ──
   const lastCutSample = useRef({ x: null, y: null, t: 0 });
   const lockUntilRef = useRef(0);
   const lastWearUpdate = useRef(0);
   const lastHoverUpdate = useRef(0);
   const lastChatterTick = useRef(0);
 
-  // ── HUD ref (diameter readout, catch feedback) ──
-  // Updating this never re-renders DrawingCanvas -- see CutHUD above.
   const hudRef = useRef(null);
   const shakeX = useRef(new Animated.Value(0)).current;
 
@@ -777,12 +997,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     pendingPoint.current = { x, y };
   }, []);
 
-  // ── Main per-frame cut processor ──
-  // Beyond just carving the profile, this now derives a "feed
-  // pressure" from how fast the finger is moving, feeds it (plus RPM
-  // and tool wear) into a per-frame catch-risk roll, applies chatter
-  // jitter under aggressive conditions, accrues tool wear, and
-  // publishes a live diameter readout.
   const processCut = useCallback(() => {
     if (!isProcessing.current) {
       rafRef.current = null;
@@ -801,11 +1015,9 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     const last = lastCutSample.current;
     const dt = last.t ? Math.max(1, now - last.t) : 16;
     const dist = last.x != null ? Math.hypot(point.x - last.x, point.y - last.y) : 0;
-    const velocity = dist / dt; // px/ms
+    const velocity = dist / dt;
     lastCutSample.current = { x: point.x, y: point.y, t: now };
 
-    // Feed pressure: careful slow strokes cut light, brisk strokes cut
-    // aggressively (and risk a catch).
     const pressureNorm = clamp(velocity / 1.4, 0, 1.6);
     const pressureMul = 0.6 + pressureNorm * 0.8;
 
@@ -826,19 +1038,43 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
       const catchRisk = shapeRisk * wearRisk * thinFactor * rpmFactor * Math.max(0, pressureNorm - 0.35);
       const catchProb = clamp(CATCH_BASE_CHANCE * catchRisk, 0, CATCH_PROB_CAP);
 
-      if (pressureNorm > 0.35 && Math.random() < catchProb) {
-        // ── CATCH: the edge grabs and digs in ──
-        const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
-        const dug = applyTool(profileRef.current, point.x, point.y, digTool);
-        profileRef.current = dug;
-        lockUntilRef.current = now + CATCH_LOCKOUT_MS;
-        onCatch();
-        onWear(currentTool.id, clamp(wearNow + 0.05, 0, 1));
-        triggerCatchFx();
-        onProfile([...dug]);
-      } else {
-        const toolForCut = { ...currentTool, depth: currentTool.depth * pressureMul * wearMul };
-        let next = applyTool(profileRef.current, point.x, point.y, toolForCut);
+if (pressureNorm > 0.35 && Math.random() < catchProb) {
+  const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
+  const beforeProfile = profileRef.current;
+  const dug = applyTool(beforeProfile, point.x, point.y, digTool);
+  const half = Math.floor(currentTool.width / 2);
+  const catchRemoval = footprintRemoval(beforeProfile, dug, seg, half);
+
+  profileRef.current = dug;
+  lockUntilRef.current = now + CATCH_LOCKOUT_MS;
+  onCatch();
+  onWear(currentTool.id, clamp(wearNow + 0.05, 0, 1));
+  triggerCatchFx();
+  onProfile([...dug]);
+
+  if (catchRemoval > CHIP_MIN_REMOVAL) {
+    spawnChips(
+      point.x, point.y, 10, currentTool,
+      chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
+      1.4
+    );
+  }
+} else {
+      const toolForCut = { ...currentTool, depth: currentTool.depth * pressureMul * wearMul };
+  const beforeProfile = profileRef.current;
+  let next = applyTool(beforeProfile, point.x, point.y, toolForCut);
+
+  const half = Math.floor(currentTool.width / 2);
+  const removalAmount = footprintRemoval(beforeProfile, next, seg, half);
+
+  if (removalAmount > CHIP_MIN_REMOVAL) {
+    const chipCount = clamp(Math.round(removalAmount * 0.8 + pressureNorm * 2.2), 1, 9);
+    spawnChips(
+      point.x, point.y, chipCount, currentTool,
+      chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
+      clamp(removalAmount / currentTool.width, 0, 1) + pressureNorm * 0.3
+    );
+  }
 
         const chatterOn = pressureNorm > 0.65 && rpmFactor > 1.15 &&
           (currentTool.shape === 'round' || currentTool.shape === 'flat');
@@ -860,11 +1096,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
         }
       }
 
-      // Tool wear accrues while actually cutting (paused during lockout).
-      // Wear changes slowly and round-trips through parent state (it
-      // flows back down via the `wear` prop), so it's throttled looser
-      // than the visual updates to avoid adding another render source
-      // to the canvas during a cut.
       if (now - lastWearUpdate.current > 300) {
         lastWearUpdate.current = now;
         const nextWear = clamp(wearNow + dist * WEAR_RATE * (currentTool.depth / 4), 0, 1);
@@ -872,8 +1103,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
       }
     }
 
-    // Live diameter callipers under the tip -- goes through the HUD
-    // ref, not component state, so it can't stall the canvas render.
     if (now - lastHoverUpdate.current > 100) {
       lastHoverUpdate.current = now;
       const r = profileRef.current[seg] ?? STOCK_RADIUS;
@@ -881,7 +1110,7 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     }
 
     rafRef.current = requestAnimationFrame(processCut);
-  }, [onProfile, onCatch, onChatterTick, onWear, triggerCatchFx]);
+  }, [onProfile, onCatch, onChatterTick, onWear, triggerCatchFx, spawnChips]);
 
   const startProcessing = useCallback(() => {
     if (!isProcessing.current) {
@@ -907,7 +1136,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
       lastReactUpdate.current = now;
       onProfile([...profileRef.current]);
     }
-    // Commit once per stroke -- this is the undo/redo checkpoint.
     onCommit([...profileRef.current]);
   }, [onProfile, onCommit]);
 
@@ -919,14 +1147,14 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
       runOnJS(startProcessing)();
-      runOnJS(updatePendingPoint)(tx, ty);
+      runOnJS(updatePendingPoint)(tx, ty - TOOL_LENGTH);
     })
     .onUpdate((e) => {
       'worklet';
       fingerX.value = e.x;
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
-      runOnJS(updatePendingPoint)(tx, ty);
+      runOnJS(updatePendingPoint)(tx, ty - TOOL_LENGTH);
     })
     .onEnd(() => {
       'worklet';
@@ -934,7 +1162,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
       runOnJS(syncReactState)();
     });
 
-  // ── Enhanced tool cursor builder ──
   const buildToolCursor = useCallback(() => {
     const halfW = tool.width / 2;
     const p = Skia.Path.Make();
@@ -1057,7 +1284,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     return p;
   }, [tool]);
 
-  // ── Paths ─────────────────────────────────────────────────────
   const fp = useMemo(() => fillPath(profile), [profile]);
 
   const toolCursorPath = useMemo(() => buildToolCursor(), [buildToolCursor]);
@@ -1068,14 +1294,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
   const axisLines = useMemo(() => Array.from({ length: 8 }), []);
   const depthLines = useMemo(() => Array.from({ length: 10 }), []);
 
-  // ── Chuck end-caps ──
-  // One jaw shape, drawn once and reused 3x per cap (rotated 120°
-  // apart via nested Group transforms) so the "[]==[]" chucks read as
-  // a real 3-jaw lathe chuck rather than a plain circle. Both caps
-  // spin together using the same angleRef shared value that drives the
-  // 2D cylinder shader's phase, so the ends visibly rotate in lockstep
-  // with the wood grain -- reinforcing that this is one spinning
-  // cylinder, not a flat strip with static end decorations.
   const chuckJawPath = useMemo(() => {
     const p = Skia.Path.Make();
     const r = CHUCK_RADIUS;
@@ -1087,13 +1305,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
   const chuckOriginL = useMemo(() => vec(CHUCK_CENTER_L, AXIS_Y), []);
   const chuckOriginR = useMemo(() => vec(CHUCK_CENTER_R, AXIS_Y), []);
 
-  // ── Cut-area highlighting ──
-  // Freshly cut wood is lighter/rawer than the untouched surface, so
-  // any segment where material has actually been removed from the
-  // original STOCK_RADIUS gets a pale overlay -- the deeper the cut,
-  // the stronger the tint. Bucketed into 3 tiers (rather than one
-  // <Path> per segment) to keep this to 3 draw calls regardless of
-  // how many segments are cut.
   const CUT_TINT_COLOR = '#faf6ed';
   const cutOverlayPaths = useMemo(() => {
     const light = Skia.Path.Make();
@@ -1102,7 +1313,7 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     const segW = STOCK_WIDTH / PROFILE_SEGS;
     for (let i = 0; i < PROFILE_SEGS; i++) {
       const removal = clamp((STOCK_RADIUS - profile[i]) / STOCK_RADIUS, 0, 1);
-      if (removal <= 0.03) continue; // untouched -- no tint
+      if (removal <= 0.03) continue;
       const x0 = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
       const rect = { x: x0, y: AXIS_Y - STOCK_RADIUS - 2, width: segW + 0.5, height: STOCK_RADIUS * 2 + 4 };
       if (removal > 0.35) heavy.addRect(rect);
@@ -1112,10 +1323,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
     return { light, medium, heavy };
   }, [profile]);
 
-  // ── Thin-wall danger zones ──
-  // Contiguous runs of the profile below MIN_SAFE_RADIUS get a
-  // translucent red overlay so a fragile section is visible before it
-  // snaps, matching the "min wall" stat in the control strip.
   const dangerSegments = useMemo(() => {
     const segs = [];
     let start = null;
@@ -1198,22 +1405,18 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
               </>
             )}
 
-            {/* Cut-area highlighting -- lighter tint where material has
-                actually been removed, intensity scaling with cut depth */}
             <Group clip={fp}>
               <Path path={cutOverlayPaths.light} style="fill" color={CUT_TINT_COLOR} opacity={0.14} />
               <Path path={cutOverlayPaths.medium} style="fill" color={CUT_TINT_COLOR} opacity={0.26} />
               <Path path={cutOverlayPaths.heavy} style="fill" color={CUT_TINT_COLOR} opacity={0.4} />
             </Group>
 
-            {/* Thin-wall danger overlay */}
             {dangerPaths.map((p, i) => (
               <Group key={i} clip={fp}>
                 <Path path={p} style="fill" color="rgba(255,40,40,0.20)" />
               </Group>
             ))}
 
-            {/* Cutting area indicator */}
             <Path
               path={cuttingIndicator}
               style="fill"
@@ -1226,7 +1429,6 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
               color={tool.color + '30'}
             />
 
-            {/* Cross-section depth lines */}
             {depthLines.map((_, i) => {
               const idx = Math.floor((i / 10) * PROFILE_SEGS);
               const x = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
@@ -1249,6 +1451,8 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
                   strokeWidth={1} color="rgba(70,110,160,0.45)" />
               );
             })}
+
+            <ChipLayer chipSnapshot={chipSnapshot} />
 
             {/* ── TOOL BODY ── */}
             <Group opacity={1} transform={toolBodyTransform}>
@@ -1431,9 +1635,7 @@ function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onW
           </SkiaCanvas>
         </GestureDetector>
       </Animated.View>
-   
-      {/* Catch flash + live diameter callipers -- isolated so their
-          frequent updates never trigger a re-render of the canvas above. */}
+
       <CutHUD ref={hudRef} />
     </View>
   );

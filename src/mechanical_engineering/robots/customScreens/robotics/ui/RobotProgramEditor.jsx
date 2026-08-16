@@ -23,18 +23,23 @@
  * Programs can be saved/opened via AsyncStorage (core/programStorage.js)
  * - same dependency and single-JSON-blob-per-key pattern CanvaProvider
  * already uses for its own settings persistence. ProgramFileManager
- * provides the list/open/delete UI.
+ * provides the list/open/delete UI. "Templates" and "Reference" jump
+ * to the dedicated NewProgramScreen and LanguageReferenceScreen via
+ * React Navigation's useNavigation() hook, since this component sits
+ * nested inside a tab, not as a screen itself.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import { DIALECTS, getDialect } from '../engine/dialects';
 import { saveProgram } from '../core/programStorage';
 import { ProgramFileManager } from './ProgramFileManager';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
 
-const LINE_HEIGHT = 22;
+const LINE_HEIGHT = 26;
 
 function CodeViewer({ text, activeLine, errorLines }) {
   const scrollRef = useRef(null);
@@ -73,10 +78,7 @@ function CodeViewer({ text, activeLine, errorLines }) {
           const isError = errorLines.has(lineNumber);
 
           return (
-            <View
-              key={i}
-              style={[styles.codeLine, isError && styles.codeLineError]}
-            >
+            <View key={i} style={[styles.codeLine, isError && styles.codeLineError]}>
               <Text style={styles.lineNumber}>{lineNumber}</Text>
               <Text style={styles.codeText}>{line || ' '}</Text>
             </View>
@@ -147,6 +149,7 @@ function DialectSelector({ dialectId, onSelect, disabled }) {
 
 export function RobotProgramEditor() {
   const { engine, programState } = useRoboticsCanvas();
+  const navigation = useNavigation();
   const [dialectId, setDialectId] = useState('simple');
   const [text, setText] = useState(getDialect('simple').example);
 
@@ -221,6 +224,15 @@ export function RobotProgramEditor() {
         />
       </View>
 
+      <View style={styles.linkRow}>
+        <TouchableOpacity onPress={() => navigation.navigate('LanguageReference')}>
+          <Text style={styles.linkText}>📖 Language Reference</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('NewProgram')}>
+          <Text style={styles.linkText}>✚ Templates</Text>
+        </TouchableOpacity>
+      </View>
+
       {programState.running ? (
         <CodeViewer text={text} activeLine={currentLine} errorLines={errorLines} />
       ) : (
@@ -231,7 +243,7 @@ export function RobotProgramEditor() {
           multiline
           autoCapitalize="none"
           autoCorrect={false}
-          placeholderTextColor="#5a6272"
+          placeholderTextColor={COLORS.textMuted}
         />
       )}
 
@@ -258,7 +270,7 @@ export function RobotProgramEditor() {
             value={saveNameInput}
             onChangeText={setSaveNameInput}
             placeholder="Program name"
-            placeholderTextColor="#5a6272"
+            placeholderTextColor={COLORS.textMuted}
             autoFocus
           />
           <TouchableOpacity style={styles.saveBarConfirm} onPress={confirmSave}>
@@ -320,197 +332,221 @@ export function RobotProgramEditor() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 12,
+    padding: SPACING.lg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   title: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
   },
   subtitle: {
-    color: '#6b7280',
-    fontSize: 11,
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.xs,
     marginTop: 2,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  linkText: {
+    color: COLORS.accent2Text,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.bold,
   },
   dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2f3a',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
+    minHeight: TOUCH_TARGET_MIN,
+    backgroundColor: COLORS.surfaceRaised,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: SPACING.xs,
   },
   dropdownTriggerDisabled: {
     opacity: 0.5,
   },
   dropdownTriggerText: {
-    color: '#c7cdd6',
-    fontSize: 13,
-    fontWeight: '600',
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
   },
   chevron: {
-    color: '#e8791a',
-    fontSize: 14,
-    fontWeight: '700',
+    color: COLORS.accentText,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
   },
   dropdownList: {
     position: 'absolute',
-    top: 36,
+    top: TOUCH_TARGET_MIN + 4,
     right: 0,
-    backgroundColor: '#14161b',
-    borderRadius: 8,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: '#2a2f3a',
+    borderColor: COLORS.border,
     overflow: 'hidden',
     zIndex: 10,
-    minWidth: 140,
+    minWidth: 160,
   },
   dropdownItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#1c1f26',
+    borderBottomColor: COLORS.border,
   },
   dropdownItemActive: {
-    backgroundColor: '#e8791a22',
+    backgroundColor: COLORS.accentSoft,
   },
   dropdownItemText: {
-    color: '#c7cdd6',
-    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.md,
   },
   dropdownItemTextActive: {
-    color: '#e8791a',
-    fontWeight: '700',
+    color: COLORS.accentText,
+    fontWeight: FONT_WEIGHT.bold,
   },
   editor: {
-    minHeight: 140,
-    maxHeight: 200,
-    backgroundColor: '#14161b',
-    color: '#e0e0e0',
+    minHeight: 180,
+    maxHeight: 260,
+    backgroundColor: COLORS.surfaceAlt,
+    color: COLORS.textPrimary,
     fontFamily: 'monospace',
-    fontSize: 13,
-    padding: 10,
-    borderRadius: 8,
+    fontSize: FONT_SIZE.md,
+    padding: SPACING.md,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: '#2a2f3a',
+    borderColor: COLORS.border,
     textAlignVertical: 'top',
   },
   codeViewer: {
-    height: 200,
-    backgroundColor: '#14161b',
-    borderRadius: 8,
+    height: 260,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: '#2a2f3a',
+    borderColor: COLORS.border,
   },
   highlightBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: LINE_HEIGHT,
-    backgroundColor: '#e8791a33',
+    backgroundColor: COLORS.accentSoft,
     borderLeftWidth: 3,
-    borderLeftColor: '#e8791a',
+    borderLeftColor: COLORS.accent,
   },
   codeLine: {
     flexDirection: 'row',
     alignItems: 'center',
     height: LINE_HEIGHT,
-    paddingHorizontal: 8,
+    paddingHorizontal: SPACING.sm,
   },
   codeLineError: {
-    backgroundColor: '#ff8a8022',
+    backgroundColor: COLORS.dangerSoft,
   },
   lineNumber: {
-    width: 26,
-    color: '#5a6272',
+    width: 30,
+    color: COLORS.textMuted,
     fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
   },
   codeText: {
-    color: '#e0e0e0',
+    color: COLORS.textPrimary,
     fontFamily: 'monospace',
-    fontSize: 13,
+    fontSize: FONT_SIZE.md,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
   button: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: '#2a2f3a',
+    borderRadius: RADII.md,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   runButton: {
-    backgroundColor: '#2c8a4f',
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
   },
   stopButton: {
-    backgroundColor: '#a33a2f',
+    backgroundColor: COLORS.danger,
+    borderColor: COLORS.danger,
   },
   buttonText: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.sm,
   },
   saveBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   saveBarInput: {
     flex: 1,
-    backgroundColor: '#14161b',
-    color: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    minHeight: TOUCH_TARGET_MIN,
+    backgroundColor: COLORS.surfaceAlt,
+    color: COLORS.textPrimary,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.md,
     borderWidth: 1,
-    borderColor: '#2a2f3a',
-    fontSize: 13,
+    borderColor: COLORS.border,
+    fontSize: FONT_SIZE.md,
   },
   saveBarConfirm: {
-    backgroundColor: '#2c8a4f',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADII.md,
   },
   saveBarCancel: {
-    backgroundColor: '#2a2f3a',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    minHeight: TOUCH_TARGET_MIN,
+    minWidth: TOUCH_TARGET_MIN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceRaised,
+    borderRadius: RADII.md,
   },
   status: {
-    color: '#8fd19e',
-    marginTop: 8,
-    fontSize: 12,
+    color: COLORS.success,
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
   },
   progressTrack: {
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#2a2f3a',
-    marginTop: 6,
+    height: 6,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.surfaceRaised,
+    marginTop: SPACING.xs,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#8fd19e',
+    backgroundColor: COLORS.success,
   },
   errorList: {
-    marginTop: 8,
-    maxHeight: 100,
+    marginTop: SPACING.sm,
+    maxHeight: 120,
   },
   errorText: {
     color: '#ff8a80',
-    fontSize: 12,
-    marginBottom: 2,
+    fontSize: FONT_SIZE.sm,
+    marginBottom: SPACING.xs,
   },
 });

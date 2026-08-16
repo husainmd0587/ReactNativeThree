@@ -18,6 +18,8 @@ export { RoboticsNavigator } from './navigation/RoboticsNavigator';
 export { RoboticsHomeScreen } from './screens/RoboticsHomeScreen';
 export { RobotSimulatorScreen } from './screens/RobotSimulatorScreen';
 export { RobotBuilderScreen } from './screens/RobotBuilderScreen';
+export { LanguageReferenceScreen } from './screens/LanguageReferenceScreen';
+export { NewProgramScreen } from './screens/NewProgramScreen';
 
 export { RoboticsEngineProvider, useRoboticsEngine } from './providers/RoboticsEngineProvider';
 export { RoboticsCanvasProvider, useRoboticsCanvas } from './providers/RoboticsCanvasProvider';
@@ -29,6 +31,7 @@ export { DIALECTS, getDialect } from './engine/dialects';
 
 export { RobotProgramEditor } from './ui/RobotProgramEditor';
 export { ProgramFileManager } from './ui/ProgramFileManager';
+export { SimulationControlsBar } from './ui/SimulationControlsBar';
 
 export {
   listSavedPrograms,
@@ -36,6 +39,10 @@ export {
   saveProgram,
   deleteSavedProgram,
 } from './core/programStorage';
+
+export { DIALECT_DOCS, getDialectDocs } from './core/dialectDocs';
+export { PROGRAM_TEMPLATES, getTemplate, listTemplates } from './core/programTemplates';
+export * as THEME from './core/theme';
 
 export { PickableBox, DropZoneMarker } from './scene/PickableBox';
 
@@ -46,4 +53,6 @@ export {
   GRIP_STATES,
   DEFAULT_BOX_START_POSITION,
   DEFAULT_DROP_ZONE_POSITION,
+  PLAYBACK_STATES,
+  SPEED_PRESETS,
 } from './core/robotConstants';

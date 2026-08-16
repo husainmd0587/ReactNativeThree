@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Canvas, useThree, useFrame } from '@react-three/fiber/native';
 import {
-  PerspectiveCamera, OrthographicCamera, Vector3, DataTexture, RGBAFormat, LinearFilter, MathUtils,
+  PerspectiveCamera, OrthographicCamera, Vector3,  Box3, DataTexture, RGBAFormat, LinearFilter, MathUtils,
   Raycaster, Vector2, Color, TextureLoader, RepeatWrapping, BufferAttribute,
 } from 'three';
 import useControls from 'r3f-native-orbitcontrols';
@@ -18,6 +18,36 @@ import { usePortal, usePortalKey } from '../../utils/ThreeJs_Utils/portal';
 import { Textures, useTextureLoader } from '../materials/textures.js';
 import bg1 from '../../assets/images/bg/nature.jpg';
 import bg2 from '../../assets/images/bg/gradient.jpg';
+
+
+
+export function AutoFitCamera({ groupRef, trigger, enabled = true }) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (!enabled || !groupRef?.current || !camera) return;
+
+    const target = groupRef.current;
+    target.updateMatrixWorld(true); // force-sync world matrices before measuring
+
+    const box = new Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+
+    const size = box.getSize(new Vector3());
+    const center = box.getCenter(new Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (!Number.isFinite(maxDim) || maxDim <= 0) return;
+
+    const distance = maxDim * 1.5;
+    const direction = new Vector3(0.7, 0.5, 0.7).normalize();
+
+    camera.position.copy(center).add(direction.multiplyScalar(distance));
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+  }, [trigger, enabled, camera, groupRef]);
+
+  return null;
+}
 
 // ─── Context for 3D scene state ────────────────────────────────────────────
 const SceneContext = createContext();
@@ -154,7 +184,7 @@ export function makeLetterTexture(letter, hexColor) {
   const grid = PIXEL_FONT[letter];
   const GRID_H = grid.length;
   const GRID_W = grid[0].length;
-  const SCALE = 12;
+  const SCALE = 10;
   const PAD = SCALE;
   const TEX_W = GRID_W * SCALE + PAD * 2;
   const TEX_H = GRID_H * SCALE + PAD * 2;
@@ -204,25 +234,26 @@ export function makeLetterTexture(letter, hexColor) {
   return tex;
 }
 
-const AxisLabel = memo(({ text, position, color }) => {
+const AxisLabel = memo(({ text, position, color,scale=0.5 }) => {
+  
   const texture = useMemo(() => makeLetterTexture(text, color), [text, color]);
   useEffect(() => {
     return () => texture.dispose();
   }, [texture]);
   return (
-    <sprite position={position} scale={[1, 1, 1]}>
+    <sprite position={position} scale={[scale,scale,scale]}>
       <spriteMaterial map={texture} transparent depthTest={false} alphaTest={0.05} sizeAttenuation />
     </sprite>
   );
 });
 
-export const AxisLabels = memo(({ size = 5 }) => {
+export const AxisLabels = memo(({ size = 5,gap=0.2 }) => {
   return (
     <>
       <axesHelper args={[size]} />
-      <AxisLabel text="X" position={[size + 2.5, 0, 0]} color="#ff3333" />
-      <AxisLabel text="Y" position={[0, size + 2.5, 0]} color="#33cc33" />
-      <AxisLabel text="Z" position={[0, 0, size + 2.5]} color="#3388ff" />
+      <AxisLabel text="X" position={[size + gap, 0, 0]} color="#ff3333" />
+      <AxisLabel text="Y" position={[0, size + gap, 0]} color="#33cc33" />
+      <AxisLabel text="Z" position={[0, 0, size + gap]} color="#3388ff" />
     </>
   );
 });
@@ -490,19 +521,22 @@ export function CameraOrbitController({ vx, vy, pinchScale, pinchActive, enabled
   const lastPinchActiveFlag = useRef(false);
   const lastZoomEmit = useRef(0);
 
-  useEffect(() => {
+useEffect(() => {
+  spherical.current = null; // force recompute on next frame, after any auto-fit has landed
+  lastPinchScale.current = 1;
+  lastPinchActiveFlag.current = false;
+}, [camera]);
+
+  useFrame(() => {
+      if (!enabled) return;
+  if (!spherical.current) {
     const radius = camera.position.length() || 1;
     spherical.current = {
       theta: Math.atan2(camera.position.x, camera.position.z),
       phi: Math.acos(MathUtils.clamp(camera.position.y / radius, -1, 1)),
       radius,
     };
-    lastPinchScale.current = 1;
-    lastPinchActiveFlag.current = false;
-  }, [camera]);
-
-  useFrame(() => {
-    if (!enabled || !spherical.current) return;
+  }
     let dirty = false;
 
     if (pinchScale && pinchActive) {
@@ -1212,7 +1246,7 @@ const AdvancedVerticalPanel = memo(({
               value={gridSize}
               min={20}
               max={200}
-              step={20}
+              step={5}
               onChange={onGridSizeChange}
             />
 
@@ -1622,7 +1656,7 @@ const defaultSettings = {
   customGesture: false,
   activeView: 'iso',
   showGrid: false,
-  gridSize: 100,
+  gridSize: 20,
   axesVisible: true,
   backgroundColor: '#1a1b1e',
   bgMode: 'Color',
@@ -1697,6 +1731,7 @@ const CanvaProvider = ({
   instanceId = 'default',
   parts = [],
   onPartPress,
+  
 }) => {
   const initialCamPosition = useRef(camPosition || DEFAULT_CAM_POSITION).current;
   const [customGesture, setCustomGesture] = useState(false);
@@ -1704,7 +1739,7 @@ const CanvaProvider = ({
   const [camPos, setCamPos]               = useState(initialCamPosition);
   const [panelOpen, setPanelOpen]         = useState(false);
   const [showGrid, setShowGrid]           = useState(false);
-  const [gridSize, setGridSize]           = useState(100);
+  const [gridSize, setGridSize]           = useState(20);
   const [axesVisible, setAxesVisible]     = useState(true);
   const [backgroundColor, setBackgroundColor] = useState('#1a1b1e');
   const [bgMode, setBgMode]               = useState('Color');
@@ -2120,7 +2155,7 @@ const CanvaProvider = ({
       setCustomGesture(settings.customGesture || false);
       setActiveView(settings.activeView || 'iso');
       setShowGrid(settings.showGrid || false);
-      setGridSize(settings.gridSize || 100);
+      setGridSize(settings.gridSize || 20);
       setAxesVisible(settings.axesVisible !== undefined ? settings.axesVisible : true);
       setBackgroundColor(settings.backgroundColor || '#1a1b1e');
       setBgMode(settings.bgMode || 'Color');
@@ -2661,7 +2696,7 @@ const CanvaProvider = ({
 
                 {showGrid && (
                   <gridHelper
-                    args={[gridSize, Math.max(4, Math.round(gridSize * 0.8)), '#4a5a6a', '#2a3a4a']}
+                    args={[gridSize, Math.max(1, Math.round(gridSize * 0.5)), '#4a5a6a', '#2a3a4a']}
                     position={[0, 0, 0]}
                   />
                 )}

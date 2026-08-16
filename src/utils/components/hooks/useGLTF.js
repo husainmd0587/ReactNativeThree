@@ -82,10 +82,10 @@ export function useGLTF(url) {
 
           cache[resolvedURL] = result
           setState(result)
-        }, (err) => console.error('useGLTF parse error:', err))
+        })
 
       } catch (e) {
-        console.error('useGLTF load error:', e)
+        // Silent fail for GLTF load error handling.
       }
     }
 

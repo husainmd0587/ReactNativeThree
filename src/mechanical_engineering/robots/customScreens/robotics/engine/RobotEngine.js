@@ -34,6 +34,8 @@ import {
   PICK_RADIUS,
   GRAVITY,
   BOX_REST_HEIGHT,
+  PLAYBACK_STATES,
+  FIXED_STEP_SECONDS,
 } from '../core/robotConstants';
 
 const DEFAULT_MOVE_SPEED = 60; // degrees/second
@@ -60,6 +62,20 @@ export class RobotEngine {
     // the moment of drop, so the box lands exactly where the gripper
     // visually is.
     this.gripperWorldPosition = [0, 0, 0];
+
+    // Overall simulation clock - separate from program.running (which
+    // tracks only whether a program is mid-execution). update() only
+    // advances anything when playback.state === 'playing', so pausing
+    // freezes motion interpolation, box physics, AND program stepping
+    // together - not just a running program.
+    this.playback = {
+      state: PLAYBACK_STATES.PLAYING,
+      speed: 1,
+    };
+  }
+
+  getPlaybackState() {
+    return this.playback;
   }
 
   getState() {
@@ -176,6 +192,7 @@ export class RobotEngine {
 
     this.program.pointer = -1;
     this.program.running = true;
+    this.playback.state = PLAYBACK_STATES.PLAYING;
     this.setMode(SIMULATION_MODES.PROGRAM);
     this._advanceProgram();
     return true;
@@ -229,13 +246,73 @@ export class RobotEngine {
     }
   }
 
+  // ─── Simulation clock (Play / Pause / Stop / Step / Speed) ───────
+  /** Resumes ticking - whatever was in flight (motion, physics, a
+   * paused program) continues exactly where it left off. */
+  play() {
+    if (this.playback.state === PLAYBACK_STATES.PLAYING) return;
+    this.playback.state = PLAYBACK_STATES.PLAYING;
+    this._notify();
+  }
+
+  /** Freezes the clock. update() becomes a no-op until play()/stepFrame(). */
+  pause() {
+    if (this.playback.state !== PLAYBACK_STATES.PLAYING) return;
+    this.playback.state = PLAYBACK_STATES.PAUSED;
+    this._notify();
+  }
+
   /**
-   * Called every frame (see RoboticsScene's SimulationLoop). Advances
-   * in-flight motion, then steps the program forward if one is running
-   * and the current instruction has finished (motion arrived, wait
-   * elapsed, or grip/instant instructions complete immediately).
+   * Halts and rewinds: clears in-flight motion, stops any running
+   * program and resets its instruction pointer to the top (so the
+   * next Run/Play starts over, not mid-way). Does not otherwise move
+   * the robot or box - like an e-stop, not a full scene reset.
+   */
+  stop() {
+    this.playback.state = PLAYBACK_STATES.STOPPED;
+    this.motion.stop();
+    this.program.running = false;
+    this.program.pointer = -1;
+    this.program.waitRemaining = 0;
+    this._notify();
+  }
+
+  /**
+   * Advances exactly one fixed-size tick, regardless of playback
+   * state - the tool for frame-by-frame inspection while paused.
+   * No-ops while already playing (continuous ticking already covers
+   * it).
+   */
+  stepFrame() {
+    if (this.playback.state === PLAYBACK_STATES.PLAYING) return;
+    this._tick(FIXED_STEP_SECONDS * this.playback.speed);
+  }
+
+  /** Sets the playback speed multiplier (e.g. 0.25 for slow motion, 10 for 10x). */
+  setSpeed(multiplier) {
+    this.playback.speed = Math.min(10, Math.max(0.1, multiplier));
+    this._notify();
+  }
+
+  /**
+   * Called every frame (see RoboticsScene's SimulationLoop). Only
+   * advances anything while the playback clock is 'playing' - see
+   * play()/pause()/stop() above.
    */
   update(deltaTime) {
+    if (this.playback.state !== PLAYBACK_STATES.PLAYING) return;
+    this._tick(deltaTime * this.playback.speed);
+  }
+
+  /**
+   * The actual per-tick work: advances in-flight motion, box physics,
+   * then steps the program forward if one is running and the current
+   * instruction has finished (motion arrived, wait elapsed, or
+   * grip/instant instructions complete immediately). Shared by
+   * update() (continuous, gated by playback state) and stepFrame()
+   * (single manual tick, bypasses the gate).
+   */
+  _tick(deltaTime) {
     let changed = false;
 
     if (this.motion.isMoving()) {

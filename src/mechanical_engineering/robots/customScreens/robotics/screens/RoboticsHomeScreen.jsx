@@ -1,82 +1,155 @@
 /**
  * RoboticsHomeScreen.jsx
  *
- * Entry point for the Robotics module. Three cards: Learn Robotics
- * (placeholder - hook up to the app's content renderer later),
- * Robot Simulator, and Robot Builder.
+ * Entry point for the Robotics module. Cards for the Simulator,
+ * Builder, Language Reference (dialect syntax docs), and New Program
+ * (template-based program creation). Uses the shared theme tokens
+ * (core/theme.js) for consistent sizing across the whole module.
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, CARD_SHADOW } from '../core/theme';
 
-function HomeCard({ title, description, onPress, disabled }) {
+function HomeCard({ icon, title, description, onPress, disabled, accentColor = COLORS.accent }) {
   return (
     <TouchableOpacity
       style={[styles.card, disabled && styles.cardDisabled]}
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.8}
     >
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDescription}>{description}</Text>
+      <View style={[styles.iconWrap, { backgroundColor: `${accentColor}22` }]}>
+        <Text style={styles.icon}>{icon}</Text>
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDescription}>{description}</Text>
+      </View>
+      {!disabled && <Text style={styles.chevron}>›</Text>}
     </TouchableOpacity>
   );
 }
 
 export function RoboticsHomeScreen({ navigation }) {
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Robotics</Text>
+      <Text style={styles.subheader}>Simulate, program, and learn industrial robot arms</Text>
 
+      <Text style={styles.sectionLabel}>Simulate</Text>
       <HomeCard
+        icon="🦾"
+        title="Robot Simulator"
+        description="Jog joints manually or run a program - Fanuc, ABB, KUKA, or the built-in language"
+        onPress={() => navigation.navigate('RobotSimulator')}
+      />
+      <HomeCard
+        icon="🛠"
+        title="Interactive Robot Builder"
+        description="Preview and inspect a robot's joints and links"
+        onPress={() => navigation.navigate('RobotBuilder')}
+        accentColor={COLORS.accent2}
+      />
+
+      <Text style={styles.sectionLabel}>Program</Text>
+      <HomeCard
+        icon="✚"
+        title="New Program"
+        description="Start from a template - Pick and Place, Welding Pass, or blank"
+        onPress={() => navigation.navigate('NewProgram')}
+        accentColor={COLORS.success}
+      />
+      <HomeCard
+        icon="📖"
+        title="Language Reference"
+        description="Full syntax for Simple, Fanuc, ABB, and KUKA"
+        onPress={() => navigation.navigate('LanguageReference')}
+        accentColor={COLORS.accent2}
+      />
+
+      <Text style={styles.sectionLabel}>Learn</Text>
+      <HomeCard
+        icon="🎓"
         title="Learn Robotics"
         description="Lessons on joints, kinematics, and robot programming"
         disabled
       />
-
-      <HomeCard
-        title="Robot Simulator"
-        description="Control a 3-DOF robot arm in real time"
-        onPress={() => navigation.navigate('RobotSimulator')}
-      />
-
-      <HomeCard
-        title="Interactive Robot Builder"
-        description="Build a custom robot from joints and links"
-        onPress={() => navigation.navigate('RobotBuilder')}
-      />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#0f1115',
+    backgroundColor: COLORS.bg,
+  },
+  content: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxl,
   },
   header: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 16,
+    fontSize: FONT_SIZE.display,
+    fontWeight: FONT_WEIGHT.black,
+    color: COLORS.textPrimary,
+  },
+  subheader: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
+  },
+  sectionLabel: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
   },
   card: {
-    backgroundColor: '#1c1f26',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    ...CARD_SHADOW,
   },
   cardDisabled: {
-    opacity: 0.5,
+    opacity: 0.45,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: RADII.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  icon: {
+    fontSize: FONT_SIZE.xl,
+  },
+  cardBody: {
+    flex: 1,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
+    marginBottom: 2,
   },
   cardDescription: {
-    fontSize: 13,
-    color: '#9aa4b2',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  chevron: {
+    fontSize: FONT_SIZE.xl,
+    color: COLORS.textMuted,
+    marginLeft: SPACING.sm,
   },
 });
