@@ -1,4 +1,4 @@
-// RobotTestScreen.js - Cleaned UI Version
+// RoboticSimulator.js - Cleaned UI Version
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import {
@@ -17,7 +17,7 @@ import { createRobotController } from '../robot/robotController.js';
 const ROBOT_URL = 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/robotics/robotTeaching/industrialRobotArm2.glb';
 const { height } = Dimensions.get('window');
 
-export default function RobotTestScreen() {
+export default function RoboticSimulator() {
   const robotRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isGripperOpen, setIsGripperOpen] = useState(true);
