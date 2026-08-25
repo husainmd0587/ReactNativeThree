@@ -23,10 +23,12 @@ export const GRIP_STATES = Object.freeze({
   CLOSED: 'closed',
 });
 
-// Default camera position passed to the shared CanvaProvider.
-// The shared provider's own default ([0, 0, 100]) is tuned for
-// larger CAD-scale scenes; the 3-DOF arm preset is only ~1.5 units
-// tall, so robotics screens use a much closer camera.
+// Initial camera position passed to the shared CanvaProvider, before
+// GlbRobotArm's Scene component runs its own AutoFitCamera pass once
+// the real GLB model finishes loading (see scene/GlbRobotArm.jsx).
+// This value only matters for the brief moment before that fit
+// happens - AutoFitCamera adjusts for whatever the model's actual
+// scale turns out to be, so this doesn't need to be scale-accurate.
 export const DEFAULT_CAM_POSITION = [2, 2, 2];
 
 export const DEFAULT_JOINT_LIMITS = Object.freeze({
@@ -34,25 +36,33 @@ export const DEFAULT_JOINT_LIMITS = Object.freeze({
   max: 90,
 });
 
-// Where the pickable box starts (on the ground, within the arm's
-// rough visual reach), and where the drop zone marker is drawn.
-// These are purely visual placements - there is no reach/collision
-// checking yet, so they're not guaranteed to exactly line up with
-// any particular joint program.
+// PLACEHOLDER VALUES - scale-dependent on the real GLB rig, which
+// this environment can't measure (its CDN host is blocked by the
+// sandbox's network allowlist). These were tuned for the earlier
+// procedural robot's ~1.5-unit-tall geometry; the real rig's units
+// could be completely different (meters vs a normalized/arbitrary
+// scale). Recalibrate all four of these once you can see the model in
+// the app: watch where the box renders relative to the arm, and
+// adjust BOX_START/DROP_ZONE positions and PICK_RADIUS to match.
 export const DEFAULT_BOX_START_POSITION = [0.32, 0.03, 0.28];
 export const DEFAULT_DROP_ZONE_POSITION = [-0.32, 0, 0.22];
 
 // Box half-height, matching PickableBox's default size (0.07/2) - the
 // box rests with its center at this Y when sitting on the ground.
+// Also scale-dependent - see the placeholder note above.
 export const BOX_REST_HEIGHT = 0.035;
 
 // How close the gripper's real world position must be to the box for
 // closing the gripper to actually pick it up. Below this, the gripper
-// closes but grabs nothing - a real "miss".
+// closes but grabs nothing - a real "miss". Scale-dependent - see the
+// placeholder note above.
 export const PICK_RADIUS = 0.14;
 
 // Simple gravity constant (units/s^2) used to animate a released box
 // falling to the ground, instead of freezing wherever it was released.
+// Scale-dependent - see the placeholder note above; a much larger
+// rig's units would need a correspondingly larger constant to look
+// like normal-speed gravity rather than a slow-motion drift.
 export const GRAVITY = 2.4;
 
 // Overall simulation clock state (see engine/RobotEngine.js's play/

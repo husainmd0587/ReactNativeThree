@@ -23,7 +23,7 @@ import {
  *   mode,                // one of SIMULATION_MODES
  *   selectedJointId,
  *   grip,                // one of GRIP_STATES
- *   box,                 // { position: [x,y,z], held: bool, velocityY: number } - pick/place demo object
+ *   box,                 // { position: [x,y,z], quaternion: [x,y,z,w], held: bool, velocityY: number } - pick/place demo object
  *   dropZonePosition,    // [x,y,z] - visual marker only, doesn't affect logic
  * }
  */
@@ -41,6 +41,7 @@ export function createInitialRobotState(definition) {
     grip: GRIP_STATES.OPEN,
     box: {
       position: DEFAULT_BOX_START_POSITION,
+      quaternion: [0, 0, 0, 1],
       held: false,
       velocityY: 0,
     },
@@ -104,6 +105,10 @@ export function setBoxPosition(state, position) {
   return { ...state, box: { ...state.box, position } };
 }
 
+export function setBoxQuaternion(state, quaternion) {
+  return { ...state, box: { ...state.box, quaternion } };
+}
+
 export function setBoxVelocity(state, velocityY) {
   return { ...state, box: { ...state.box, velocityY } };
 }
@@ -111,7 +116,7 @@ export function setBoxVelocity(state, velocityY) {
 export function resetBox(state) {
   return {
     ...state,
-    box: { position: DEFAULT_BOX_START_POSITION, held: false, velocityY: 0 },
+    box: { position: DEFAULT_BOX_START_POSITION, quaternion: [0, 0, 0, 1], held: false, velocityY: 0 },
   };
 }
 

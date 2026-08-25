@@ -4,13 +4,15 @@
  * Central coordinator: holds robot state, drives motion interpolation,
  * and steps through a loaded program. Kinematics/collision are still
  * out of scope for this phase - joints are treated as directly
- * controlling the renderer's transforms (see RobotRenderer.jsx), not
- * derived from a forward-kinematics solve yet.
+ * controlling the rig's transforms (see scene/GlbRobotArm.jsx, which
+ * bridges this engine's plain jointValues scalars into the real GLB
+ * model imperatively), not derived from a forward-kinematics solve
+ * yet.
  *
  * Pipeline this enables:
  *   Program Text -> ProgramInterpreter -> Instructions
  *     -> RobotEngine (executor) -> MotionController -> jointValues
- *     -> RobotRenderer
+ *     -> GlbRobotArm -> real GLB rig
  */
 
 import {
@@ -22,6 +24,7 @@ import {
   setGrip,
   setBoxHeld,
   setBoxPosition,
+  setBoxQuaternion,
   setBoxVelocity,
   resetBox,
 } from '../model/RobotState';
@@ -56,12 +59,14 @@ export class RobotEngine {
       waitRemaining: 0,
     };
 
-    // Updated every frame by the renderer (RobotRenderer's gripper
-    // assembly) via reportGripperWorldPosition - the real rendered
-    // world position of the gripper, read from Three.js. Used only at
-    // the moment of drop, so the box lands exactly where the gripper
-    // visually is.
+    // Updated every frame by the renderer (GlbRobotArm) via
+    // reportGripperWorldPosition - the real rendered world transform of
+    // the end effector (J5), read directly off the GLB rig's Object3D.
+    // Used continuously while the box is held (see _tick below) and at
+    // the moment of drop, so the box tracks and lands exactly where
+    // the rig's wrist actually is.
     this.gripperWorldPosition = [0, 0, 0];
+    this.gripperWorldQuaternion = [0, 0, 0, 1];
 
     // Overall simulation clock - separate from program.running (which
     // tracks only whether a program is mid-execution). update() only
@@ -84,6 +89,20 @@ export class RobotEngine {
 
   getProgramState() {
     return this.program;
+  }
+
+  /**
+   * The end effector's last-reported real world position - updated
+   * continuously by GlbRobotArm every render frame regardless of
+   * playback state (see reportGripperWorldPosition). Exposed as a
+   * getter so UI components (e.g. PickDropWizardScreen) can poll it
+   * for a live "distance to target" readout without needing it to be
+   * part of the reactive state/notify pipeline - it changes every
+   * frame during any motion, and treating it as reactive state would
+   * mean re-rendering everything on every frame just for this.
+   */
+  getGripperWorldPosition() {
+    return this.gripperWorldPosition;
   }
 
   subscribe(listener) {
@@ -126,9 +145,10 @@ export class RobotEngine {
       }
     } else if (grip === GRIP_STATES.OPEN && previousGrip === GRIP_STATES.CLOSED && wasHolding) {
       // Drop: detach at the gripper's last reported real world
-      // position, then let update() animate it falling to the ground.
+      // transform, then let update() animate it falling to the ground.
       this.state = setBoxHeld(this.state, false);
       this.state = setBoxPosition(this.state, this.gripperWorldPosition);
+      this.state = setBoxQuaternion(this.state, this.gripperWorldQuaternion);
       this.state = setBoxVelocity(this.state, 0);
     }
 
@@ -136,13 +156,17 @@ export class RobotEngine {
   }
 
   /**
-   * Called every frame from the renderer with the gripper's actual
-   * rendered world position (via Object3D.getWorldPosition). Cheap and
-   * intentionally does not notify/re-render - it's only read back at
-   * the moment of a drop.
+   * Called every frame from the renderer with the end effector's
+   * actual rendered world transform (position, and optionally
+   * orientation as an [x,y,z,w] quaternion - GlbRobotArm reports both,
+   * the old procedural renderer only reported position). Cheap and
+   * intentionally does not notify/re-render on its own - it's read
+   * back continuously while the box is held (see _tick) and at the
+   * moment of a drop.
    */
-  reportGripperWorldPosition(position) {
+  reportGripperWorldPosition(position, quaternion) {
     this.gripperWorldPosition = position;
+    if (quaternion) this.gripperWorldQuaternion = quaternion;
   }
 
   /** Puts the box back at its starting position, released. */
@@ -220,9 +244,15 @@ export class RobotEngine {
   _startInstruction(instruction) {
     switch (instruction.type) {
       case INSTRUCTION_TYPES.HOME: {
+        // Each joint's own configured default, NOT a blanket 0 - for
+        // this rig, 0 isn't a meaningful rest angle for every joint
+        // (J3 rests at 180°, J4 at 90°, J5 at 120° - see
+        // core/glbRobotConfig.js). joint.value already carries that
+        // default (set when the preset was derived from the GLB
+        // config), so HOME just returns every joint to it.
         const targets = {};
         this.state.definition.joints.forEach((joint) => {
-          targets[joint.id] = 0;
+          targets[joint.id] = joint.value ?? 0;
         });
         this.motion.moveJ(this.state.jointValues, targets, DEFAULT_MOVE_SPEED);
         break;
@@ -318,6 +348,19 @@ export class RobotEngine {
     if (this.motion.isMoving()) {
       const { values } = this.motion.update(deltaTime);
       this.state = setJointValues(this.state, values);
+      changed = true;
+    }
+
+    // While held, the box has no parent-transform relationship to the
+    // gripper the way the old procedural renderer's JSX tree gave it
+    // for free (box literally nested inside the gripper's Three.js
+    // group). With the real GLB model controlled imperatively, there's
+    // no such JSX nesting available, so instead the box's state is
+    // kept in sync with the gripper's actual reported world transform
+    // every tick - same effect, different mechanism.
+    if (this.state.box.held) {
+      this.state = setBoxPosition(this.state, this.gripperWorldPosition);
+      this.state = setBoxQuaternion(this.state, this.gripperWorldQuaternion);
       changed = true;
     }
 

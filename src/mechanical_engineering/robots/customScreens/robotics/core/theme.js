@@ -60,6 +60,7 @@ export const RADII = {
 };
 
 export const FONT_SIZE = {
+  xxs: 10,
   xs: 11,
   sm: 13,
   md: 15,
@@ -77,6 +78,21 @@ export const FONT_WEIGHT = {
 };
 
 export const TOUCH_TARGET_MIN = 40;
+
+// Deliberately smaller than TOUCH_TARGET_MIN - used only for the
+// simulator's always-visible control chrome (header/transport bar),
+// where screen space must be prioritized for the 3D model rather than
+// the controls. Still large enough to tap reliably, just dense.
+export const COMPACT_TOUCH_TARGET = 30;
+
+// Fraction of the simulator screen's height given to the 3D canvas vs
+// the controls below it - see RobotSimulatorScreen.jsx. Using explicit
+// flex ratios (not flex:1 on both) is what actually guarantees this;
+// flex:1 on the canvas competing against a non-flex, content-sized
+// controls area is what caused the model to disappear entirely when
+// the Program tab's content got tall enough to squeeze it to zero.
+export const CANVAS_HEIGHT_RATIO = 7;
+export const CONTROLS_HEIGHT_RATIO = 3;
 
 export const CARD_SHADOW = {
   shadowColor: '#000',

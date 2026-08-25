@@ -20,6 +20,7 @@ import { RobotSimulatorScreen } from '../screens/RobotSimulatorScreen';
 import { RobotBuilderScreen } from '../screens/RobotBuilderScreen';
 import { LanguageReferenceScreen } from '../screens/LanguageReferenceScreen';
 import { NewProgramScreen } from '../screens/NewProgramScreen';
+import { PickDropWizardScreen } from '../screens/PickDropWizardScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -50,6 +51,11 @@ export function RoboticsNavigator() {
         name="NewProgram"
         component={NewProgramScreen}
         options={{ title: 'New Program' }}
+      />
+      <Stack.Screen
+        name="PickDropWizard"
+        component={PickDropWizardScreen}
+        options={{ title: 'Pick & Drop Wizard' }}
       />
     </Stack.Navigator>
   );

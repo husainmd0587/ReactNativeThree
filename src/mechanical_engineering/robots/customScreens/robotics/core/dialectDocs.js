@@ -26,7 +26,7 @@ export const DIALECT_DOCS = {
         syntax: 'MOVEJ J1=<deg> J2=<deg> ... SPEED=<deg/s>',
         description:
           'Joint move. List only the joints you want to move - others hold their current position. SPEED is optional (defaults to 60°/s).',
-        example: 'MOVEJ J1=-41 J2=-76 J3=-136 J4=96 SPEED=60',
+        example: 'MOVEJ J1=30 SPEED=40',
       },
       {
         syntax: 'WAIT <seconds>',
@@ -52,7 +52,7 @@ export const DIALECT_DOCS = {
       {
         syntax: 'PR[n] = {J1 <deg>, J2 <deg>, ...}',
         description: 'Defines a position register\u2019s joint values. Must appear before it\u2019s referenced.',
-        example: 'PR[1] = {J1 -41, J2 -76, J3 -136, J4 96}',
+        example: 'PR[1] = {J1 30}',
       },
       {
         syntax: 'J HOME 100% FINE',
@@ -62,7 +62,7 @@ export const DIALECT_DOCS = {
       {
         syntax: 'J PR[n] <speed>% FINE',
         description: 'Moves to the joint values stored in position register n. The speed percentage maps directly to this simulator\u2019s SPEED value.',
-        example: 'J PR[1] 100% FINE',
+        example: 'J PR[1] 40% FINE',
       },
       {
         syntax: 'WAIT <seconds>(sec)',
@@ -86,10 +86,10 @@ export const DIALECT_DOCS = {
       'Real RAPID is a full language (procedures, variables, IF/FOR, multiple motion types, work objects) - this covers only joint motion, waits, and a digital-output convention for the gripper.',
     statements: [
       {
-        syntax: 'MoveAbsJ [[j1,j2,j3,j4],[0,0,0,0]], vN, fine, tool0;',
+        syntax: 'MoveAbsJ [[j1,j2,...],[0,0,0,0]], vN, fine, tool0;',
         description:
-          'Joint move to the given values. The second array (axis configuration) is accepted but ignored - this simulator doesn\u2019t model axis turns. vN sets speed (e.g. v100).',
-        example: 'MoveAbsJ [[-41,-76,-136,96],[0,0,0,0]], v100, fine, tool0;',
+          'Joint move. List as many or as few joint values as you want to move - unlisted joints hold their current value. The second array (axis configuration) is accepted but ignored - this simulator doesn\u2019t model axis turns. vN sets speed (e.g. v100).',
+        example: 'MoveAbsJ [[30],[0,0,0,0]], v40, fine, tool0;',
       },
       {
         syntax: 'WaitTime <seconds>;',
@@ -126,7 +126,7 @@ export const DIALECT_DOCS = {
       {
         syntax: 'PTP {A1 <deg>, A2 <deg>, ...} VEL=<n>',
         description: 'Joint move using KRL axis names (A1, A2, ...). VEL is optional (defaults to 60).',
-        example: 'PTP {A1 -41, A2 -76, A3 -136, A4 96} VEL=60',
+        example: 'PTP {A1 30} VEL=40',
       },
       {
         syntax: 'WAIT SEC <seconds>',

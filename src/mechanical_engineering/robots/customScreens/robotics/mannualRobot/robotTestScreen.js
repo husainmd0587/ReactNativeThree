@@ -9,13 +9,14 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import Slider from '../../../utils/ThreeJs_Utils/slider.js';
-import Model3DPreview from '../../../utils/components/glbPreview.js';
-import { industrialRobotConfig } from '../robot/robotConfig.js';
-import { createRobotController } from '../robot/robotController.js';
+import Slider from '../../../../../utils/ThreeJs_Utils/slider.js';
+import Model3DPreview from '../../../../../utils/components/glbPreview.js';
+import { industrialRobotConfig } from './robot/robotConfig.js';
+import { createRobotController } from './robot/robotController.js';
 
 const ROBOT_URL = 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/robotics/robotTeaching/industrialRobotArm2.glb';
 const { height } = Dimensions.get('window');
+
 
 export default function RoboticSimulator() {
   const robotRef = useRef(null);

@@ -1,24 +1,42 @@
 /**
  * RobotSimulatorScreen.jsx
  *
- * Two control panels below the same canvas/scene: Manual (joint
- * control) and Program (write/run in Simple/Fanuc/ABB/KUKA syntax).
- * Switching tabs doesn't change how the robot is rendered - both
- * panels drive the same RobotEngine. SimulationControlsBar sits above
- * the canvas and governs the whole simulation clock regardless of
- * which tab is active.
+ * LAYOUT FIX: the canvas area previously used `flex: 1` sitting next
+ * to a non-flex controls region (tabs + Manual/Program panel) whose
+ * natural content height could exceed the screen. In React Native
+ * flexbox, a flex:1 sibling loses that fight and gets squeezed toward
+ * zero - which is exactly why the 3D model disappeared entirely once
+ * the Program tab's content (editor + buttons + status + progress +
+ * errors) got tall enough. Fixed by giving the canvas and the controls
+ * region explicit flex RATIOS (CANVAS_HEIGHT_RATIO : CONTROLS_HEIGHT_
+ * RATIO, currently 7:3) inside a flex:1 parent - this guarantees the
+ * ~70/30 split regardless of content, and the controls region is now
+ * wrapped in a ScrollView so any overflow scrolls internally instead
+ * of pushing into the canvas's share.
+ *
+ * Also consolidated what used to be two separate bars (RoboticsToolbar
+ * + SimulationControlsBar) into one compact SimHeaderBar - "only one
+ * header" per the redesign request, with the speed-preset row hidden
+ * behind a collapsible chip instead of permanently visible.
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { RoboticsCanvasProvider, useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import { RoboticsScene } from '../scene/RoboticsScene';
-import { RoboticsToolbar } from '../ui/RoboticsToolbar';
+import { SimHeaderBar } from '../ui/SimHeaderBar';
 import { JointControlPanel } from '../ui/JointControlPanel';
 import { RobotProgramEditor } from '../ui/RobotProgramEditor';
-import { SimulationControlsBar } from '../ui/SimulationControlsBar';
-import { DEFAULT_CAM_POSITION, GRIP_STATES } from '../core/robotConstants';
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
+import { DEFAULT_CAM_POSITION } from '../core/robotConstants';
+import {
+  COLORS,
+  SPACING,
+  FONT_SIZE,
+  FONT_WEIGHT,
+  COMPACT_TOUCH_TARGET,
+  CANVAS_HEIGHT_RATIO,
+  CONTROLS_HEIGHT_RATIO,
+} from '../core/theme';
 import CanvaProvider from '../../../../../utils/ThreeJs_Utils/provider';
 
 const TABS = { MANUAL: 'manual', PROGRAM: 'program' };
@@ -50,20 +68,9 @@ function SimulatorContent() {
   const { engine, state } = useRoboticsCanvas();
   const [activeTab, setActiveTab] = useState(TABS.MANUAL);
 
-  const toggleGrip = () => {
-    engine.setGrip(state.grip === GRIP_STATES.OPEN ? GRIP_STATES.CLOSED : GRIP_STATES.OPEN);
-  };
-
   return (
     <View style={styles.container}>
-      <RoboticsToolbar
-        mode={state.mode}
-        grip={state.grip}
-        onToggleGrip={toggleGrip}
-        onResetBox={() => engine.resetBox()}
-      />
-
-      <SimulationControlsBar />
+      <SimHeaderBar onResetBox={() => engine.resetBox()} />
 
       <View style={styles.canvasArea}>
         <CanvaProvider camPosition={DEFAULT_CAM_POSITION}>
@@ -74,21 +81,24 @@ function SimulatorContent() {
             box={state.box}
             dropZonePosition={state.dropZonePosition}
             onFrame={(dt) => engine.update(dt)}
-            onGripperFrame={(pos) => engine.reportGripperWorldPosition(pos)}
+            onGripperFrame={(pos, quat) => engine.reportGripperWorldPosition(pos, quat)}
           />
         </CanvaProvider>
       </View>
 
-      <ControlTabs activeTab={activeTab} onChange={setActiveTab} />
-
-      {activeTab === TABS.MANUAL ? <JointControlPanel /> : <RobotProgramEditor />}
+      <View style={styles.controlsArea}>
+        <ControlTabs activeTab={activeTab} onChange={setActiveTab} />
+        <ScrollView style={styles.controlsScroll} keyboardShouldPersistTaps="handled">
+          {activeTab === TABS.MANUAL ? <JointControlPanel /> : <RobotProgramEditor />}
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
 export function RobotSimulatorScreen() {
   return (
-    <RoboticsCanvasProvider presetId="pick_drop_arm">
+    <RoboticsCanvasProvider presetId="industrial_glb_arm">
       <SimulatorContent />
     </RoboticsCanvasProvider>
   );
@@ -100,19 +110,25 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   canvasArea: {
+    flex: CANVAS_HEIGHT_RATIO,
+  },
+  controlsArea: {
+    flex: CONTROLS_HEIGHT_RATIO,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  controlsScroll: {
     flex: 1,
   },
   tabBar: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.surfaceAlt,
   },
   tab: {
     flex: 1,
-    minHeight: TOUCH_TARGET_MIN + 6,
+    height: COMPACT_TOUCH_TARGET,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceAlt,
   },
   tabActive: {
     backgroundColor: COLORS.surface,
@@ -122,7 +138,7 @@ const styles = StyleSheet.create({
   tabText: {
     color: COLORS.textMuted,
     fontWeight: FONT_WEIGHT.bold,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
   },
   tabTextActive: {
     color: COLORS.textPrimary,

@@ -29,7 +29,11 @@ function PropertyRow({ property, onEditValue }) {
 
   const commit = () => {
     const num = parseFloat(text);
-    if (Number.isFinite(num) && num > 0) {
+    // Angle fields (unit '°') can legitimately be 0 — a 0° rectangle is
+    // just axis-aligned, not degenerate the way a 0mm length/radius/width
+    // would be, so only those keep the "must be positive" requirement.
+    const minValue = property.unit === '°' ? 0 : Number.EPSILON;
+    if (Number.isFinite(num) && num >= minValue) {
       onEditValue(property.key, num);
     } else {
       setText(String(property.value)); // revert invalid input

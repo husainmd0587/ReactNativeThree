@@ -7,7 +7,7 @@
  * library" rule.
  *
  * Usage:
- *   <RoboticsEngineProvider presetId="three_dof_arm">
+ *   <RoboticsEngineProvider presetId="industrial_glb_arm">
  *     <RobotSimulatorScreen />
  *   </RoboticsEngineProvider>
  */
@@ -18,7 +18,7 @@ import { getRobotPreset } from '../core/robotPresets';
 
 const RoboticsEngineContext = createContext(null);
 
-export function RoboticsEngineProvider({ presetId = 'pick_drop_arm', children }) {
+export function RoboticsEngineProvider({ presetId = 'industrial_glb_arm', children }) {
   const engine = useMemo(() => {
     const definition = getRobotPreset(presetId);
     return createRobotEngine(definition);

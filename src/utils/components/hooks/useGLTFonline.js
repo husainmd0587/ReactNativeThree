@@ -489,3 +489,5 @@ export function clearGLTF(url) {
   }
   cache.cache.delete(url);
 }
+
+//compressed models - gltfpack -i car.glb -o carC.glb -cc -kn -ke -vpf -vtf

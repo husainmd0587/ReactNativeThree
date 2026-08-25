@@ -10,29 +10,28 @@ import ProgressRing from '../utils/components/common/progressBar.js';
 
 import HomeCad from '../mechanical_engineering/Edand3D/index.js'
 import HomeTurningMilling from '../turning_milling/index.js';
-import AllMeasuringTools from '../mechanical_engineering/measurings/allmeasuringTools';
-import MetalWeightCalculator from '../mechanical_engineering/calculator/home';
+import AllMeasuringTools from '../mechanical_engineering/measurings/allmeasuringTools.js';
+import MetalWeightCalculator from '../mechanical_engineering/calculator/home.js';
 import MachineElements from '../mechanical_engineering/machine_elements/index.js';
 import Robots from '../mechanical_engineering/robots/index.js';
 import Workshop from '../mechanical_engineering/workshop/index.js';
 import AutomobileHome from '../mechanical_engineering/automobile/index.js';
 import MaterialsHome from '../mechanical_engineering/materials/index.js';
-import ProductionManagement from '../mechanical_engineering/management/management';
+import ProductionManagement from '../mechanical_engineering/management/management.js';
 import MCQ from '../mechanical_engineering/management/mcq/index.js';
 
 // special simulations screens
 import AutoCadPractice from '../mechanical_engineering/Edand3D/customScreens/AutoCad/index.js';
 import FreehandTurning from '../turning_milling/customScreens/mannualTurning/freehandTurning.js';
 import CncSimulatorPro from '../turning_milling/customScreens/cnc/CncSimulatorPro.js';
-import RoboticSimulator from '../mechanical_engineering/robots/customScreens/robotTestScreen.js';
+import RoboticSimulator from '../mechanical_engineering/robots/customScreens/robotics/mannualRobot/robotTestScreen.js';
 import ScientificCalculator from '../mechanical_engineering/calculator/allCalculators/ScientificCalculator.js';
 
-import { Header } from '../components/common';
-
+import { Header } from '../components/common/index.js';
+import SplashScreen from './splash.js';
 const Stack = createNativeStackNavigator();
 const { width } = Dimensions.get('window');
 
-// ── Featured Simulator Card (Horizontal Scroll) ──
 const FeaturedSimulatorCard = React.memo(({ simulator, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -52,11 +51,14 @@ const FeaturedSimulatorCard = React.memo(({ simulator, onPress }) => {
     }).start();
   };
 
+  const cardWidth = width < 768 ? width * 0.75 : width * 0.4;
+
   return (
     <Animated.View
       style={[
         styles.featuredCardWrapper,
         {
+          width: cardWidth,
           transform: [{ scale: scaleAnim }],
         }
       ]}
@@ -98,14 +100,17 @@ const FeaturedSimulatorCard = React.memo(({ simulator, onPress }) => {
 });
 
 // ── Featured Simulator Scroll ──
+
 const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) => {
   const flatListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const intervalRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  // Calculate card width based on screen
   const cardWidth = width < 768 ? width * 0.75 : width * 0.4;
   const spacing = 16;
+  // The total width includes the card + marginRight from card wrapper
   const totalWidth = cardWidth + spacing;
 
   // Auto-scroll animation
@@ -118,6 +123,7 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
       intervalRef.current = setInterval(() => {
         if (flatListRef.current) {
           const nextIndex = (currentIndex + 1) % simulators.length;
+          // Calculate offset based on card width + spacing
           const offsetX = nextIndex * totalWidth;
           
           flatListRef.current.scrollToOffset({
@@ -141,9 +147,27 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
 
   const handleMomentumScrollEnd = (event) => {
     const offsetX = event.nativeEvent.contentOffset.x;
+    // Calculate which card is centered
     const index = Math.round(offsetX / totalWidth);
     const clampedIndex = Math.min(Math.max(index, 0), simulators.length - 1);
     setCurrentIndex(clampedIndex);
+    
+    // Snap to exact position after user scroll
+    if (flatListRef.current) {
+      flatListRef.current.scrollToOffset({
+        offset: clampedIndex * totalWidth,
+        animated: true,
+      });
+    }
+  };
+
+  // Handle scroll to get current index
+  const handleScroll = (event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / totalWidth);
+    if (index !== currentIndex && index >= 0 && index < simulators.length) {
+      setCurrentIndex(index);
+    }
   };
 
   // Shuffle simulators for featured section
@@ -205,22 +229,28 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
         )}
         contentContainerStyle={[
           styles.featuredList,
-          { paddingHorizontal: 16 }
+          { 
+            paddingHorizontal: (width - cardWidth) / 2, // Center the first and last cards
+          }
         ]}
+        snapToAlignment="center"
         snapToInterval={totalWidth}
         decelerationRate="fast"
         bounces={false}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        style={styles.featuredFlatList}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={3}
+        showsHorizontalScrollIndicator={false}
+        // Add these props for better snapping
+        pagingEnabled={false}
+        disableIntervalMomentum={true}
       />
 
       {renderDots()}
     </View>
   );
 });
-
 
 // ── Simulator Grid Component ──
 const SimulatorGrid = React.memo(({ simulators, onSimulatorPress }) => {
@@ -237,7 +267,6 @@ const SimulatorGrid = React.memo(({ simulators, onSimulatorPress }) => {
 
       <View style={styles.simulatorGrid}>
         {simulators.map((simulator, index) => {
-          // Check if it's the last item in a row (every 3rd item)
           const isLastInRow = (index + 1) % 3 === 0;
           return (
             <View 
@@ -258,6 +287,7 @@ const SimulatorGrid = React.memo(({ simulators, onSimulatorPress }) => {
     </View>
   );
 });
+
 // ── Simulator Card Component (Grid) ──
 const SimulatorCard = React.memo(({ simulator, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -590,12 +620,29 @@ const NavigationMain = ({ navigation }) => {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      <Header
-        title="ME Studio"
-        subtitle="Mechanical Engineering · Learn Easily"
-        drawerItems={drawerItems}
-        onDrawerItemPress={(item) => handleNavigate(item.route)}
-      />
+      {/* Header with Background Image */}
+      <View style={styles.headerContainer}>
+        <ImageBackground
+          source={require('../assets/images/navigations/drawing_cad.png')}
+          style={styles.headerBackground}
+          imageStyle={styles.headerBackgroundImage}
+          resizeMode="cover"
+        >
+          <View style={styles.headerOverlay}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.headerTitle}>ME Studio</Text>
+                <Text style={styles.headerSubtitle}>Mechanical Engineering · Learn Easily</Text>
+              </View>
+              <View style={styles.headerRight}>
+                <TouchableOpacity style={styles.headerProfileBtn}>
+                  <Text style={styles.headerProfileEmoji}>👤</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
 
       <Toolbox
         listView={listView}
@@ -792,7 +839,7 @@ const AllScreens = [
 ];
 
 // ── Navigation Content ──
-function MainStackContent() {
+function MainStack() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -816,9 +863,7 @@ function MainStackContent() {
 }
 
 // ── Main stack ──
-export default function MainStack() {
-  return <MainStackContent />;
-}
+export default MainStack;
 
 // ── Styles ──
 const styles = StyleSheet.create({
@@ -836,6 +881,65 @@ const styles = StyleSheet.create({
   },
   bodyList: { 
     paddingHorizontal: 12 
+  },
+
+  // Header Styles with Background Image
+  headerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F5',
+  },
+  headerBackground: {
+    width: '100%',
+    height: 120,
+  },
+  headerBackgroundImage: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  headerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    justifyContent: 'center',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerProfileBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F0EEF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#E8E6F0',
+  },
+  headerProfileEmoji: {
+    fontSize: 20,
   },
 
   // Featured Section Styles
@@ -885,11 +989,10 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   featuredList: {
-    paddingHorizontal: 16,
-    paddingRight: 16,
+    paddingHorizontal: 0, // Remove fixed padding
+    gap: 16, // Add gap between items
   },
   featuredCardWrapper: {
-    marginRight: 12,
     borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -897,9 +1000,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
+    marginRight: 0, // Remove marginRight
   },
   featuredCard: {
-    width: width < 768 ? width * 0.7 : width * 0.35,
+    flex: 1, // Make card fill the wrapper
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',
@@ -1040,12 +1144,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   simulatorGridItem: {
-    width: '31.33%', // Fixed width for 3 columns with gaps
+    width: '31.33%',
     marginBottom: 8,
-    marginRight: '2%', // Gap between items
+    marginRight: '2%',
   },
   simulatorGridItemLast: {
-    marginRight: 0, // Remove right margin for last item in row
+    marginRight: 0,
   },
   simulatorCardWrapper: {
     borderRadius: 12,

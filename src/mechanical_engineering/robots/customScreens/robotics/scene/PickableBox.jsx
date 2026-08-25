@@ -4,16 +4,26 @@
  * The small box the robot picks up and moves, plus a flat ring marking
  * the suggested drop zone. Both are purely visual - there's no
  * physics/collision here yet, just meshes positioned by state.
+ *
+ * `quaternion` is optional - RobotEngine keeps it synced to the real
+ * gripper's orientation while the box is held (see RobotEngine._tick),
+ * so the box also rotates with the wrist, not just translates with it.
  */
 
 import React from 'react';
 
 const BOX_SIZE = 0.07;
 const BOX_COLOR = '#f2c14e';
+const IDENTITY_QUATERNION = [0, 0, 0, 1];
 
-export function PickableBox({ position = [0, 0, 0], size = BOX_SIZE, color = BOX_COLOR }) {
+export function PickableBox({
+  position = [0, 0, 0],
+  quaternion = IDENTITY_QUATERNION,
+  size = BOX_SIZE,
+  color = BOX_COLOR,
+}) {
   return (
-    <mesh position={position}>
+    <mesh position={position} quaternion={quaternion}>
       <boxGeometry args={[size, size, size]} />
       <meshStandardMaterial color={color} roughness={0.5} metalness={0.1} />
     </mesh>

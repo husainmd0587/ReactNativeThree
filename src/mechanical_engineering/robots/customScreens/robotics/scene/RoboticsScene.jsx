@@ -1,11 +1,18 @@
 /**
  * RoboticsScene.jsx
  *
- * Scene *content* only - the robot itself, a small ground plane sized
- * to match the robot's scale, and the per-frame simulation driver.
- * Grid, axis labels, camera, and lighting are already provided by the
- * existing shared CanvaProvider - this component doesn't duplicate
- * them, it's just what gets passed as CanvaProvider's children.
+ * Scene *content* only - the robot itself, the pickable box, a small
+ * ground plane, and the per-frame simulation driver. Grid, axis
+ * labels, camera, and lighting are already provided by the existing
+ * shared CanvaProvider - this component doesn't duplicate them, it's
+ * just what gets passed as CanvaProvider's children.
+ *
+ * The box is now ALWAYS rendered here (no more `!box.held` check) -
+ * with the real GLB model, there's no JSX tree to nest the box inside
+ * when held, so instead RobotEngine keeps box.position/box.quaternion
+ * synced to the gripper's real transform every tick while held (see
+ * RobotEngine._tick). The box just always renders at whatever
+ * position/quaternion the engine currently reports.
  *
  * `onFrame`, if provided, is called every render frame with the delta
  * time (seconds) via R3F's useFrame - this is how RobotEngine.update()
@@ -15,7 +22,7 @@
 
 import React from 'react';
 import { useFrame } from '@react-three/fiber/native';
-import { RobotRenderer } from './RobotRenderer';
+import { GlbRobotArm } from './GlbRobotArm';
 import { PickableBox, DropZoneMarker } from './PickableBox';
 
 function SimulationLoop({ onFrame }) {
@@ -52,13 +59,12 @@ export function RoboticsScene({
       {showGround && <Ground />}
 
       {dropZonePosition && <DropZoneMarker position={dropZonePosition} />}
-      {box && !box.held && <PickableBox position={box.position} />}
+      {box && <PickableBox position={box.position} quaternion={box.quaternion} />}
 
-      <RobotRenderer
+      <GlbRobotArm
         definition={definition}
         jointValues={jointValues}
         grip={grip}
-        heldBox={box?.held}
         onGripperFrame={onGripperFrame}
       />
     </group>

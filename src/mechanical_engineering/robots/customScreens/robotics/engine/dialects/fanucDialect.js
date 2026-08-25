@@ -13,7 +13,7 @@
  * Supported syntax (one statement per line; `!` or `//` starts a
  * comment):
  *
- *   PR[1] = {J1 -41, J2 -76, J3 -136, J4 96}
+ *   PR[1] = {J1 30}
  *   J HOME 100% FINE
  *   J PR[1] 100% FINE
  *   WAIT 0.5(sec)
@@ -23,18 +23,22 @@
  * As with the KUKA dialect, the DOUT number is accepted but not
  * validated against anything specific - it's treated as whichever
  * output the gripper is wired to, same as a real cell's I/O config.
+ *
+ * NOTE on FANUC_EXAMPLE below: only J1 moves, by a modest safe delta -
+ * see simpleDialect.js's header for why (can't verify multi-joint
+ * reach targets against geometry this environment can't fetch).
  */
 
 import { INSTRUCTION_TYPES, buildJointNameMap } from '../ProgramInterpreter';
 
-export const FANUC_EXAMPLE = `PR[1] = {J1 -41, J2 -76, J3 -136, J4 96}
-PR[2] = {J1 -146, J2 -73, J3 -138, J4 74}
+export const FANUC_EXAMPLE = `PR[1] = {J1 30}
+PR[2] = {J1 -30}
 J HOME 100% FINE
-J PR[1] 100% FINE
+J PR[1] 40% FINE
 WAIT 0.5(sec)
 DOUT[1]=ON
 WAIT 0.3(sec)
-J PR[2] 100% FINE
+J PR[2] 40% FINE
 WAIT 0.5(sec)
 DOUT[1]=OFF
 WAIT 0.5(sec)

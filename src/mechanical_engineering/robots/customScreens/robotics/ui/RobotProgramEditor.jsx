@@ -37,9 +37,9 @@ import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import { DIALECTS, getDialect } from '../engine/dialects';
 import { saveProgram } from '../core/programStorage';
 import { ProgramFileManager } from './ProgramFileManager';
-import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, COMPACT_TOUCH_TARGET } from '../core/theme';
 
-const LINE_HEIGHT = 26;
+const LINE_HEIGHT = 22;
 
 function CodeViewer({ text, activeLine, errorLines }) {
   const scrollRef = useRef(null);
@@ -332,7 +332,7 @@ export function RobotProgramEditor() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: SPACING.lg,
+    padding: SPACING.sm,
   },
   header: {
     flexDirection: 'row',
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
     backgroundColor: COLORS.surfaceRaised,
     paddingHorizontal: SPACING.md,
     borderRadius: RADII.md,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   },
   dropdownList: {
     position: 'absolute',
-    top: TOUCH_TARGET_MIN + 4,
+    top: COMPACT_TOUCH_TARGET + 4,
     right: 0,
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADII.md,
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   dropdownItem: {
-    minHeight: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
     justifyContent: 'center',
     paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
@@ -415,8 +415,8 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
   },
   editor: {
-    minHeight: 180,
-    maxHeight: 260,
+    minHeight: 120,
+    maxHeight: 170,
     backgroundColor: COLORS.surfaceAlt,
     color: COLORS.textPrimary,
     fontFamily: 'monospace',
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   codeViewer: {
-    height: 260,
+    height: 170,
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADII.md,
     borderWidth: 1,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    minHeight: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: RADII.md,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   saveBarInput: {
     flex: 1,
-    minHeight: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
     backgroundColor: COLORS.surfaceAlt,
     color: COLORS.textPrimary,
     paddingHorizontal: SPACING.md,
@@ -509,15 +509,15 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
   },
   saveBarConfirm: {
-    minHeight: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
     justifyContent: 'center',
     backgroundColor: COLORS.success,
     paddingHorizontal: SPACING.lg,
     borderRadius: RADII.md,
   },
   saveBarCancel: {
-    minHeight: TOUCH_TARGET_MIN,
-    minWidth: TOUCH_TARGET_MIN,
+    minHeight: COMPACT_TOUCH_TARGET,
+    minWidth: COMPACT_TOUCH_TARGET,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.surfaceRaised,

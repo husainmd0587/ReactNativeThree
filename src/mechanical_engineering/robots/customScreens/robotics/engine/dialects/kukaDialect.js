@@ -9,8 +9,9 @@
  * Supported syntax (one statement per line; `;` starts a comment):
  *
  *   PTP HOME
- *   PTP {A1 -41, A2 -76, A3 -136, A4 96}
- *   PTP {A1 0, A2 0, A3 0, A4 0} VEL=60      (optional VEL= for speed)
+ *   PTP {A1 30, A2 -10}       (list as many axes as you want to move -
+ *                              unlisted axes hold their current value)
+ *   PTP {A1 0, A2 0} VEL=60      (optional VEL= for speed)
  *   WAIT SEC 1
  *   $OUT[1] = TRUE     -> closes the gripper
  *   $OUT[1] = FALSE    -> opens the gripper
@@ -19,16 +20,20 @@
  * anything - this simulator assumes whichever output number is used
  * is the configured gripper signal, same as a real cell's I/O mapping
  * would be set up by the integrator.
+ *
+ * NOTE on KUKA_EXAMPLE below: only A1 moves, by a modest safe delta -
+ * see simpleDialect.js's header for why (can't verify multi-axis
+ * reach targets against geometry this environment can't fetch).
  */
 
 import { INSTRUCTION_TYPES, buildJointNameMap } from '../ProgramInterpreter';
 
 export const KUKA_EXAMPLE = `PTP HOME
-PTP {A1 -41, A2 -76, A3 -136, A4 96} VEL=60
+PTP {A1 30} VEL=40
 WAIT SEC 0.5
 $OUT[1] = TRUE
 WAIT SEC 0.3
-PTP {A1 -146, A2 -73, A3 -138, A4 74} VEL=60
+PTP {A1 -30} VEL=40
 WAIT SEC 0.5
 $OUT[1] = FALSE
 WAIT SEC 0.5

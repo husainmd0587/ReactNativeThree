@@ -20,6 +20,7 @@ export { RobotSimulatorScreen } from './screens/RobotSimulatorScreen';
 export { RobotBuilderScreen } from './screens/RobotBuilderScreen';
 export { LanguageReferenceScreen } from './screens/LanguageReferenceScreen';
 export { NewProgramScreen } from './screens/NewProgramScreen';
+export { PickDropWizardScreen } from './screens/PickDropWizardScreen';
 
 export { RoboticsEngineProvider, useRoboticsEngine } from './providers/RoboticsEngineProvider';
 export { RoboticsCanvasProvider, useRoboticsCanvas } from './providers/RoboticsCanvasProvider';
@@ -31,7 +32,7 @@ export { DIALECTS, getDialect } from './engine/dialects';
 
 export { RobotProgramEditor } from './ui/RobotProgramEditor';
 export { ProgramFileManager } from './ui/ProgramFileManager';
-export { SimulationControlsBar } from './ui/SimulationControlsBar';
+export { SimHeaderBar } from './ui/SimHeaderBar';
 
 export {
   listSavedPrograms,
@@ -42,17 +43,29 @@ export {
 
 export { DIALECT_DOCS, getDialectDocs } from './core/dialectDocs';
 export { PROGRAM_TEMPLATES, getTemplate, listTemplates } from './core/programTemplates';
+export { generatePickDropProgram } from './core/programGenerator';
 export * as THEME from './core/theme';
 
 export { PickableBox, DropZoneMarker } from './scene/PickableBox';
+export { GlbRobotArm } from './scene/GlbRobotArm';
 
-export { robotPresets, getRobotPreset, threeDofArmPreset, pickDropArmPreset } from './core/robotPresets';
+export { createRobotController } from './engine/glbRobotController';
+export {
+  industrialRobotConfig,
+  buildJointsFromGlbConfig,
+  ROBOT_MODEL_URL,
+} from './core/glbRobotConfig';
+
+export { robotPresets, getRobotPreset, industrialGlbArmPreset } from './core/robotPresets';
 export {
   JOINT_TYPES,
   SIMULATION_MODES,
   GRIP_STATES,
   DEFAULT_BOX_START_POSITION,
   DEFAULT_DROP_ZONE_POSITION,
+  PICK_RADIUS,
+  GRAVITY,
+  BOX_REST_HEIGHT,
   PLAYBACK_STATES,
   SPEED_PRESETS,
 } from './core/robotConstants';

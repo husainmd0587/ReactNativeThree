@@ -1,21 +1,29 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Canvas, Path, Skia, Text as SkiaText, useFont } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, useDerivedValue, runOnJS } from 'react-native-reanimated';
+import { buildShapeVisuals } from '../engine/geometry/shapeVisuals';
+import { useSettings } from '../state/SettingsContext';
 
 const CANVAS_HEIGHT = 280;
 const SCREEN_PADDING = 32; // matches the screen's own horizontal padding
 const PX_PER_MM = 2; // must match engine/geometry/units.js
-const DIM_OFFSET = 26; // px, how far the dimension line sits from the shape
+const DIM_OFFSET = 26;
 const ARROW_SIZE = 8;
-const ARROW_ANGLE = 20; // degrees, half-angle of the arrowhead "V"
+const ARROW_ANGLE = 20;
+const CROSSHAIR_SIZE = 22; // px, each arm's length from the pickbox out
+const PICKBOX_SIZE = 3; // px, half-width of the center square
 
-// Small worklet helpers. Kept in this file (not imported from
-// engine/geometry/math.js) because a function called from inside a
-// worklet must itself be a worklet — the reanimated babel plugin only
-// auto-workletizes functions that carry the 'worklet' directive, and
-// that has to happen where the function is defined.
+const DRAG_TYPES = new Set([
+  'line', 'circle', 'rectangle',
+  'move', 'copy', 'rotate', 'scale', 'mirror', 'offset', 'array',
+]);
+
+// Worklet helpers for the shape currently being dragged (see the note on
+// engine/geometry/shapeVisuals.js — that file has the same math for
+// already-committed shapes, duplicated on purpose because a worklet can't
+// call a plain imported function).
 function rotate(vx, vy, deg) {
   'worklet';
   const rad = (deg * Math.PI) / 180;
@@ -24,9 +32,6 @@ function rotate(vx, vy, deg) {
   return { x: vx * cos - vy * sin, y: vx * sin + vy * cos };
 }
 
-// Draws a small arrowhead "V" with its tip at (tipX, tipY), pointing in
-// direction (dirX, dirY) — the same visual language AutoCAD/SolidWorks use
-// for dimension line arrows.
 function addArrow(path, tipX, tipY, dirX, dirY) {
   'worklet';
   const w1 = rotate(-dirX, -dirY, ARROW_ANGLE);
@@ -37,38 +42,105 @@ function addArrow(path, tipX, tipY, dirX, dirY) {
   path.lineTo(tipX + w2.x * ARROW_SIZE, tipY + w2.y * ARROW_SIZE);
 }
 
-// Line, circle, and rectangle all reduce to the same interaction: drag from
-// a start point to an end point. What differs is only (a) the shape + its
-// dimension annotation while dragging, and (b) how the two points get
-// measured — that measurement happens outside this component (see
-// engine/operations/*), once, when the gesture ends.
+// Mirrors centroidOf() in engine/operations/modify.js — duplicated here
+// because a worklet can't call a plain imported function (same reason
+// every other worklet helper in this file is self-contained).
+function centroidOfWorklet(type, points) {
+  'worklet';
+  if (type === 'circle') return { x: points[0].x, y: points[0].y };
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    sx += points[i].x;
+    sy += points[i].y;
+  }
+  return { x: sx / points.length, y: sy / points.length };
+}
+
+// Renders every already-drawn shape for this command (`shapes`), plus one
+// live in-progress shape (dragging for line/circle/rectangle, or the
+// tap-by-tap `draftPoints` the parent is building for arc/polyline).
 //
-// `initialPoints` lets a parent re-seed an already-drawn shape (used when
-// the student edits a value in the Properties panel) — pass it together
-// with a changed `key` prop to force a remount with the new geometry
-// already committed.
-export default function PracticeCanvas({ practiceType, onComplete, initialPoints }) {
+// This component owns rendering and raw gesture forwarding only — it does
+// NOT decide what a tap or long-press means. `onCanvasTap`/
+// `onCanvasLongPress` just report the raw point/event up to
+// screens/CommandPractice.jsx, which owns the actual interaction state
+// (selection, drafting, committing). Keeping that logic in one place
+// (instead of split between here and the parent) is what fixes drafts
+// silently failing to commit — there's now exactly one place that decides
+// "this draft is done", and it's backed by an explicit Finish action in
+// the Toolbar, not just gesture timing.
+export default function PracticeCanvas({
+  practiceType,
+  shapes,
+  draftPoints,
+  selectedId,
+  selectedShape,
+  showDimensions,
+  onDrawComplete,
+  onCanvasTap,
+  onCanvasLongPress,
+}) {
   const { width } = useWindowDimensions();
   const canvasWidth = width - SCREEN_PADDING;
   const font = useFont(require('../../../../../assets/fonts/roboto.ttf'), 12);
+  const { settings } = useSettings();
 
-  const startX = useSharedValue(initialPoints?.start?.x ?? 0);
-  const startY = useSharedValue(initialPoints?.start?.y ?? 0);
-  const currentX = useSharedValue(initialPoints?.end?.x ?? 0);
-  const currentY = useSharedValue(initialPoints?.end?.y ?? 0);
+  // AutoCAD-style crosshair — visible the moment the screen opens
+  // (defaults to canvas center), follows any touch across every command
+  // (drawing or selecting), and stays put at the last touch position
+  // afterward rather than disappearing. Independent of drag/draft state
+  // on purpose: it's a cursor, not a shape.
+  const cursorX = useSharedValue(canvasWidth / 2);
+  const cursorY = useSharedValue(CANVAS_HEIGHT / 2);
+
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const currentX = useSharedValue(0);
+  const currentY = useSharedValue(0);
   const dragging = useSharedValue(false);
-  // Once a shape exists (drawn or seeded), keep rendering it — nothing
-  // ever gets hidden based on what it measures to.
-  const hasShape = useSharedValue(Boolean(initialPoints));
 
-  const handleEnd = useCallback(
-    (start, end) => {
-      onComplete(start, end);
+  // Rotate-specific: captured once per drag (in onBegin, only when
+  // practiceType is 'rotate' and something's selected) so the live
+  // preview and gizmo below have a fixed pivot + original geometry to
+  // rotate from as the finger moves — the AutoCAD-style "center dot +
+  // reference arrow" rotation indicator this component didn't have
+  // before, plus an actual live-rotating preview of the selected shape
+  // instead of nothing happening until release.
+  const rotationActive = useSharedValue(false);
+  const rotationPivot = useSharedValue({ x: 0, y: 0 });
+  const rotationOriginalPoints = useSharedValue([]);
+  const rotationOriginalType = useSharedValue('');
+
+  const handleDrawEnd = useCallback(
+    (points) => {
+      onDrawComplete(points);
     },
-    [onComplete],
+    [onDrawComplete],
   );
 
+  const handleTap = useCallback(
+    (point) => {
+      onCanvasTap(point);
+    },
+    [onCanvasTap],
+  );
+
+  const handleLongPress = useCallback(() => {
+    onCanvasLongPress();
+  }, [onCanvasLongPress]);
+
   const pan = Gesture.Pan()
+    .minDistance(6)
+    .enabled(DRAG_TYPES.has(practiceType))
+    .onTouchesMove((e) => {
+      'worklet';
+      const t = e.allTouches[0];
+      if (t) {
+        cursorX.value = t.x;
+        cursorY.value = t.y;
+      }
+    })
     .onBegin((e) => {
       'worklet';
       startX.value = e.x;
@@ -76,29 +148,77 @@ export default function PracticeCanvas({ practiceType, onComplete, initialPoints
       currentX.value = e.x;
       currentY.value = e.y;
       dragging.value = true;
+
+      if (practiceType === 'rotate' && selectedShape) {
+        rotationOriginalPoints.value = selectedShape.points;
+        rotationOriginalType.value = selectedShape.type;
+        rotationPivot.value = centroidOfWorklet(selectedShape.type, selectedShape.points);
+        rotationActive.value = true;
+      } else {
+        rotationActive.value = false;
+      }
     })
     .onUpdate((e) => {
       'worklet';
-      // Transient drag state lives only in shared values — never React
-      // state or Redux — so dragging never triggers a JS-thread re-render.
       currentX.value = e.x;
       currentY.value = e.y;
     })
     .onEnd(() => {
       'worklet';
       dragging.value = false;
-      hasShape.value = true;
-      runOnJS(handleEnd)(
+      runOnJS(handleDrawEnd)([
         { x: startX.value, y: startY.value },
         { x: currentX.value, y: currentY.value },
-      );
+      ]);
     });
 
-  // The shape itself.
-  const shapePath = useDerivedValue(() => {
-    const path = Skia.Path.Make();
-    if (!dragging.value && !hasShape.value) return path;
+  // Exclusive (not Race): try the long-press first, and only fall back to
+  // a plain tap once long-press fails to recognize. This is the reliable
+  // way to combine tap + long-press on the same view — racing them
+  // against each other is exactly what let a long-press sometimes lose to
+  // a competing (but ultimately unwanted) tap recognition, which is why
+  // a polyline could finish drafting on-screen but never actually commit.
+  const tap = Gesture.Tap()
+    .onTouchesDown((e) => {
+      'worklet';
+      const t = e.allTouches[0];
+      if (t) {
+        cursorX.value = t.x;
+        cursorY.value = t.y;
+      }
+    })
+    .onTouchesMove((e) => {
+      'worklet';
+      const t = e.allTouches[0];
+      if (t) {
+        cursorX.value = t.x;
+        cursorY.value = t.y;
+      }
+    })
+    .onEnd((e) => {
+      'worklet';
+      cursorX.value = e.x;
+      cursorY.value = e.y;
+      runOnJS(handleTap)({ x: e.x, y: e.y });
+    });
 
+  const longPress = Gesture.LongPress()
+    .enabled(practiceType === 'polyline')
+    .minDuration(450)
+    .onStart(() => {
+      'worklet';
+      runOnJS(handleLongPress)();
+    });
+
+  const isTapType = practiceType === 'arc' || practiceType === 'polyline';
+  const gesture = isTapType ? Gesture.Exclusive(longPress, tap) : Gesture.Race(tap, pan);
+
+  // ── Live, in-progress DRAG shape (line/circle/rectangle) — worklet-
+  // driven, smooth per-frame updates, zero React re-renders while
+  // dragging ────────────────────────────────────────────────────────────
+  const liveShapePath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    if (!dragging.value) return path;
     if (practiceType === 'line') {
       path.moveTo(startX.value, startY.value);
       path.lineTo(currentX.value, currentY.value);
@@ -119,12 +239,76 @@ export default function PracticeCanvas({ practiceType, onComplete, initialPoints
     return path;
   });
 
-  // Dimension lines + extension lines + arrowheads — AutoCAD/SolidWorks
-  // style annotation, built as one path. Updates live while dragging and
-  // stays put once released, same as the shape itself.
-  const annotationPath = useDerivedValue(() => {
+  // ── Live ROTATE preview + gizmo — a rebuilt (rotated) copy of the
+  // selected shape's own path, plus a pivot dot, a reference line from
+  // pivot to finger, an arrowhead, and a live angle readout. All driven
+  // by the same shared values as the drag itself, so it updates every
+  // frame with no React re-render.
+  const rotationPreviewPath = useDerivedValue(() => {
     const path = Skia.Path.Make();
-    if (!dragging.value && !hasShape.value) return path;
+    if (!dragging.value || !rotationActive.value) return path;
+
+    const pivot = rotationPivot.value;
+    const origPoints = rotationOriginalPoints.value;
+    const shapeType = rotationOriginalType.value;
+    const angleStart = Math.atan2(startY.value - pivot.y, startX.value - pivot.x);
+    const angleNow = Math.atan2(currentY.value - pivot.y, currentX.value - pivot.x);
+    const delta = angleNow - angleStart;
+    const cos = Math.cos(delta);
+    const sin = Math.sin(delta);
+
+    const rotated = [];
+    for (let i = 0; i < origPoints.length; i += 1) {
+      const dx = origPoints[i].x - pivot.x;
+      const dy = origPoints[i].y - pivot.y;
+      rotated.push({ x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos });
+    }
+
+    if (shapeType === 'rectangle' && rotated.length === 4) {
+      path.moveTo(rotated[0].x, rotated[0].y);
+      path.lineTo(rotated[1].x, rotated[1].y);
+      path.lineTo(rotated[2].x, rotated[2].y);
+      path.lineTo(rotated[3].x, rotated[3].y);
+      path.close();
+    } else if (shapeType === 'line' && rotated.length === 2) {
+      path.moveTo(rotated[0].x, rotated[0].y);
+      path.lineTo(rotated[1].x, rotated[1].y);
+    } else if (shapeType === 'circle' && rotated.length === 2) {
+      const r = Math.hypot(rotated[1].x - rotated[0].x, rotated[1].y - rotated[0].y);
+      path.addCircle(rotated[0].x, rotated[0].y, r);
+    }
+    return path;
+  });
+
+  const rotationGizmoPath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    if (!dragging.value || !rotationActive.value) return path;
+    const pivot = rotationPivot.value;
+    path.addCircle(pivot.x, pivot.y, 4);
+    path.moveTo(pivot.x, pivot.y);
+    path.lineTo(currentX.value, currentY.value);
+    const dx = currentX.value - pivot.x;
+    const dy = currentY.value - pivot.y;
+    const len = Math.hypot(dx, dy) || 1;
+    addArrow(path, currentX.value, currentY.value, dx / len, dy / len);
+    return path;
+  });
+
+  const rotationAngleText = useDerivedValue(() => {
+    if (!dragging.value || !rotationActive.value) return '';
+    const pivot = rotationPivot.value;
+    const angleStart = Math.atan2(startY.value - pivot.y, startX.value - pivot.x);
+    const angleNow = Math.atan2(currentY.value - pivot.y, currentX.value - pivot.x);
+    let delta = ((angleNow - angleStart) * 180) / Math.PI;
+    delta = Math.round(delta * 10) / 10;
+    return `${delta}°`;
+  });
+  const rotationAngleTextX = useDerivedValue(() => currentX.value + 12);
+  const rotationAngleTextY = useDerivedValue(() => currentY.value - 16);
+
+  const liveAnnotationPath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    if (!dragging.value) return path;
 
     if (practiceType === 'line') {
       const sx = startX.value;
@@ -194,14 +378,10 @@ export default function PracticeCanvas({ practiceType, onComplete, initialPoints
     return path;
   });
 
-  // Primary dimension text (length+angle / radius+diameter / width) and,
-  // for rectangle only, a second label (height). Empty string draws
-  // nothing — unlike a floating TextInput, there's no empty box to see.
-  const primaryText = useDerivedValue(() => {
-    if (!dragging.value && !hasShape.value) return '';
+  const livePrimaryText = useDerivedValue(() => {
+    if (!dragging.value) return '';
     const dx = currentX.value - startX.value;
     const dy = currentY.value - startY.value;
-
     if (practiceType === 'line') {
       const lengthMm = Math.round((Math.hypot(dx, dy) / PX_PER_MM) * 10) / 10;
       let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
@@ -220,80 +400,184 @@ export default function PracticeCanvas({ practiceType, onComplete, initialPoints
     return '';
   });
 
-  const primaryTextX = useDerivedValue(() => {
-    if (practiceType === 'line') {
-      return (startX.value + currentX.value) / 2 - 30;
-    }
-    if (practiceType === 'circle') {
-      return (startX.value + currentX.value) / 2 + 8;
-    }
-    if (practiceType === 'rectangle') {
-      return (startX.value + currentX.value) / 2 - 24;
-    }
-    return 0;
+  const livePrimaryX = useDerivedValue(() => {
+    if (practiceType === 'circle') return (startX.value + currentX.value) / 2 + 8;
+    if (practiceType === 'rectangle') return (startX.value + currentX.value) / 2 - 24;
+    return (startX.value + currentX.value) / 2 - 30;
   });
 
-  const primaryTextY = useDerivedValue(() => {
+  const livePrimaryY = useDerivedValue(() => {
     if (practiceType === 'line') {
       const nx = -(currentY.value - startY.value);
       const ny = currentX.value - startX.value;
       const nlen = Math.hypot(nx, ny) || 1;
       return (startY.value + currentY.value) / 2 + (ny / nlen) * DIM_OFFSET - 8;
     }
-    if (practiceType === 'circle') {
-      return (startY.value + currentY.value) / 2 - 8;
-    }
+    if (practiceType === 'circle') return (startY.value + currentY.value) / 2 - 8;
     if (practiceType === 'rectangle') {
       return Math.max(startY.value, currentY.value) + DIM_OFFSET + 16;
     }
     return 0;
   });
 
-  // Rectangle's second dimension label (height), to the right of the shape.
-  const secondaryText = useDerivedValue(() => {
-    if (practiceType !== 'rectangle' || (!dragging.value && !hasShape.value)) return '';
+  const liveSecondaryText = useDerivedValue(() => {
+    if (practiceType !== 'rectangle' || !dragging.value) return '';
     const heightMm = Math.round(
       (Math.abs(currentY.value - startY.value) / PX_PER_MM) * 10,
     ) / 10;
     return `${heightMm} mm`;
   });
-
-  const secondaryTextX = useDerivedValue(
+  const liveSecondaryX = useDerivedValue(
     () => Math.max(startX.value, currentX.value) + DIM_OFFSET + 6,
   );
-  const secondaryTextY = useDerivedValue(
+  const liveSecondaryY = useDerivedValue(
     () => (startY.value + currentY.value) / 2,
   );
 
+  // ── Already-committed shapes (plain React/JS — only recomputed when
+  // the `shapes` array actually changes, not per drag/tap) ─────────────
+  const committedVisuals = useMemo(
+    () => shapes.map((shape) => ({
+      id: shape.id,
+      ...buildShapeVisuals(shape.type, shape.points),
+    })),
+    [shapes],
+  );
+
+  // ── In-progress TAP draft (arc/polyline), controlled by the parent —
+  // a connecting line between placed points, a dot at each one, and for
+  // polyline a running "so far" length label so the dimension is visible
+  // WHILE drafting, not only once committed.
+  const draftVisual = useMemo(() => {
+    if (!draftPoints || draftPoints.length === 0) return null;
+
+    const linePath = Skia.Path.Make();
+    draftPoints.forEach((pt, i) => {
+      if (i === 0) linePath.moveTo(pt.x, pt.y);
+      else linePath.lineTo(pt.x, pt.y);
+    });
+    const dotsPath = Skia.Path.Make();
+    draftPoints.forEach((pt) => dotsPath.addCircle(pt.x, pt.y, 3));
+
+    let label = '';
+    let labelX = 0;
+    let labelY = 0;
+    if (practiceType === 'polyline' && draftPoints.length >= 2) {
+      let totalPx = 0;
+      for (let i = 1; i < draftPoints.length; i += 1) {
+        totalPx += Math.hypot(
+          draftPoints[i].x - draftPoints[i - 1].x,
+          draftPoints[i].y - draftPoints[i - 1].y,
+        );
+      }
+      const totalMm = Math.round((totalPx / PX_PER_MM) * 10) / 10;
+      const last = draftPoints[draftPoints.length - 1];
+      label = `${draftPoints.length - 1} seg so far   ${totalMm} mm`;
+      labelX = last.x + 8;
+      labelY = last.y - 8;
+    }
+
+    return { linePath, dotsPath, label, labelX, labelY };
+  }, [draftPoints, practiceType]);
+
+  // AutoCAD-style crosshair path: a "+" with a small gap for the pickbox
+  // square in the middle, same visual language as the real desktop tool.
+  const crosshairPath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    const cx = cursorX.value;
+    const cy = cursorY.value;
+    path.moveTo(cx - CROSSHAIR_SIZE, cy);
+    path.lineTo(cx - PICKBOX_SIZE, cy);
+    path.moveTo(cx + PICKBOX_SIZE, cy);
+    path.lineTo(cx + CROSSHAIR_SIZE, cy);
+    path.moveTo(cx, cy - CROSSHAIR_SIZE);
+    path.lineTo(cx, cy - PICKBOX_SIZE);
+    path.moveTo(cx, cy + PICKBOX_SIZE);
+    path.lineTo(cx, cy + CROSSHAIR_SIZE);
+    path.addRect({
+      x: cx - PICKBOX_SIZE,
+      y: cy - PICKBOX_SIZE,
+      width: PICKBOX_SIZE * 2,
+      height: PICKBOX_SIZE * 2,
+    });
+    return path;
+  });
+
   return (
-    <GestureDetector gesture={pan}>
-      <View style={[styles.canvasWrap, { width: canvasWidth, height: CANVAS_HEIGHT }]}>
+    <GestureDetector gesture={gesture}>
+      <View
+        style={[
+          styles.canvasWrap,
+          { width: canvasWidth, height: CANVAS_HEIGHT, backgroundColor: settings.canvasBackground },
+        ]}
+      >
         <Canvas style={StyleSheet.absoluteFill}>
-          <Path path={shapePath} color="#2E7DAF" style="stroke" strokeWidth={2.5} />
-          <Path
-            path={annotationPath}
-            color="#8A8A9A"
-            style="stroke"
-            strokeWidth={1}
-          />
-          {font && (
+          {committedVisuals.map((v) => (
+            <React.Fragment key={v.id}>
+              <Path
+                path={v.shapePath}
+                color={v.id === selectedId ? settings.selectedColor : settings.shapeColor}
+                style="stroke"
+                strokeWidth={2.5}
+              />
+              {showDimensions && (
+                <Path path={v.annotationPath} color={settings.dimensionColor} style="stroke" strokeWidth={1} />
+              )}
+              {showDimensions && font && (
+                <>
+                  <SkiaText x={v.primaryX} y={v.primaryY} text={v.primaryText} font={font} color={settings.shapeColor} />
+                  {!!v.secondaryText && (
+                    <SkiaText x={v.secondaryX} y={v.secondaryY} text={v.secondaryText} font={font} color={settings.shapeColor} />
+                  )}
+                </>
+              )}
+            </React.Fragment>
+          ))}
+
+          <Path path={liveShapePath} color={settings.shapeColor} style="stroke" strokeWidth={2.5} />
+          {showDimensions && (
+            <Path path={liveAnnotationPath} color={settings.dimensionColor} style="stroke" strokeWidth={1} />
+          )}
+          {showDimensions && font && (
             <>
-              <SkiaText
-                x={primaryTextX}
-                y={primaryTextY}
-                text={primaryText}
-                font={font}
-                color="#2E7DAF"
-              />
-              <SkiaText
-                x={secondaryTextX}
-                y={secondaryTextY}
-                text={secondaryText}
-                font={font}
-                color="#2E7DAF"
-              />
+              <SkiaText x={livePrimaryX} y={livePrimaryY} text={livePrimaryText} font={font} color={settings.shapeColor} />
+              <SkiaText x={liveSecondaryX} y={liveSecondaryY} text={liveSecondaryText} font={font} color={settings.shapeColor} />
             </>
           )}
+
+          {draftVisual && (
+            <>
+              <Path path={draftVisual.linePath} color={settings.shapeColor} style="stroke" strokeWidth={2} opacity={0.6} />
+              <Path path={draftVisual.dotsPath} color={settings.shapeColor} style="fill" />
+              {showDimensions && font && !!draftVisual.label && (
+                <SkiaText
+                  x={draftVisual.labelX}
+                  y={draftVisual.labelY}
+                  text={draftVisual.label}
+                  font={font}
+                  color={settings.shapeColor}
+                />
+              )}
+            </>
+          )}
+
+          {/* AutoCAD-style rotate gizmo: pivot dot, reference arrow, live
+              angle readout, and a live-rotating preview of the selected
+              shape — only active while dragging in Rotate mode. */}
+          <Path path={rotationPreviewPath} color={settings.shapeColor} style="stroke" strokeWidth={2} opacity={0.7} />
+          <Path path={rotationGizmoPath} color={settings.crosshairColor} style="stroke" strokeWidth={1.5} />
+          {font && (
+            <SkiaText
+              x={rotationAngleTextX}
+              y={rotationAngleTextY}
+              text={rotationAngleText}
+              font={font}
+              color={settings.crosshairColor}
+            />
+          )}
+
+          {/* Always on top, always visible — a cursor, not a dimension. */}
+          <Path path={crosshairPath} color={settings.crosshairColor} style="stroke" strokeWidth={1} />
         </Canvas>
       </View>
     </GestureDetector>
@@ -302,7 +586,6 @@ export default function PracticeCanvas({ practiceType, onComplete, initialPoints
 
 const styles = StyleSheet.create({
   canvasWrap: {
-    backgroundColor: '#FBFBFD',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E8E6F0',

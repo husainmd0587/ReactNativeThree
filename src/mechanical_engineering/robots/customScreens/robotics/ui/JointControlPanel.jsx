@@ -31,7 +31,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import Slider from '../../../../../utils/ThreeJs_Utils/slider';
-import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, TOUCH_TARGET_MIN } from '../core/theme';
+import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, COMPACT_TOUCH_TARGET } from '../core/theme';
 
 const STEP = 5;
 const HOLD_DELAY_MS = 350; // time before repeat kicks in, like a remote button
@@ -189,54 +189,54 @@ export function JointControlPanel() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: SPACING.lg,
+    padding: SPACING.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   label: {
     color: COLORS.textPrimary,
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
   },
   dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: TOUCH_TARGET_MIN,
+    height: COMPACT_TOUCH_TARGET,
     backgroundColor: COLORS.surfaceRaised,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADII.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
-    gap: SPACING.xs,
+    gap: 4,
   },
   dropdownTriggerText: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.xs,
     fontWeight: FONT_WEIGHT.bold,
   },
   chevron: {
     color: COLORS.accentText,
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
   },
   dropdownList: {
     backgroundColor: COLORS.surfaceAlt,
-    borderRadius: RADII.md,
+    borderRadius: RADII.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
     overflow: 'hidden',
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: TOUCH_TARGET_MIN,
-    paddingHorizontal: SPACING.md,
+    height: COMPACT_TOUCH_TARGET,
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
   },
   dropdownItemTextActive: {
     color: COLORS.accentText,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemValue: {
     color: COLORS.textMuted,
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     fontFamily: 'monospace',
   },
   controls: {
@@ -261,8 +261,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   button: {
-    width: 48,
-    height: 48,
+    width: COMPACT_TOUCH_TARGET,
+    height: COMPACT_TOUCH_TARGET,
     borderRadius: RADII.pill,
     backgroundColor: COLORS.surfaceRaised,
     borderWidth: 1,
@@ -272,11 +272,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: COLORS.textPrimary,
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
   },
   sliderWrap: {
     flex: 1,
-    marginHorizontal: SPACING.md,
+    marginHorizontal: SPACING.sm,
   },
 });

@@ -4,7 +4,7 @@ import React from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Provider } from 'react-redux';
 import { store } from './src/store';
-import MainStack from './src/navigation/MainStack';
+import FirstStack from './src/navigation/firstStack';
 import { Worker } from './src/all_glb/worker';
 import { PortalProvider } from './src/utils/ThreeJs_Utils/portal'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ const App = () => {
       <Provider store={store}>
            <QueryClientProvider client={queryClient}>
               <PortalProvider>
-                  <MainStack />
+                  <FirstStack />
               </PortalProvider>
            </QueryClientProvider>
       </Provider>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { RoboticsEngineProvider, useRoboticsEngine } from './RoboticsEngineProvider';
 
-export function RoboticsCanvasProvider({ presetId = 'pick_drop_arm', children }) {
+export function RoboticsCanvasProvider({ presetId = 'industrial_glb_arm', children }) {
   return (
     <RoboticsEngineProvider presetId={presetId}>
       {children}

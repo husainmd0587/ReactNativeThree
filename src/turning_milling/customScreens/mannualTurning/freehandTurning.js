@@ -786,6 +786,32 @@ const ChipLayer = memo(function ChipLayer({ chipSnapshot }) {
 
 
 function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick, spinEnabled }) {
+  // ── Visual blade sizing ─────────────────────────────────────
+// tool.width drives the actual cut in profile-px (2–16) and must
+// stay small for the simulation to feel precise. Drawing it 1:1
+// made a 2px parting tool and a 16px roughing tool look like the
+// same blob. This is a SEPARATE on-screen scale: same relative
+// ordering as the real cutting width, but every tool stays legible
+// and thin tools (parting) read clearly thinner than wide ones
+// (scraper/roughing).
+function bladeVisualWidth(toolWidth) {
+  return clamp(toolWidth * 1.6 + 6, 10, 28);
+}
+
+const BLADE_LEN = 32;    // exposed steel blade, tip to shoulder
+const SHANK_LEN = 8;     // taper from blade shoulder into the ferrule
+const HANDLE_LEN = 46;   // visual handle length only -- independent of
+                          // TOOL_LENGTH, which still drives cutting reach
+                          // in fingerToTip/the pan gesture and must not
+                          // be touched for cosmetic changes.
+const TOTAL_VISUAL_LEN = BLADE_LEN + SHANK_LEN + HANDLE_LEN;
+
+const STEEL_LIGHT = '#eef2f6';
+const STEEL_MID   = '#b9c4cf';
+const STEEL_DARK  = '#7c8894';
+const WOOD_HANDLE = '#e3c79a';
+const WOOD_HANDLE_DK = '#c9a874';
+
   const textureDef = useMemo(
     () => Textures.find(t => t.name === SPIN_TEXTURE_CONFIG.MATERIAL) ?? null,
     []
@@ -1168,126 +1194,134 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
       runOnJS(stopProcessing)();
       runOnJS(syncReactState)();
     });
-
+  // ── Blade: real cutting-edge geometry per tool shape ────────
+  // Every profile is built at y=0 (the tip, touching the stock) up to
+  // y=-BLADE_LEN (the shoulder, where it meets the ferrule). Width is
+  // bladeVisualWidth(tool.width), so it scales with the real cutting
+  // width but never collapses to an unreadable sliver.
   const buildToolCursor = useCallback(() => {
-    const halfW = tool.width / 2;
+    const bw = bladeVisualWidth(tool.width);
+    const half = bw / 2;
     const p = Skia.Path.Make();
 
-    switch (tool.id) {
-      case 'roughing':
-        p.moveTo(-halfW * 1.2, 0);
-        p.quadTo(-halfW * 1.4, -halfW * 0.4, -halfW * 0.8, -halfW * 0.8);
-        p.quadTo(-halfW * 0.3, -halfW * 1.1, 0, -halfW * 1.2);
-        p.quadTo(halfW * 0.3, -halfW * 1.1, halfW * 0.8, -halfW * 0.8);
-        p.quadTo(halfW * 1.4, -halfW * 0.4, halfW * 1.2, 0);
-        p.close();
+    switch (tool.shape) {
+      case 'flat': {
+        if (tool.id === 'skew') {
+          // Diagonal ground edge -- classic skew chisel silhouette.
+          const skew = half * 0.85;
+          p.moveTo(-half, 0);
+          p.lineTo(-half, -BLADE_LEN * 0.82);
+          p.lineTo(-half + skew, -BLADE_LEN);
+          p.lineTo(half, -BLADE_LEN * 0.55);
+          p.lineTo(half, 0);
+          p.close();
+        } else {
+          // Scraper -- flat square-ground edge.
+          p.moveTo(-half, 0);
+          p.lineTo(-half, -BLADE_LEN * 0.85);
+          p.lineTo(-half * 0.9, -BLADE_LEN);
+          p.lineTo(half * 0.9, -BLADE_LEN);
+          p.lineTo(half, -BLADE_LEN * 0.85);
+          p.lineTo(half, 0);
+          p.close();
+        }
         break;
+      }
 
-      case 'gouge':
-        p.moveTo(-halfW * 0.9, 0);
-        p.quadTo(-halfW * 1.1, -halfW * 0.3, -halfW * 0.8, -halfW * 0.7);
-        p.quadTo(-halfW * 0.4, -halfW * 1.1, 0, -halfW * 1.3);
-        p.quadTo(halfW * 0.4, -halfW * 1.1, halfW * 0.8, -halfW * 0.7);
-        p.quadTo(halfW * 1.1, -halfW * 0.3, halfW * 0.9, 0);
-        p.close();
-        break;
-
-      case 'skew':
-        p.moveTo(0, -halfW * 1.4);
-        p.lineTo(halfW * 1.8, 0);
-        p.lineTo(0, halfW * 1.4);
-        p.lineTo(-halfW * 1.8, 0);
-        p.close();
-        break;
-
-      case 'parting':
-        p.moveTo(0, 0);
-        p.lineTo(halfW * 0.3, -halfW * 0.3);
-        p.lineTo(halfW * 0.6, -halfW * 0.8);
-        p.lineTo(halfW * 0.7, -halfW * 1.8);
-        p.lineTo(-halfW * 0.7, -halfW * 1.8);
-        p.lineTo(-halfW * 0.6, -halfW * 0.8);
-        p.lineTo(-halfW * 0.3, -halfW * 0.3);
-        p.close();
-        break;
-
-      case 'scraper': {
-        const w = halfW * 1.4;
-        p.moveTo(-w, 0);
-        p.quadTo(-w, -halfW * 0.2, -w * 0.9, -halfW * 0.5);
-        p.lineTo(w * 0.9, -halfW * 0.5);
-        p.quadTo(w, -halfW * 0.2, w, 0);
+      case 'narrow': { // parting -- thin diamond cross-section blade
+        p.moveTo(-half * 0.45, 0);
+        p.lineTo(-half, -BLADE_LEN * 0.5);
+        p.lineTo(-half * 0.3, -BLADE_LEN);
+        p.lineTo(half * 0.3, -BLADE_LEN);
+        p.lineTo(half, -BLADE_LEN * 0.5);
+        p.lineTo(half * 0.45, 0);
         p.close();
         break;
       }
 
-      case 'spindle':
-        p.moveTo(-halfW * 0.7, 0);
-        p.quadTo(-halfW * 0.8, -halfW * 0.4, -halfW * 0.5, -halfW * 0.8);
-        p.quadTo(-halfW * 0.2, -halfW * 1.0, 0, -halfW * 1.1);
-        p.quadTo(halfW * 0.2, -halfW * 1.0, halfW * 0.5, -halfW * 0.8);
-        p.quadTo(halfW * 0.8, -halfW * 0.4, halfW * 0.7, 0);
+      case 'point': { // spindle gouge -- narrow blade, small round nose
+        p.moveTo(-half * 0.6, 0);
+        p.lineTo(-half * 0.65, -BLADE_LEN * 0.72);
+        p.quadTo(-half * 0.65, -BLADE_LEN, 0, -BLADE_LEN);
+        p.quadTo(half * 0.65, -BLADE_LEN, half * 0.65, -BLADE_LEN * 0.72);
+        p.lineTo(half * 0.6, 0);
         p.close();
         break;
+      }
 
-      case 'bead':
-        p.moveTo(-halfW * 1.1, 0);
-        p.quadTo(-halfW * 1.2, -halfW * 0.4, -halfW * 0.8, -halfW * 0.9);
-        p.quadTo(-halfW * 0.4, -halfW * 1.3, 0, -halfW * 1.4);
-        p.quadTo(halfW * 0.4, -halfW * 1.3, halfW * 0.8, -halfW * 0.9);
-        p.quadTo(halfW * 1.2, -halfW * 0.4, halfW * 1.1, 0);
+      case 'round':
+      default: { // gouge / roughing / bead -- U-fluted round-nose blade
+        p.moveTo(-half, 0);
+        p.lineTo(-half, -BLADE_LEN * 0.72);
+        p.quadTo(-half, -BLADE_LEN, 0, -BLADE_LEN);
+        p.quadTo(half, -BLADE_LEN, half, -BLADE_LEN * 0.72);
+        p.lineTo(half, 0);
         p.close();
         break;
-
-      default:
-        p.addRect({ x: -halfW, y: -halfW * 2, width: halfW * 2, height: halfW * 2 });
-        break;
+      }
     }
-
     return p;
   }, [tool]);
 
-  const buildToolHandle = useCallback(() => {
-    const halfW = tool.width / 2;
+  // Hollow-ground flute drawn on top of round-nose blades so gouge/
+  // roughing/bead read as real fluted steel, not a flat scraper with
+  // rounded corners. Returns null for flat/narrow/point tools.
+  const buildToolFlute = useCallback(() => {
+    if (tool.shape !== 'round') return null;
+    const bw = bladeVisualWidth(tool.width);
+    const half = (bw / 2) * 0.5;
     const p = Skia.Path.Make();
-    const handleLength = TOOL_LENGTH;
-
-    p.moveTo(-halfW * 0.3, -halfW * 0.5);
-    p.quadTo(-halfW * 0.2, -handleLength * 0.2, -halfW * 0.35, -handleLength);
-    p.lineTo(halfW * 0.35, -handleLength);
-    p.quadTo(halfW * 0.2, -handleLength * 0.2, halfW * 0.3, -halfW * 0.5);
+    p.moveTo(-half, -3);
+    p.lineTo(-half, -BLADE_LEN * 0.66);
+    p.quadTo(-half, -BLADE_LEN * 0.9, 0, -BLADE_LEN * 0.9);
+    p.quadTo(half, -BLADE_LEN * 0.9, half, -BLADE_LEN * 0.66);
+    p.lineTo(half, -3);
     p.close();
-
     return p;
   }, [tool]);
 
+  // Steel ferrule collar joining blade shoulder to wood handle.
+  // Never thinner than a slim blade so parting/skew don't get a
+  // ferrule that looks wider than the blade it's crimping.
   const buildToolFerrule = useCallback(() => {
-    const halfW = tool.width / 2;
+    const bw = bladeVisualWidth(tool.width);
+    const half = Math.max(bw / 2, 5.5);
     const p = Skia.Path.Make();
-    const ferruleY = -halfW * 0.8;
-    const ferruleH = halfW * 0.6;
-
-    p.addRect({
-      x: -halfW * 0.4,
-      y: ferruleY - ferruleH,
-      width: halfW * 0.8,
-      height: ferruleH
+    p.addRRect({
+      rect: { x: -half, y: -(BLADE_LEN + SHANK_LEN), width: half * 2, height: SHANK_LEN },
+      rx: 1, ry: 1,
     });
+    return p;
+  }, [tool]);
 
+  // Wood handle -- always drawn chunkier than the blade (real turning
+  // tool handles are, regardless of how fine the edge is) and always
+  // HANDLE_LEN long, independent of tool width or TOOL_LENGTH.
+  const buildToolHandle = useCallback(() => {
+    const bw = bladeVisualWidth(tool.width);
+    const handleHalf = Math.max(bw * 0.85, 9);
+    const top = -(BLADE_LEN + SHANK_LEN);
+    const bottom = top - HANDLE_LEN;
+    const p = Skia.Path.Make();
+    p.moveTo(-handleHalf * 0.55, top);
+    p.quadTo(-handleHalf, (top + bottom) / 2, -handleHalf * 0.4, bottom);
+    p.quadTo(0, bottom + 6, handleHalf * 0.4, bottom);
+    p.quadTo(handleHalf, (top + bottom) / 2, handleHalf * 0.55, top);
+    p.close();
     return p;
   }, [tool]);
 
   const buildToolShadow = useCallback(() => {
-    const halfW = tool.width / 2;
+    const bw = bladeVisualWidth(tool.width);
+    const handleHalf = Math.max(bw * 0.85, 9) * 1.05;
+    const top = -(BLADE_LEN + SHANK_LEN) + 2;
+    const bottom = top - HANDLE_LEN + 4;
     const p = Skia.Path.Make();
-    const handleLength = TOOL_LENGTH;
-
-    p.moveTo(-halfW * 0.35, -halfW * 0.3);
-    p.quadTo(-halfW * 0.25, -handleLength * 0.2, -halfW * 0.4, -handleLength + 5);
-    p.lineTo(halfW * 0.4, -handleLength + 5);
-    p.quadTo(halfW * 0.25, -handleLength * 0.2, halfW * 0.35, -halfW * 0.3);
+    p.moveTo(-handleHalf * 0.55, top);
+    p.quadTo(-handleHalf, (top + bottom) / 2, -handleHalf * 0.4, bottom);
+    p.quadTo(0, bottom + 6, handleHalf * 0.4, bottom);
+    p.quadTo(handleHalf, (top + bottom) / 2, handleHalf * 0.55, top);
     p.close();
-
     return p;
   }, [tool]);
 
@@ -1364,6 +1398,8 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     p.lineTo(tx, ty);
     return p;
   });
+
+  const toolFlutePath = useMemo(() => buildToolFlute(), [buildToolFlute]);
 
   return (
     <View style={{ width: CANVAS_W, height: CANVAS_H }}>
@@ -1461,7 +1497,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
 
             <ChipLayer chipSnapshot={chipSnapshot} />
 
-            {/* ── TOOL BODY ── */}
+                {/* ── TOOL BODY ── */}
             <Group opacity={1} transform={toolBodyTransform}>
               <Path
                 path={toolShadowPath}
@@ -1470,109 +1506,70 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
                 transform={[{ translateX: 3 }, { translateY: 3 }]}
               />
 
-              <Path
-                path={toolFerrulePath}
-                style="fill"
-                color="#8899aa"
-                transform={[{ translateX: 1 }, { translateY: 1 }]}
-              />
-              <Path
-                path={toolFerrulePath}
-                style="fill"
-                color="#aabbcc"
-              />
-              <Path
-                path={toolFerrulePath}
-                style="stroke"
-                strokeWidth={0.5}
-                color="#667788"
-              />
-
+              {/* wood handle */}
               <Path
                 path={toolHandlePath}
                 style="fill"
-                color={tool.color + '90'}
+                color={WOOD_HANDLE_DK}
                 transform={[{ translateX: 1.5 }, { translateY: 1.5 }]}
               />
-              <Path
-                path={toolHandlePath}
-                style="fill"
-                color={tool.color + '70'}
-              />
-
-              {Array.from({ length: 4 }).map((_, i) => {
-                const yPos = -TOOL_LENGTH * 0.2 * (i + 1);
+              <Path path={toolHandlePath} style="fill" color={WOOD_HANDLE} />
+              {Array.from({ length: 3 }).map((_, i) => {
+                const yPos = -(BLADE_LEN + SHANK_LEN) - HANDLE_LEN * 0.22 * (i + 1);
                 const line = Skia.Path.Make();
-                const widthFactor = 0.15 + (i * 0.02);
-                line.moveTo(-tool.width * widthFactor, yPos);
-                line.quadTo(0, yPos + 2, tool.width * widthFactor, yPos);
+                const w = bladeVisualWidth(tool.width) * 0.85 * (0.5 - i * 0.06);
+                line.moveTo(-w, yPos);
+                line.quadTo(0, yPos + 2, w, yPos);
                 return (
-                  <Path
-                    key={i}
-                    path={line}
-                    style="stroke"
-                    strokeWidth={0.4}
-                    color="rgba(255,255,255,0.1)"
-                  />
+                  <Path key={i} path={line} style="stroke" strokeWidth={0.4} color="rgba(80,50,20,0.15)" />
                 );
               })}
-
               <Path
                 path={toolHandlePath}
                 style="fill"
                 color="#ffffff"
-                opacity={0.08}
+                opacity={0.1}
                 transform={[{ translateX: -1 }, { translateY: -1 }]}
               />
 
+              {/* steel ferrule */}
+              <Path
+                path={toolFerrulePath}
+                style="fill"
+                color="#5a6672"
+                transform={[{ translateX: 1 }, { translateY: 1 }]}
+              />
+              <Path path={toolFerrulePath} style="fill" color={STEEL_DARK} />
+              <Path path={toolFerrulePath} style="stroke" strokeWidth={0.5} color="#3d4650" />
+
+              {/* steel blade -- real edge geometry, sized by bladeVisualWidth */}
               <Path
                 path={toolCursorPath}
                 style="fill"
-                color={tool.color + '15'}
-                transform={[{ translateX: 0 }, { translateY: 0 }]}
+                color="rgba(0,0,0,0.25)"
+                transform={[{ translateX: 1 }, { translateY: 1 }]}
               />
-
+              <Path path={toolCursorPath} style="fill" color={STEEL_MID} />
               <Path
                 path={toolCursorPath}
                 style="fill"
-                color={tool.color + 'DD'}
+                color={STEEL_LIGHT}
+                opacity={0.55}
+                transform={[{ translateX: -0.8 }, { translateY: -0.8 }]}
               />
+              {toolFlutePath && (
+                <Path path={toolFlutePath} style="fill" color={STEEL_DARK} opacity={0.45} />
+              )}
+              <Path path={toolCursorPath} style="stroke" strokeWidth={0.8} color={STEEL_DARK} opacity={0.7} />
 
-              <Path
-                path={toolCursorPath}
-                style="fill"
-                color={tool.color + '60'}
-                transform={[{ translateX: -1 }, { translateY: -1 }]}
-              />
-
-              <Path
-                path={toolCursorPath}
-                style="stroke"
-                strokeWidth={1}
-                color="#ffffff"
-                opacity={0.3}
-              />
-
-              <Path
-                path={toolCursorPath}
-                style="stroke"
-                strokeWidth={2}
-                color={tool.color}
-                opacity={0.4}
-              />
-
-              <Path
-                path={toolCursorPath}
-                style="stroke"
-                strokeWidth={0.6}
-                color="#ffffff"
-                opacity={0.2}
-              />
+              {/* thin color-coded outline so the tool stays identifiable
+                  at a glance even though every blade is now real steel */}
+              <Path path={toolCursorPath} style="stroke" strokeWidth={2} color={tool.color} opacity={0.5} />
 
               {toolLabelFont && (
                 <SkiaText
                   x={-tool.name.length * 1.8}
-                  y={-TOOL_LENGTH + 12}
+                  y={-TOTAL_VISUAL_LEN + 14}
                   text={tool.name}
                   font={toolLabelFont}
                   color="rgba(255,255,255,0.12)"

@@ -11,7 +11,10 @@
  * Supported syntax (one statement per line; `!` starts a comment;
  * trailing `;` optional):
  *
- *   MoveAbsJ [[j1,j2,j3,j4],[0,0,0,0]], v100, fine, tool0;
+ *   MoveAbsJ [[j1,j2,...],[0,0,0,0]], v100, fine, tool0; - the first
+ *   array can list as many or as few joints as you want; unlisted
+ *   joints hold their current value (same "partial move" semantics as
+ *   the Simple dialect's MOVEJ).
  *   WaitTime 1;
  *   Set doGripper;      -> closes the gripper
  *   Reset doGripper;    -> opens the gripper
@@ -23,15 +26,19 @@
  * The [[...],[...]] robjoint form's second array (configuration data)
  * is accepted but ignored - this simulator doesn't model axis
  * configuration/turns.
+ *
+ * NOTE on ABB_EXAMPLE below: only J1 moves, by a modest safe delta -
+ * see simpleDialect.js's header for why (can't verify multi-joint
+ * reach targets against geometry this environment can't fetch).
  */
 
 import { INSTRUCTION_TYPES, buildJointNameMap } from '../ProgramInterpreter';
 
-export const ABB_EXAMPLE = `MoveAbsJ [[-41,-76,-136,96],[0,0,0,0]], v100, fine, tool0;
+export const ABB_EXAMPLE = `MoveAbsJ [[30],[0,0,0,0]], v40, fine, tool0;
 WaitTime 0.5;
 Set doGripper;
 WaitTime 0.3;
-MoveAbsJ [[-146,-73,-138,74],[0,0,0,0]], v100, fine, tool0;
+MoveAbsJ [[-30],[0,0,0,0]], v40, fine, tool0;
 WaitTime 0.5;
 Reset doGripper;
 WaitTime 0.5;

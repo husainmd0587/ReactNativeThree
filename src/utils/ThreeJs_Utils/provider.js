@@ -5,14 +5,16 @@ import {
 } from 'react-native';
 import { Canvas, useThree, useFrame } from '@react-three/fiber/native';
 import {
-  PerspectiveCamera, OrthographicCamera, Vector3,  Box3, DataTexture, RGBAFormat, LinearFilter, MathUtils,
-  Raycaster, Vector2, Color, TextureLoader, RepeatWrapping, BufferAttribute,
+  PerspectiveCamera, OrthographicCamera, Vector3,  Box3,Box3Helper, DataTexture, RGBAFormat, LinearFilter, MathUtils,
+  Raycaster, Vector2, Color, TextureLoader, RepeatWrapping, BufferAttribute, Sphere
 } from 'three';
 import useControls from 'r3f-native-orbitcontrols';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import AnimatedReanimated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Tts from 'react-native-tts';
+
+
 import Slider from './slider.js';
 import { usePortal, usePortalKey } from '../../utils/ThreeJs_Utils/portal';
 import { Textures, useTextureLoader } from '../materials/textures.js';
@@ -20,31 +22,99 @@ import bg1 from '../../assets/images/bg/nature.jpg';
 import bg2 from '../../assets/images/bg/gradient.jpg';
 
 
+import { useGLTF } from '../components/hooks/useGLTF.js';
+// 1. Load your GLB model
+const CubeModel = memo(({ scale = 1 }) => {
+  const { scene, ready } = useGLTF(
+    require('../../assets/glb/cubeC.glb')
+  );
 
-export function AutoFitCamera({ groupRef, trigger, enabled = true }) {
-  const { camera } = useThree();
+  const model = useMemo(() => {
+    if (!scene) return null;
+    const clone = scene.clone(true);
+
+    return clone;
+  }, [scene]);
+
+  useEffect(() => {
+    if (!model) return;
+
+    model.scale.setScalar(scale);
+    model.position.set(0, 0, 0);
+  }, [model, scale]);
+
+  if (!ready || !model) {
+    return null;
+  }
+
+  return <primitive object={model} />;
+});
+
+export function AutoFitCamera({
+  groupRef,
+  trigger,
+  enabled = true,
+  onTargetChange,
+  showBounds = false,
+}) {
+  const { camera, scene } = useThree();
+  const boxHelperRef = useRef(null);
 
   useEffect(() => {
     if (!enabled || !groupRef?.current || !camera) return;
 
-    const target = groupRef.current;
-    target.updateMatrixWorld(true); // force-sync world matrices before measuring
+    const model = groupRef.current;
+    model.updateMatrixWorld(true);
 
-    const box = new Box3().setFromObject(target);
+    const box = new Box3().setFromObject(model);
     if (box.isEmpty()) return;
 
-    const size = box.getSize(new Vector3());
     const center = box.getCenter(new Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (!Number.isFinite(maxDim) || maxDim <= 0) return;
 
-    const distance = maxDim * 1.5;
+    // Bounding SPHERE instead of raw box dims — correct regardless of
+    // view angle, since we're looking at the box from an oblique corner,
+    // not straight-on to any single axis.
+    const sphere = new Sphere();
+    box.getBoundingSphere(sphere);
+    const radius = sphere.radius;
+
+    onTargetChange?.([center.x, center.y, center.z]);
+
+    if (showBounds) {
+      if (boxHelperRef.current) scene.remove(boxHelperRef.current);
+      const helper = new Box3Helper(box);
+      scene.add(helper);
+      boxHelperRef.current = helper;
+    }
+
+    if (!Number.isFinite(radius) || radius <= 0) return;
+
+    // ── Fit against BOTH vertical and horizontal FOV, use whichever
+    // needs more distance. camera.fov is vertical; horizontal is derived
+    // via aspect. This is what was missing — the old code only checked
+    // vertical, so wide models overflowed the (narrower) horizontal cone
+    // on portrait screens.
+    const vFov = MathUtils.degToRad(camera.fov);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+
+    const distanceForHeight = radius / Math.sin(vFov / 2);
+    const distanceForWidth = radius / Math.sin(hFov / 2);
+
+    const distance = Math.max(distanceForHeight, distanceForWidth);
+    const finalDistance = distance * 0.8; // padding, same as before
+
     const direction = new Vector3(0.7, 0.5, 0.7).normalize();
-
-    camera.position.copy(center).add(direction.multiplyScalar(distance));
+    camera.position.copy(center).add(direction.clone().multiplyScalar(finalDistance));
     camera.lookAt(center);
     camera.updateProjectionMatrix();
-  }, [trigger, enabled, camera, groupRef]);
+
+    return () => {
+      if (boxHelperRef.current) {
+        scene.remove(boxHelperRef.current);
+        boxHelperRef.current = null;
+      }
+    };
+  }, [trigger, enabled, camera, scene, groupRef, onTargetChange, showBounds]);
 
   return null;
 }
@@ -514,7 +584,17 @@ export function OrbitGestureProvider({
 }
 
 // ─── CameraOrbitController ──────────────────────────────────────────────────
-export function CameraOrbitController({ vx, vy, pinchScale, pinchActive, enabled, orthographic, onZoomChange }) {
+export function CameraOrbitController({ 
+  vx,
+  vy,
+  pinchScale,
+  pinchActive,
+  enabled,
+  orthographic,
+  onZoomChange,
+  cameraTarget,
+
+}) {
   const { camera } = useThree();
   const spherical = useRef(null);
   const lastPinchScale = useRef(1);
@@ -584,12 +664,22 @@ useEffect(() => {
 
     if (dirty) {
       const { theta, phi, radius } = spherical.current;
-      camera.position.set(
-        radius * Math.sin(phi) * Math.sin(theta),
-        radius * Math.cos(phi),
-        radius * Math.sin(phi) * Math.cos(theta)
-      );
-      camera.lookAt(0, 0, 0);
+camera.position.set(
+  cameraTarget[0] +
+    radius * Math.sin(phi) * Math.sin(theta),
+
+  cameraTarget[1] +
+    radius * Math.cos(phi),
+
+  cameraTarget[2] +
+    radius * Math.sin(phi) * Math.cos(theta)
+);
+
+camera.lookAt(
+  cameraTarget[0],
+  cameraTarget[1],
+  cameraTarget[2]
+);
 
       if (!orthographic) {
         const defaultRadius = 100;
@@ -1760,7 +1850,7 @@ const CanvaProvider = ({
   const [measurements, setMeasurements]       = useState(false);
   const [snapToGrid, setSnapToGrid]           = useState(false);
   const [transparency, setTransparency]       = useState(false);
-
+  const [cameraTarget, setCameraTarget] = useState([0, 0, 0]);
   // ── Live Slider Controls ────────────────────────────────────────────
   // A second, independent way to drive the camera + a couple of scene
   // settings — all by dragging sliders in a bottom dock instead of touch
@@ -2253,6 +2343,55 @@ const CanvaProvider = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orthographic]);
 
+
+const cameraCube = useMemo(() => {
+  const aspect = 1;
+  const cam = new PerspectiveCamera(45, aspect, 0.1, 1000);
+  cam.position.set(0, 0, 5);
+  cam.lookAt(0, 0, 0);
+  return cam;
+}, []);
+
+// 2. Cube camera sync component
+function CubeCameraSync() {
+  const { camera: cubeCam } = useThree();
+  const mainCamera = cameraRef.current;
+  const lastDirection = useRef(new Vector3());
+  
+  useFrame(() => {
+    if (!mainCamera) return;
+    
+    // Get direction from main camera to origin
+    const direction = new Vector3();
+    mainCamera.getWorldDirection(direction);
+    direction.negate(); // Flip because getWorldDirection points FROM camera TO target
+    
+    // Or simpler: use position
+    // const direction = mainCamera.position.clone().normalize();
+    
+    // Only update if direction changed
+    if (!direction.equals(lastDirection.current)) {
+      const distance = 5;
+      cubeCam.position.copy(direction.multiplyScalar(distance));
+      cubeCam.lookAt(0, 0, 0);
+      cubeCam.updateProjectionMatrix();
+      
+      lastDirection.current.copy(direction);
+    }
+  });
+  
+  return null;
+}
+
+const orbitTarget = useMemo(
+  () => new Vector3(
+    cameraTarget[0],
+    cameraTarget[1],
+    cameraTarget[2]
+  ),
+  [cameraTarget]
+);
+  
   // Keep the frustum in sync with size on the SAME camera instance — no
   // identity swap, no position reset, no flicker.
   useEffect(() => {
@@ -2456,6 +2595,9 @@ const CanvaProvider = ({
     setPanelOpen(false);
   }, [orthographic]);
 
+
+
+
   const toggleGesture        = useCallback(() => setCustomGesture(g => !g), []);
   const togglePanel          = useCallback(() => setPanelOpen(p => !p), []);
   const toggleGrid           = useCallback(() => setShowGrid(g => !g), []);
@@ -2632,7 +2774,8 @@ const CanvaProvider = ({
       measurements,
       snapToGrid,
       zoomLevel,
-    }), [renderMode, wireframe, shadows, transparency, measurements, snapToGrid, zoomLevel])}>
+        setCameraTarget,
+    }), [renderMode, wireframe, shadows, transparency, measurements, snapToGrid, zoomLevel, setCameraTarget])}>
       <ErrorBoundary>
         <View style={[S.root, style]} onLayout={handleLayout}>
           {bgMode === 'Image' && bgImage && (
@@ -2651,6 +2794,30 @@ const CanvaProvider = ({
           >
             <View style={StyleSheet.absoluteFill} {...canvasEvents} >
               <View  style={{flex: 1}} pointerEvents={customGesture ? 'auto' : 'none'}>
+
+            <View style={{ 
+        position: 'absolute', 
+        bottom: 0, 
+        left: 0,
+        width:60,
+        height: 60,
+        // backgroundColor: '#fff',
+        borderRadius: 8,
+        overflow: 'hidden',
+        zIndex: 1,
+      }}>
+  <Canvas
+    style={{ flex: 1 }}
+    camera={cameraCube}
+  >
+    <CubeCameraSync />
+    <Lightings brightness={brightnessMultiplier} />
+    <Suspense fallback={null}>
+      <CubeModel scale={1} />
+    </Suspense>
+  </Canvas>
+</View>
+
                    <Canvas
                 camera={camera}
                 shadows={shadows}
@@ -2668,15 +2835,16 @@ const CanvaProvider = ({
               >
                 <Suspense fallback={null}>
                   <RaycastBridge bridgeRef={bridgeRef} />
-                  <CameraOrbitController
-                    vx={gesture?.vx}
-                    vy={gesture?.vy}
-                    pinchScale={gesture?.pinchScale}
-                    pinchActive={gesture?.pinchActive}
-                    enabled={customGesture}
-                    orthographic={orthographic}
-                    onZoomChange={handleGestureZoomChange}
-                  />
+                      <CameraOrbitController
+                  vx={gesture?.vx}
+                  vy={gesture?.vy}
+                  pinchScale={gesture?.pinchScale}
+                  pinchActive={gesture?.pinchActive}
+                  enabled={customGesture}
+                  orthographic={orthographic}
+                  onZoomChange={handleGestureZoomChange}
+                  cameraTarget={cameraTarget}
+                />
                   <AutoRotateController enabled={autoRotate} axis={autoRotateAxis} speed={autoRotateSpeed} />
                   {children}
                 </Suspense>
@@ -2690,7 +2858,13 @@ const CanvaProvider = ({
                 {bgMode !== 'Image' && <color attach="background" args={[backgroundColor]} />}
                 <Lightings brightness={brightnessMultiplier} />
 
-                {!customGesture && <OrbitControls enabled={!panelOpen} />}
+                {!customGesture && 
+
+              <OrbitControls
+              enabled={!panelOpen}
+              target={orbitTarget}
+              />
+                }
 
                 <CameraPositionTracker onChange={setCamPos} active={panelOpen} />
 
@@ -2703,6 +2877,7 @@ const CanvaProvider = ({
 
                 {axesVisible && <AxisLabels size={gridSize * 0.15} />}
               </Canvas>
+          
               </View>
           
             </View>

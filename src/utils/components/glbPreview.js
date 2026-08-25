@@ -1,5 +1,3 @@
-// SceneModel.js - Clean Version (No Backward Compatibility)
-
 import React, {
   useMemo,
   useRef,
@@ -15,7 +13,7 @@ import { useFrame } from '@react-three/fiber/native';
 import { useAnimations } from '@react-three/drei/native';
 import { MeshStandardMaterial } from 'three';
 import { useGLTF } from './hooks/useGLTFonline';
-import CanvaProvider, { AutoFitCamera } from '../ThreeJs_Utils/provider';
+import CanvaProvider, { AutoFitCamera,useScene } from '../ThreeJs_Utils/provider';
 import * as THREE from 'three';
 import { useMaterialConfigs } from '../materials/materialConfigs.js';
 import SoundPlayer from '../sound/soundPlayer';
@@ -46,13 +44,14 @@ const SceneModel = forwardRef(function SceneModel(
     playClipAnimations = true,
     clipNames = null,
     animationTimeScale = 1,
+    isPlaying = true,
     soundUrl = null,
     soundPlayWithoutAnimation = false,
     soundLoop = true,
     onMeshPress,
     onLoad,
     onError,
-    autoFit=true,
+    autoFit = true,
     onClipFinished,
     onSoundLoaded,
     onSoundError,
@@ -70,16 +69,16 @@ const SceneModel = forwardRef(function SceneModel(
   const clips = rawClips ?? EMPTY_ARRAY;
   const mixerRef = useRef(null);
   const soundLoadTimeoutRef = useRef(null);
-  const isPlayingRef = useRef(false);
+  const isSoundPlayingRef = useRef(false); // Tracks if sound is currently playing
   const soundUrlRef = useRef(soundUrl);
   const componentMountedRef = useRef(true);
   const animationStartedRef = useRef(false);
   const soundLoadedRef = useRef(false);
   const modelLoadedRef = useRef(false);
   const controllerInitializedRef = useRef(false);
-
+  const isPlayingRef = useRef(isPlaying); // Tracks animation playing state from props
   const materialConfigs = useMaterialConfigs();
-  console.log('Auto Fit',autoFit)
+  const { setCameraTarget } = useScene() || {};
   // ==========================================
   // GENERIC API SYSTEM
   // ==========================================
@@ -186,7 +185,7 @@ const SceneModel = forwardRef(function SceneModel(
       meshRefs.current = {};
       SoundPlayer.stop();
       SoundPlayer.release();
-      isPlayingRef.current = false;
+      isSoundPlayingRef.current = false;
       if (soundLoadTimeoutRef.current) {
         clearTimeout(soundLoadTimeoutRef.current);
       }
@@ -270,7 +269,7 @@ const SceneModel = forwardRef(function SceneModel(
   }, [soundUrl, soundPlayWithoutAnimation]);
 
   const startSound = useCallback(() => {
-    if (!soundLoadedRef.current || !soundUrl || isPlayingRef.current) {
+    if (!soundLoadedRef.current || !soundUrl || isSoundPlayingRef.current) {
       return;
     }
 
@@ -280,7 +279,7 @@ const SceneModel = forwardRef(function SceneModel(
       }
 
       SoundPlayer.play();
-      isPlayingRef.current = true;
+      isSoundPlayingRef.current = true;
     } catch (error) {
       // Silent fail
     }
@@ -317,23 +316,25 @@ const SceneModel = forwardRef(function SceneModel(
       const meshes = [];
       jointRefs.current = {};
      
-            // Get all gripper object names from config
+      // Get all gripper object names from config
       const gripperObjectNames = new Set();
-      if (jointConfig?.GRIPPER) {
-        const { open, closed } = jointConfig.GRIPPER;
-        Object.values(open).forEach(finger => {
-          if (finger.object) gripperObjectNames.add(finger.object);
-        });
-        Object.values(closed).forEach(finger => {
-          if (finger.object) gripperObjectNames.add(finger.object);
-        });
-      }
+
+        if (jointConfig?.GRIPPER?.open) {
+          Object.values(jointConfig.GRIPPER.open).forEach(finger => {
+            if (finger.object) gripperObjectNames.add(finger.object);
+          });
+        }
+        if (jointConfig?.GRIPPER?.closed) {
+          Object.values(jointConfig.GRIPPER.closed).forEach(finger => {
+            if (finger.object) gripperObjectNames.add(finger.object);
+          });
+        }
 
       scene.traverse((child) => {
         if (child.isMesh) {
           meshes.push(child);
         }
-            // Register robot joints (J1, J2, etc.)
+        // Register robot joints (J1, J2, etc.)
         if (child.isObject3D && /^J\d+$/.test(child.name)) {
           jointRefs.current[child.name] = child;
           console.log('[SceneModel] Found joint:', child.name);
@@ -345,7 +346,7 @@ const SceneModel = forwardRef(function SceneModel(
           console.log('[SceneModel] Found gripper part:', child.name);
         }
       });
-    // Log all found joints and gripper parts
+      // Log all found joints and gripper parts
       console.log('[SceneModel] All registered objects:', Object.keys(jointRefs.current));
       // Notify controller when joints are found
       if (controller && typeof controller.onJointsReady === 'function') {
@@ -438,13 +439,17 @@ const SceneModel = forwardRef(function SceneModel(
   }, [processedScene, jointConfig, controller]);
 
   // ==========================================
-  // CLIP ANIMATION PLAYBACK
+  // CLIP ANIMATION PLAYBACK WITH PAUSE/RESUME
   // ==========================================
   useEffect(() => {
-    if (animationStartedRef.current || !playClipAnimations || !actions || Object.keys(actions).length === 0) {
+    if (!playClipAnimations || !actions || Object.keys(actions).length === 0) {
       return;
     }
 
+    // Update isPlayingRef
+    isPlayingRef.current = isPlaying;
+
+    // Build target actions
     let targetActions = actions;
     if (clipNames && clipNames.length > 0) {
       targetActions = {};
@@ -460,22 +465,53 @@ const SceneModel = forwardRef(function SceneModel(
       return;
     }
 
-    actionKeys.forEach((key) => {
-      const action = targetActions[key];
-      if (action) {
-        action.reset();
-        action.setLoop(Infinity, Infinity);
-        action.timeScale = animationTimeScale;
-        action.play();
+    // Handle animation playback based on isPlaying state
+    if (isPlaying) {
+      // PLAY or RESUME animation
+      actionKeys.forEach((key) => {
+        const action = targetActions[key];
+        if (action) {
+          // Check if action is paused or not started
+          if (action.paused) {
+            // Resume from where it was paused
+            action.paused = false;
+            action.play();
+          } else if (!action.isRunning()) {
+            // Start fresh if not running
+            action.reset();
+            action.setLoop(Infinity, Infinity);
+            action.timeScale = animationTimeScale;
+            action.play();
+          }
+        }
+      });
+
+      // Mark animation as started
+      if (!animationStartedRef.current) {
+        animationStartedRef.current = true;
       }
-    });
 
-    animationStartedRef.current = true;
+      // Start sound only when animation is playing and not set to play without animation
+      if (!soundPlayWithoutAnimation && soundLoadedRef.current && soundUrl) {
+        startSound();
+      }
+    } else {
+      // PAUSE animation
+      actionKeys.forEach((key) => {
+        const action = targetActions[key];
+        if (action && action.isRunning()) {
+          action.paused = true;
+        }
+      });
 
-    if (!soundPlayWithoutAnimation && soundLoadedRef.current && soundUrl) {
-      startSound();
+      // Pause sound when animation pauses (only if sound shouldn't play without animation)
+      if (!soundPlayWithoutAnimation && soundLoadedRef.current && soundUrl) {
+        SoundPlayer.pause();
+        isSoundPlayingRef.current = false;
+      }
     }
 
+    // Event listener for animation completion
     const handleFinished = (event) => {
       const clipName = event.action?.getClip()?.name;
       if (clipName) {
@@ -488,6 +524,7 @@ const SceneModel = forwardRef(function SceneModel(
     }
 
     return () => {
+      // Cleanup: Stop all actions and remove event listener
       actionKeys.forEach((key) => {
         const action = targetActions[key];
         if (action) {
@@ -498,8 +535,10 @@ const SceneModel = forwardRef(function SceneModel(
       if (mixerRef.current) {
         mixerRef.current.removeEventListener('finished', handleFinished);
       }
+
+      // Don't reset animationStartedRef here to maintain state across re-renders
     };
-  }, [actions, playClipAnimations, clipNames, animationTimeScale, soundUrl, startSound, soundPlayWithoutAnimation]);
+  }, [actions, playClipAnimations, clipNames, animationTimeScale, isPlaying, soundUrl, startSound, soundPlayWithoutAnimation]);
 
   // ==========================================
   // MANUAL PER-MESH ROTATION ANIMATIONS
@@ -528,33 +567,42 @@ const SceneModel = forwardRef(function SceneModel(
   const children = processedScene.children || [];
   if (children.length === 0) return null;
 
-  return (
-    <>
-      <AutoFitCamera
-        groupRef={group}
-        trigger={processedScene}
-        enabled={autoFit && modelConfig?.autoFit !== false}
-      />
-      <group 
-        ref={group} 
-        {...props} 
-        position={modelConfig?.position || [0, 0, 0]} 
-        rotation={modelConfig?.rotation || [0, 0, 0]} 
-        scale={modelConfig?.scale || [1, 1, 1]}
-      >
-        {children.map((child, index) => (
-          <primitive
-            key={`${child.name || child.uuid || index}`}
-            object={child}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMeshPress?.(e.object?.name || e.object?.uuid, e);
-            }}
-          />
-        ))}
-      </group>
-    </>
-  );
+return (
+  <>
+    <group
+      ref={group}
+      {...props}
+      position={modelConfig?.position || [0, 0, 0]}
+      rotation={modelConfig?.rotation || [0, 0, 0]}
+      scale={modelConfig?.scale || [1, 1, 1]}
+    >
+      {children.map((child, index) => (
+        <primitive
+          key={`${child.name || child.uuid || index}`}
+          object={child}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMeshPress?.(
+              e.object?.name || e.object?.uuid,
+              e
+            );
+          }}
+        />
+      ))}
+    </group>
+
+    <AutoFitCamera
+      groupRef={group}
+      trigger={processedScene}
+      enabled={autoFit && modelConfig?.autoFit !== false}
+      showBounds={false}
+       onTargetChange={setCameraTarget}
+    />
+  </>
+);
+
+
+
 });
 
 export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
@@ -566,6 +614,7 @@ export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
     prevProps.modelConfig === nextProps.modelConfig &&
     prevProps.autoFit === nextProps.autoFit &&
     prevConfig === nextConfig &&
+    prevProps.isPlaying === nextProps.isPlaying && 
     prevProps.animations === nextProps.animations &&
     prevProps.playClipAnimations === nextProps.playClipAnimations &&
     prevProps.animationTimeScale === nextProps.animationTimeScale &&
@@ -589,6 +638,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
     camPosition = [2, 2, 5],
     animations = EMPTY_ARRAY,
     playClipAnimations = true,
+    isPlaying = true,
     clipNames,
     animationTimeScale = 1,
     soundUrl = null,
@@ -717,6 +767,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
     modelUrl,
     materialConfig,
     animations,
+    isPlaying,
     playClipAnimations,
     clipNames,
     animationTimeScale,
@@ -729,7 +780,7 @@ const Model3DPreview = forwardRef(function Model3DPreview(
     onSoundError,
     controller,
     ...props
-  }), [modelUrl, materialConfig, animations, playClipAnimations, clipNames, animationTimeScale,
+  }), [modelUrl, materialConfig, animations,isPlaying, playClipAnimations, clipNames, animationTimeScale,
      soundUrl, soundLoop, handleLoad, handleError, onClipFinished, onSoundLoaded, onSoundError, props]);
 
   if (!modelUrl) {

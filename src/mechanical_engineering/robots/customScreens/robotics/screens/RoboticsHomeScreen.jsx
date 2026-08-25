@@ -54,6 +54,13 @@ export function RoboticsHomeScreen({ navigation }) {
 
       <Text style={styles.sectionLabel}>Program</Text>
       <HomeCard
+        icon="🤖"
+        title="Pick & Drop Wizard"
+        description="Jog the real arm to the box and drop zone, capture both poses, auto-generate a working program"
+        onPress={() => navigation.navigate('PickDropWizard')}
+        accentColor={COLORS.success}
+      />
+      <HomeCard
         icon="✚"
         title="New Program"
         description="Start from a template - Pick and Place, Welding Pass, or blank"

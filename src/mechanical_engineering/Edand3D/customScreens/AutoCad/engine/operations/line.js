@@ -1,11 +1,11 @@
 import { distance, angleDeg, round } from '../geometry/math';
 import { pxToMm } from '../geometry/units';
 
-// Converts the two points the student actually drew into measured geometry.
-export function computeLineGeometry(startPx, endPx) {
+export function computeLineGeometry(points) {
+  const [start, end] = points;
   return {
     type: 'line',
-    lengthMm: round(pxToMm(distance(startPx, endPx)), 1),
-    angleDeg: round(angleDeg(startPx, endPx), 1),
+    lengthMm: round(pxToMm(distance(start, end)), 1),
+    angleDeg: round(angleDeg(start, end), 1),
   };
 }
