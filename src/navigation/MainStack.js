@@ -628,6 +628,7 @@ const NavigationMain = ({ navigation }) => {
           imageStyle={styles.headerBackgroundImage}
           resizeMode="cover"
         >
+          <Header/>
           <View style={styles.headerOverlay}>
             <View style={styles.headerContent}>
               <View style={styles.headerLeft}>
@@ -702,6 +703,8 @@ const NavigationMain = ({ navigation }) => {
     </SafeAreaView>
   );
 };
+
+
 
 // ── Screens config ──
 const AllScreens = [

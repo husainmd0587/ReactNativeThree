@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect, forwardRef, u
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Dimensions, StatusBar, Platform,
-  Animated, Modal,ImageBackground
+  Animated, Modal,ImageBackground,Image
 } from 'react-native';
 import {
   GestureDetector, Gesture,
@@ -30,7 +30,7 @@ import {
   Easing,
 } from 'react-native-reanimated';
 
-import { useFrame as useR3FFrame,Canvas } from '@react-three/fiber/native';
+import { useFrame as useR3FFrame,Canvas,useLoader } from '@react-three/fiber/native';
 import useControls from 'r3f-native-orbitcontrols';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTextureLoader, Textures } from '../../../utils/materials/textures';
@@ -39,14 +39,15 @@ import {Scene} from '../../../utils/components/glbPreview'
 import usetextureLoader from '../../../utils/materials/textures'
 import {degToRad} from '../../../utils/common'
 import * as THREE from 'three';
+import motor from '../../../assets/images/others/motor.png'
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 // ── Layout Constants ──
 const HEADER_H = Platform.OS === 'ios' ? 96 : 58;
 const TOOLBAR_H = 108;
-const MAGAZINE_H = 150; // Height reserved for magazine
-const CONTROL_STRIP_H = 44; // Height reserved for the accuracy/stats control strip
+const MAGAZINE_H = 150;
+const CONTROL_STRIP_H = 44;
 const CANVAS_H = SH - HEADER_H - TOOLBAR_H - MAGAZINE_H - CONTROL_STRIP_H;
 const CANVAS_W = SW;
 
@@ -58,46 +59,29 @@ const STOCK_LEFT = 65;
 const STOCK_RIGHT = CANVAS_W - 10;
 const STOCK_WIDTH = STOCK_RIGHT - STOCK_LEFT;
 
-// ── Chuck end-caps ──
-// Small rotating 3-jaw chucks bracketing the stock -- "[]==[]" -- so
-// the flat 2D profile still reads as the side view of a cylinder held
-// on a lathe, not a flat strip. They live in the margin already
-// reserved by STOCK_LEFT/STOCK_RIGHT, so no cutting-coordinate
-// constants need to change.
 const CHUCK_RADIUS = Math.min(30, STOCK_LEFT);
 const CHUCK_CENTER_L = STOCK_LEFT / 2;
 const CHUCK_CENTER_R = STOCK_RIGHT + (CANVAS_W - STOCK_RIGHT) / 2;
 
-// ── Real-world scale ─────────────────────────────────────────
-// Purely for HUD readouts (diameter callipers, thin-wall warning) --
-// the simulation itself still works in px. We treat the stock's full
-// starting radius as representing a real blank of this diameter.
 const REAL_STOCK_DIAMETER_MM = 100;
 const PX_TO_MM = REAL_STOCK_DIAMETER_MM / (STOCK_RADIUS * 2);
-const MIN_SAFE_RADIUS = STOCK_RADIUS * 0.12; // below this, wall is "thin" / at risk
+const MIN_SAFE_RADIUS = STOCK_RADIUS * 0.12;
 
 // ── Spindle speed ──────────────────────────────────────────────
-const BASE_RPM = 1200; // reference speed the base spin/rotation rates were tuned at
+const BASE_RPM = 1200;
 const MIN_RPM = 200;
 const MAX_RPM = 3000;
 const RPM_STEP = 100;
 
-// ── Persisted parts (AsyncStorage) ──
 const SAVED_PARTS_KEY = '@pottery_studio/saved_parts';
 
-// ── Cutting accuracy tuning ──────────────────────────────────
-// Single place to retune the feel of catches, chatter, and wear
-// without hunting through the gesture/cut pipeline below.
-const CATCH_BASE_CHANCE = 0.006; // scaled by risk factors, then capped per-frame
+const CATCH_BASE_CHANCE = 0.006;
 const CATCH_PROB_CAP = 0.035;
-const CATCH_LOCKOUT_MS = 220;    // brief "recoil" pause after a catch
-const WEAR_RATE = 0.00003;       // wear gained per px of cutting contact
-const WEAR_DEPTH_PENALTY = 0.55; // fully worn tool cuts up to 55% less
-const WEAR_CATCH_RISK = 1.6;     // dull edges are more likely to skid/catch
+const CATCH_LOCKOUT_MS = 220;
+const WEAR_RATE = 0.00003;
+const WEAR_DEPTH_PENALTY = 0.55;
+const WEAR_CATCH_RISK = 1.6;
 
-
-
-// ── Tools ──────────────────────────────────────────────
 const TOOLS = [
   { id: 'roughing', name: 'Roughing', icon: '⚡', color: '#e67e22', width: 16, depth: 6, shape: 'round' },
   { id: 'gouge', name: 'Bowl Gouge', icon: '🔄', color: '#3498db', width: 10, depth: 3.5, shape: 'round' },
@@ -116,7 +100,6 @@ const MATERIALS = [
   { id: 'bronze', label: 'Bronze', color: '#cd7f32', roughness: 0.35, metalness: 0.80 },
 ];
 
-// ── Handle → tip offset ────────────────────────────────────────
 const TOOL_REACH = 10;
 const TOOL_LENGTH = 50;
 const DEBUG_SHOW_TIP = true;
@@ -138,6 +121,23 @@ const toolLabelFont = matchFont({
   fontStyle: 'normal',
   fontWeight: 'normal',
 });
+
+function PowerToggleButton({ isOn, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[styles.powerToggle, isOn ? styles.powerOn : styles.powerOff]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.powerToggleInner}>
+        <Text style={[styles.powerToggleText, isOn ? styles.powerTextOn : styles.powerTextOff]}>
+          {isOn ? 'I' : 'O'}
+        </Text>
+      </View>
+      <View style={[styles.powerIndicator, isOn ? styles.powerIndicatorOn : styles.powerIndicatorOff]} />
+    </TouchableOpacity>
+  );
+}
 
 // ── Profile helpers ───────────────────────────────────────────
 const makeProfile = () => new Float32Array(PROFILE_SEGS).fill(STOCK_RADIUS);
@@ -194,9 +194,6 @@ function smooth(profile, str = 0.4) {
   return o;
 }
 
-// Small random per-segment perturbation used to simulate tool chatter
-// (spindle/feed resonance) -- distinct from a catch: low-amplitude,
-// applied across a short span rather than a single deep gouge.
 function jitterProfile(profile, centerSeg, halfWidth, intensity) {
   if (intensity <= 0) return profile;
   const next = Float32Array.from(profile);
@@ -209,7 +206,6 @@ function jitterProfile(profile, centerSeg, halfWidth, intensity) {
   return next;
 }
 
-// ── Skia path builders ────────────────────────────────────────
 function fillPath(profile) {
   const p = Skia.Path.Make();
   p.moveTo(STOCK_LEFT, AXIS_Y - profile[0]);
@@ -234,15 +230,10 @@ const WORLD_R = 1.8;
 
 function PotteryMesh({ profile, mat, autoRotate, rpm }) {
   const ref = useRef();
-  // `mat.id` is passed through so the texture actually tracks the
-  // selected material -- verify the exact param key against
-  // utils/materials/textures.js if your Textures entries are keyed
-  // differently (e.g. `name` instead of `type`).
   const texture = useTextureLoader({ type: mat.id });
 
   useR3FFrame((_, dt) => {
     if (autoRotate && ref.current) {
-      // Rotation speed now tracks spindle RPM instead of a fixed rate.
       ref.current.rotation.y += dt * (rpm / BASE_RPM);
     }
   });
@@ -305,7 +296,7 @@ const SPIN_TEXTURE_CONFIG = {
   WRAP_HEIGHT: 160,
   SPEED: 22,
   DIRECTION: 1,
-  CLOCK_RATE: 5, // base rate at BASE_RPM -- scaled live by rpm/BASE_RPM
+  CLOCK_RATE: 5,
   MIN_BRIGHTNESS: 0.35,
   MAX_BRIGHTNESS: 1.0,
 };
@@ -339,17 +330,6 @@ half4 main(vec2 pos) {
 
 const cylinderEffect = Skia.RuntimeEffect.Make(CYLINDER_SHADER_SKSL);
 
-// ── Isolated HUD overlay ──────────────────────────────────────
-// The diameter callipers and catch-flash used to be plain useState
-// inside DrawingCanvas. Every update (hover ~16x/sec, catch flashes)
-// re-ran DrawingCanvas's whole render function, which reconciles a
-// 100+ element Skia tree -- on top of the profile/wear state updates
-// already firing during a cut, this saturated the JS thread and made
-// gesture input feel like it was hanging. Moving this state into its
-// own tiny component, updated imperatively via a ref instead of
-// props, means a hover tick only re-renders this small overlay --
-// never the canvas -- while the canvas itself only re-renders when
-// `profile`/`tool`/etc. actually change.
 const CutHUD = forwardRef(function CutHUD(_props, ref) {
   const [hoverInfo, setHoverInfo] = useState(null);
   const [flash, setFlash] = useState(false);
@@ -376,59 +356,34 @@ const CutHUD = forwardRef(function CutHUD(_props, ref) {
   );
 });
 
-
 const RotatingPulley = memo(function RotatingPulley({
   position = [0, 0, 0],
   rotation = [0, 0, 0],
-
   radius = 0.8,
   thickness = 0.2,
-
   speed = 4,
   direction = 1,
-
   color = '#aa6e6e',
   texture = null,
   rpmRef = null,
+  isPowered = true,
 }) {
   const pulleyRef = useRef(null);
 
   useR3FFrame((_, delta) => {
     if (!pulleyRef.current) return;
-
-    // Rotation speed now tracks the same RPM control that drives the
-    // stock's spin -- read live via a ref (not a prop) so this stays
-    // in sync without needing this frozen preview to re-render.
+    if (!isPowered) return;
     const rpmFactor = (rpmRef?.current ?? BASE_RPM) / BASE_RPM;
     pulleyRef.current.rotation.y += delta * speed * rpmFactor * direction;
   });
 
   return (
-    <group
-      position={position}
-      rotation={rotation}
-    >
-      {/* Animation wrapper */}
+    <group position={position} rotation={rotation}>
       <group ref={pulleyRef}>
-
         <mesh>
-          <cylinderGeometry
-            args={[
-              radius,
-              radius,
-              thickness,
-              24,
-            ]}
-          />
-
-          <meshStandardMaterial
-            color={color}
-            roughness={0.85}
-            metalness={0.05}
-            map={texture}
-          />
+          <cylinderGeometry args={[radius, radius, thickness, 24]} />
+          <meshStandardMaterial color={color} roughness={0.85} metalness={0.05} map={texture} />
         </mesh>
-
       </group>
     </group>
   );
@@ -441,6 +396,7 @@ const VBelt = memo(function VBelt({
   speed = 0.5,
   color = '#888686',
   rpmRef = null,
+  isPowered = true,
 }) {
   const beltRef = useRef(null);
 
@@ -452,35 +408,28 @@ const VBelt = memo(function VBelt({
 
   const texture = useMemo(() => {
     if (!loadedTexture) return null;
-
     const cloned = loadedTexture.clone();
-
     cloned.wrapS = THREE.RepeatWrapping;
     cloned.wrapT = THREE.RepeatWrapping;
     cloned.needsUpdate = true;
-
     return cloned;
   }, [loadedTexture]);
 
   useEffect(() => {
-    return () => {
-      texture?.dispose();
-    };
+    return () => { texture?.dispose(); };
   }, [texture]);
 
   useR3FFrame((_, delta) => {
     if (!texture) return;
-
-    const rpmFactor =
-      (rpmRef?.current ?? BASE_RPM) / BASE_RPM;
-
+    if (!isPowered) return;
+    const rpmFactor = (rpmRef?.current ?? BASE_RPM) / BASE_RPM;
     texture.offset.y -= delta * speed * rpmFactor;
   });
 
   if (!texture) return null;
- 
+
   return (
-    <mesh ref={beltRef} position={center} >
+    <mesh ref={beltRef} position={center}>
       <planeGeometry args={[width, height]} />
       <meshStandardMaterial
         color={color}
@@ -495,201 +444,112 @@ const VBelt = memo(function VBelt({
   );
 });
 
-const GearBox= memo(function GearBox({
+const GearBox = memo(function GearBox({
   position = [0, 0, 0],
   rotation = [0, 10, 0],
   size = 0.5,
   color = '#fafafa'
 }) {
-  const texture = useTextureLoader({flipY: true, type: 'default', repeat : [1, 1]})
+  const texture = useTextureLoader({ flipY: true, type: 'default', repeat: [1, 1] })
   return (
-    <group
-      position={position}
-      rotation={degToRad(rotation)}
-    >
+    <group position={position} rotation={degToRad(rotation)}>
       <mesh>
-        <boxGeometry
-
-          args={[
-            size/1.5,
-            size,
-            size
-          ]}
-        />
-        <meshStandardMaterial 
-        color={color}   
-        map={texture}
-        metalness={0.5}
-        />
+        <boxGeometry args={[size / 1.5, size, size]} />
+        <meshStandardMaterial color={color} map={texture} metalness={0.5} />
       </mesh>
-  
     </group>
   );
 });
 
-// =========================================================
-// Motor + Pulley System
-// =========================================================
-function MoterAndPulley({ rpmRef, onLoad }) {
-  const texture = useTextureLoader({
-    type: 'wall',
-    flipY: false,
-    repeat: [1, 1],
-  });
-const AllPos={
-  motor:[-0.18, -1.4, 0],  //this is moter
-  pulley1:[-1.25, 0.9, 0],  //this is pulley1 that is connected to Stock
-  pulley2:[-1.1, 0.9, 0],   //this connected  to pullye1 and stock
-  pulley3:[-1.23, -1.5, 0], //this connected to motor
-  beltCenter:[-1.22, -0.098, 0],  //this is belt
-  gearBox:[-0.8, -1.5, 0],  //this is gear box 
-  pulley4:[-1.1, -1.5, 0]
-}
-
-
-  return (
-    <group>
-
-      {/* =================================================
-          MOTOR GLB
-          ================================================= */}
-      <Scene
-        modelUrl="https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/electricMoter.glb"
-        soundUrl="https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/electricMotor2.mp3"
-        soundPlayWithoutAnimation={true}
-        modelConfig={{
-          position: AllPos.motor,
-          scale: [0.5, 0.5, 0.5],
-          rotation: degToRad([0, -75, 0]),
-        }}
-        autoFit={false}
-        onLoad={onLoad}
-      />
-  
-
-  <RotatingPulley
-  position={AllPos.pulley1}
-  rotation={degToRad([0, 18, 90])}
-  radius={0.8}
-  thickness={0.2}
-  speed={4}
-  direction={-1}
-  color="#aa6e6e"
-  texture={texture}
-  rpmRef={rpmRef}
-/>
-  {/* center pully */}
-  <RotatingPulley
-  position={AllPos.pulley2}
-  rotation={degToRad([0, 10, 90])}
-  radius={0.3}
-  thickness={0.29}
-  speed={4}
-  direction={-1}
-  color="#aa6e6e"
-  texture={texture}
-  rpmRef={rpmRef}
-/>
-
-<RotatingPulley
-  position={AllPos.pulley3}
-  rotation={degToRad([0, 18, 90])}
-  radius={0.4}
-  thickness={0.2}
-  speed={4}
-  direction={-1}
-  color="#aa6e6e"
-  texture={texture}
-  rpmRef={rpmRef}
-/>
-<VBelt center={AllPos.beltCenter} rpmRef={rpmRef} />
-   <GearBox position={AllPos.gearBox} rpmRef={rpmRef} />
-  <RotatingPulley
-  position={AllPos.pulley4}
-  rotation={degToRad([0, 18, 90])}
-  radius={0.1}
-  thickness={0.25}
-  speed={4}
-  direction={-1}
-  color="#aa6e6e"
-  texture={texture}
-  rpmRef={rpmRef}
-/>
-    </group>
-  );
-}
-
-
-// =========================================================
-// Frozen Motor Preview
-// =========================================================
 const MotorPreview = React.memo(
-  function MotorPreview({ rpmRef, onLoad }) {
+  function MotorPreview({ rpmRef, onLoad, isPowered = true }) {
+     console.log('isPowered',isPowered)
+
+    useEffect(() => {
+      if (onLoad) onLoad();
+    }, []);
+
     return (
       <ImageBackground
         source={{
-          uri:
-            'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/carpentryWorkshop.jpg',
+          uri: 'https://pub-9a09ee6126034c0c9cbd772d75056b70.r2.dev/turning%26milling/mannualTurning/carpentryWorkshop.jpg',
         }}
         resizeMode="cover"
         pointerEvents="none"
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
+          top: 0, left: 0,
+          width: '100%', height: '100%',
           zIndex: -1,
         }}
       >
-        {/* <View style={{position:'absolute',top:STOCK_RADIUS-20,width:SW,height:STOCK_RADIUS*2.2,
-          backgroundColor:'rgba(255, 255, 255,0.3)'}}>
-
-        </View> */}
         <Canvas
-          style={{
-            width: '100%',
-            height: '100%',
-          }}
-          camera={{
-            position: [0, 0, 5],
-            fov: 50,
-          }}
+          style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
+          camera={{ position: [0, 0, 5], fov: 50 }}
         >
-
-          {/* Optional lighting */}
           <ambientLight intensity={1} />
-
-          <directionalLight
-            position={[5, 5, 5]}
-            intensity={2}
-          />
-
-          {/* Motor + rotating pulleys */}
-          <MoterAndPulley rpmRef={rpmRef} onLoad={onLoad} />
-
+          <directionalLight position={[5, 5, 5]} intensity={2} />
+          <PulleysOnly rpmRef={rpmRef} isPowered={isPowered} />
         </Canvas>
 
+        <Image
+          source={motor}
+          style={{
+            position: 'absolute',
+            bottom: 60,
+            left: 100,
+            width: 100,
+            height: 100,
+            resizeMode: 'contain',
+            zIndex: 1,
+            opacity: isPowered ? 1 : 0.5,
+          }}
+        />
       </ImageBackground>
     );
   },
-
-  // Keep the entire preview isolated from parent re-renders. Live RPM
-  // changes still reach it via `rpmRef` (a stable ref object mutated
-  // in place, read every frame inside each useR3FFrame above) rather
-  // than through props/re-renders, so this memo staying "always equal"
-  // doesn't break the sync.
-  () => true
+  // rpm changes shouldn't re-render this (rpm is read live via rpmRef
+  // inside each useR3FFrame below, on purpose, to avoid re-rendering
+  // the whole frozen 3D preview ~10x/sec). isPowered is different: it
+  // isn't read from a ref anywhere in this tree, so a change HAS to
+  // reach RotatingPulley/VBelt as a fresh prop, or they (and the motor
+  // image's opacity) freeze at whatever isPowered was on first mount --
+  // which, since power now defaults to off, meant they never started.
+  (prevProps, nextProps) =>
+    prevProps.isPowered === nextProps.isPowered &&
+    prevProps.rpmRef === nextProps.rpmRef &&
+    prevProps.onLoad === nextProps.onLoad
 );
 
-// chips helper ==========================================
-// ── Chip particle system ──
-// chips helper ==========================================
+function PulleysOnly({ rpmRef, isPowered = true }) {
+  const texture = useTextureLoader({ type: 'wall', flipY: false, repeat: [1, 1] });
+
+  const AllPos = {
+    pulley1: [-1.25, 0.9, 0],
+    pulley2: [-1.1, 0.9, 0],
+    pulley3: [-1.23, -1.5, 0],
+    beltCenter: [-1.22, -0.098, 0],
+    gearBox: [-0.8, -1.5, 0],
+    pulley4: [-1.1, -1.5, 0]
+  }
+
+  return (
+    <group>
+      <RotatingPulley position={AllPos.pulley1} rotation={degToRad([0, 18, 90])} radius={0.8} thickness={0.2} speed={4} direction={-1} color="#aa6e6e" texture={texture} rpmRef={rpmRef} isPowered={isPowered} />
+      <RotatingPulley position={AllPos.pulley2} rotation={degToRad([0, 10, 90])} radius={0.3} thickness={0.29} speed={4} direction={-1} color="#aa6e6e" texture={texture} rpmRef={rpmRef} isPowered={isPowered} />
+      <RotatingPulley position={AllPos.pulley3} rotation={degToRad([0, 18, 90])} radius={0.4} thickness={0.2} speed={4} direction={-1} color="#aa6e6e" texture={texture} rpmRef={rpmRef} isPowered={isPowered} />
+      <VBelt center={AllPos.beltCenter} rpmRef={rpmRef} isPowered={isPowered} />
+      <GearBox position={AllPos.gearBox} rpmRef={rpmRef} />
+      <RotatingPulley position={AllPos.pulley4} rotation={degToRad([0, 18, 90])} radius={0.1} thickness={0.25} speed={4} direction={-1} color="#aa6e6e" texture={texture} rpmRef={rpmRef} isPowered={isPowered} />
+    </group>
+  );
+}
+
 // ── Chip particle system ──
 const CHIP_POOL_SIZE = 50;
-const CHIP_GRAVITY = 520;          // px/s² -- stronger fall for a punchier arc
-const CHIP_MAX_LIFE = 800;         // ms, randomized per chip
-const CHIP_MIN_REMOVAL = 0.05;     // ignore near-zero radius changes -- hovering/edge-grazing shouldn't spawn chips
+const CHIP_GRAVITY = 520;
+const CHIP_MAX_LIFE = 800;
+const CHIP_MIN_REMOVAL = 0.05;
 
 function chipStyleForMaterial(mat) {
   switch (mat.id) {
@@ -717,8 +577,6 @@ function ChipParticle({ chipSnapshot, index }) {
   const opacity = useDerivedValue(() => chipSnapshot.value[index].opacity);
   const color = useDerivedValue(() => chipSnapshot.value[index].color);
 
-  // Geometry rebuilt per-frame from live size/kind -- cheap since each
-  // path is 3-6 points, and it's only rebuilt for active particles.
   const path = useDerivedValue(() => {
     const c = chipSnapshot.value[index];
     const s = c.size / 2;
@@ -726,7 +584,6 @@ function ChipParticle({ chipSnapshot, index }) {
 
     switch (c.kind) {
       case 'shaving': {
-        // Curled wood ribbon -- a tapered S-curve instead of a straight sliver
         p.moveTo(-s * 1.6, 0);
         p.quadTo(-s * 0.4, -s * 0.9, s * 0.6, -s * 0.3);
         p.quadTo(s * 1.3, 0.1, s * 1.6, s * 0.6);
@@ -736,7 +593,6 @@ function ChipParticle({ chipSnapshot, index }) {
         break;
       }
       case 'chip': {
-        // Angular ceramic/glazed fragment -- irregular quad
         p.moveTo(-s, -s * 0.6);
         p.lineTo(s * 0.8, -s);
         p.lineTo(s, s * 0.5);
@@ -745,7 +601,6 @@ function ChipParticle({ chipSnapshot, index }) {
         break;
       }
       case 'spark': {
-        // Small bright diamond -- reads as a metal spark, not a dot
         p.moveTo(0, -s);
         p.lineTo(s * 0.55, 0);
         p.lineTo(0, s);
@@ -755,7 +610,6 @@ function ChipParticle({ chipSnapshot, index }) {
       }
       case 'blob':
       default: {
-        // Soft clay/ceramic crumb -- irregular rounded triangle, not a perfect circle
         p.moveTo(0, -s);
         p.quadTo(s, -s * 0.5, s * 0.7, s * 0.6);
         p.quadTo(0, s * 1.1, -s * 0.7, s * 0.6);
@@ -784,33 +638,23 @@ const ChipLayer = memo(function ChipLayer({ chipSnapshot }) {
   );
 });
 
+function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick,
+   spinEnabled, isPowered = true }) {
 
-function DrawingCanvas({ profile, onProfile, onCommit, tool, mat, rpm, wear, onWear, onCatch, onChatterTick, spinEnabled }) {
-  // ── Visual blade sizing ─────────────────────────────────────
-// tool.width drives the actual cut in profile-px (2–16) and must
-// stay small for the simulation to feel precise. Drawing it 1:1
-// made a 2px parting tool and a 16px roughing tool look like the
-// same blob. This is a SEPARATE on-screen scale: same relative
-// ordering as the real cutting width, but every tool stays legible
-// and thin tools (parting) read clearly thinner than wide ones
-// (scraper/roughing).
-function bladeVisualWidth(toolWidth) {
-  return clamp(toolWidth * 1.6 + 6, 10, 28);
-}
+  function bladeVisualWidth(toolWidth) {
+    return clamp(toolWidth * 1.6 + 6, 10, 28);
+  }
 
-const BLADE_LEN = 32;    // exposed steel blade, tip to shoulder
-const SHANK_LEN = 8;     // taper from blade shoulder into the ferrule
-const HANDLE_LEN = 46;   // visual handle length only -- independent of
-                          // TOOL_LENGTH, which still drives cutting reach
-                          // in fingerToTip/the pan gesture and must not
-                          // be touched for cosmetic changes.
-const TOTAL_VISUAL_LEN = BLADE_LEN + SHANK_LEN + HANDLE_LEN;
+  const BLADE_LEN = 32;
+  const SHANK_LEN = 8;
+  const HANDLE_LEN = 46;
+  const TOTAL_VISUAL_LEN = BLADE_LEN + SHANK_LEN + HANDLE_LEN;
 
-const STEEL_LIGHT = '#eef2f6';
-const STEEL_MID   = '#b9c4cf';
-const STEEL_DARK  = '#7c8894';
-const WOOD_HANDLE = '#e3c79a';
-const WOOD_HANDLE_DK = '#c9a874';
+  const STEEL_LIGHT = '#eef2f6';
+  const STEEL_MID   = '#b9c4cf';
+  const STEEL_DARK  = '#7c8894';
+  const WOOD_HANDLE = '#e3c79a';
+  const WOOD_HANDLE_DK = '#c9a874';
 
   const textureDef = useMemo(
     () => Textures.find(t => t.name === SPIN_TEXTURE_CONFIG.MATERIAL) ?? null,
@@ -822,7 +666,17 @@ const WOOD_HANDLE_DK = '#c9a874';
   const matRef = useRef(mat);
   useEffect(() => { matRef.current = mat; }, [mat]);
 
-  // ── Chip particle pool ──
+  // ── Power state, readable from worklets ──────────────────────
+  // Gesture callbacks below run on the UI thread ('worklet'), so a
+  // plain JS `isPowered` prop can't be read there directly -- it has
+  // to be mirrored into a shared value. This is what makes cutting
+  // itself (not just the spin animation) turn off with the power,
+  // so the whole rig -- stock spin, motor/pulley visuals, and the
+  // ability to cut -- goes on/off together instead of the tool still
+  // being able to carve while everything visually looks "off".
+  const isPoweredSV = useSharedValue(isPowered);
+  useEffect(() => { isPoweredSV.value = isPowered; }, [isPowered]);
+
   const chipPoolRef = useRef(makeChipPool(CHIP_POOL_SIZE));
   const chipCursorRef = useRef(0);
   const chipsActiveCountRef = useRef(0);
@@ -889,62 +743,61 @@ const WOOD_HANDLE_DK = '#c9a874';
 
   useEffect(() => () => { if (chipRafRef.current) cancelAnimationFrame(chipRafRef.current); }, []);
 
-  // Spawns `count` chips at (tx, ty). `strength` (0-1+) scales how hard
-  // they're flung -- driven by how much material was actually removed,
-  // not just gesture speed, so a light scrape flings dust and a deep
-  // roughing pass flings real debris.
-const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, strength) => {
-  const pool = chipPoolRef.current;
-  const kick = 1 + clamp(strength, 0, 1) * 1.4;
-  for (let i = 0; i < count; i++) {
-    const idx = chipCursorRef.current;
-    chipCursorRef.current = (idx + 1) % CHIP_POOL_SIZE;
-    const p = pool[idx];
-    if (!p.active) chipsActiveCountRef.current += 1;
+  const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, strength) => {
+    const pool = chipPoolRef.current;
+    const kick = 1 + clamp(strength, 0, 1) * 1.4;
+    for (let i = 0; i < count; i++) {
+      const idx = chipCursorRef.current;
+      chipCursorRef.current = (idx + 1) % CHIP_POOL_SIZE;
+      const p = pool[idx];
+      if (!p.active) chipsActiveCountRef.current += 1;
 
-    const side = ty < AXIS_Y ? -1 : 1;
+      const side = ty < AXIS_Y ? -1 : 1;
+      const tangentialBase = spindleDir * side * (0.6 + Math.random() * 0.6);
+      const scatter = (Math.random() - 0.5) * 2;
 
-    // Surface (tangential) velocity flips direction between the top
-    // and bottom of a spinning cylinder -- top and bottom of a wheel
-    // move opposite ways on screen even though the wheel spins one way.
-    const tangentialBase = spindleDir * side * (0.6 + Math.random() * 0.6);
+      p.active = true;
+      p.x = tx + (Math.random() - 0.5) * tool.width * 0.6;
+      p.y = ty;
+      p.vx = (tangentialBase * 140 + scatter * 130) * kick;
+      p.vy = side * (-170 - Math.random() * 130) * kick;
+      p.rot = Math.random() * Math.PI * 2;
+      p.vr = (Math.random() - 0.5) * 14;
+      p.maxLife = CHIP_MAX_LIFE * (0.6 + Math.random() * 0.8);
+      p.life = p.maxLife;
+      p.size = matStyle.size[0] + Math.random() * (matStyle.size[1] - matStyle.size[0]);
+      p.kind = matStyle.kind;
+      p.color = matStyle.color;
+    }
+    startChipLoop();
+  }, [startChipLoop]);
 
-    // Wide random cone so chips genuinely scatter left/right, not just
-    // jitter around one dominant direction. This term is now comparable
-    // in magnitude to the tangential term, not a minor jitter on top of it.
-    const scatter = (Math.random() - 0.5) * 2; // -1..1
-
-    p.active = true;
-    p.x = tx + (Math.random() - 0.5) * tool.width * 0.6;
-    p.y = ty;
-    p.vx = (tangentialBase * 140 + scatter * 130) * kick;
-    p.vy = side * (-170 - Math.random() * 130) * kick;
-    p.rot = Math.random() * Math.PI * 2;
-    p.vr = (Math.random() - 0.5) * 14;
-    p.maxLife = CHIP_MAX_LIFE * (0.6 + Math.random() * 0.8);
-    p.life = p.maxLife;
-    p.size = matStyle.size[0] + Math.random() * (matStyle.size[1] - matStyle.size[0]);
-    p.kind = matStyle.kind;
-    p.color = matStyle.color;
-  }
-  startChipLoop();
-}, [startChipLoop]);
+  const animationRunningRef = useRef(false);
 
   useEffect(() => {
-    // Stay static until the 3D motor/pulley assembly (MotorPreview)
-    // has actually loaded and is on screen -- otherwise the stock
-    // starts "spinning" before there's any visible drive mechanism
-    // turning it, which reads as broken rather than intentional.
-    if (!spinEnabled) return;
-    const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM);
-    const sweep = 100000;
-    const durationMs = (sweep / rate) * 1000;
-    angleRef.value = withRepeat(
-      withTiming(angleRef.value + sweep, { duration: durationMs, easing: Easing.linear }),
-      -1,
-      false
-    );
-  }, [rpm, spinEnabled]);
+    const stopAnimation = () => {
+      animationRunningRef.current = false;
+      angleRef.value = 0;
+    };
+
+    if (!spinEnabled || !isPowered) {
+      stopAnimation();
+      return;
+    }
+
+    if (!animationRunningRef.current) {
+      animationRunningRef.current = true;
+      const rate = SPIN_TEXTURE_CONFIG.CLOCK_RATE * (rpm / BASE_RPM);
+      const sweep = 100000;
+      const durationMs = (sweep / rate) * 1000;
+
+      angleRef.value = withRepeat(
+        withTiming(angleRef.value + sweep, { duration: durationMs, easing: Easing.linear }),
+        -1,
+        false
+      );
+    }
+  }, [rpm, spinEnabled, isPowered]);
 
   const cylinderUniforms = useDerivedValue(() => ({
     axisY: AXIS_Y,
@@ -1071,43 +924,43 @@ const spawnChips = useCallback((tx, ty, count, tool, matStyle, spindleDir, stren
       const catchRisk = shapeRisk * wearRisk * thinFactor * rpmFactor * Math.max(0, pressureNorm - 0.35);
       const catchProb = clamp(CATCH_BASE_CHANCE * catchRisk, 0, CATCH_PROB_CAP);
 
-if (pressureNorm > 0.35 && Math.random() < catchProb) {
-  const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
-  const beforeProfile = profileRef.current;
-  const dug = applyTool(beforeProfile, point.x, point.y, digTool);
-  const half = Math.floor(currentTool.width / 2);
-  const catchRemoval = footprintRemoval(beforeProfile, dug, seg, half);
+      if (pressureNorm > 0.35 && Math.random() < catchProb) {
+        const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
+        const beforeProfile = profileRef.current;
+        const dug = applyTool(beforeProfile, point.x, point.y, digTool);
+        const half = Math.floor(currentTool.width / 2);
+        const catchRemoval = footprintRemoval(beforeProfile, dug, seg, half);
 
-  profileRef.current = dug;
-  lockUntilRef.current = now + CATCH_LOCKOUT_MS;
-  onCatch();
-  onWear(currentTool.id, clamp(wearNow + 0.05, 0, 1));
-  triggerCatchFx();
-  onProfile([...dug]);
+        profileRef.current = dug;
+        lockUntilRef.current = now + CATCH_LOCKOUT_MS;
+        onCatch();
+        onWear(currentTool.id, clamp(wearNow + 0.05, 0, 1));
+        triggerCatchFx();
+        onProfile([...dug]);
 
-  if (catchRemoval > CHIP_MIN_REMOVAL) {
-    spawnChips(
-      point.x, point.y, 10, currentTool,
-      chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
-      1.4
-    );
-  }
-} else {
-      const toolForCut = { ...currentTool, depth: currentTool.depth * pressureMul * wearMul };
-  const beforeProfile = profileRef.current;
-  let next = applyTool(beforeProfile, point.x, point.y, toolForCut);
+        if (catchRemoval > CHIP_MIN_REMOVAL) {
+          spawnChips(
+            point.x, point.y, 10, currentTool,
+            chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
+            1.4
+          );
+        }
+      } else {
+        const toolForCut = { ...currentTool, depth: currentTool.depth * pressureMul * wearMul };
+        const beforeProfile = profileRef.current;
+        let next = applyTool(beforeProfile, point.x, point.y, toolForCut);
 
-  const half = Math.floor(currentTool.width / 2);
-  const removalAmount = footprintRemoval(beforeProfile, next, seg, half);
+        const half = Math.floor(currentTool.width / 2);
+        const removalAmount = footprintRemoval(beforeProfile, next, seg, half);
 
-  if (removalAmount > CHIP_MIN_REMOVAL) {
-    const chipCount = clamp(Math.round(removalAmount * 0.8 + pressureNorm * 2.2), 1, 9);
-    spawnChips(
-      point.x, point.y, chipCount, currentTool,
-      chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
-      clamp(removalAmount / currentTool.width, 0, 1) + pressureNorm * 0.3
-    );
-  }
+        if (removalAmount > CHIP_MIN_REMOVAL) {
+          const chipCount = clamp(Math.round(removalAmount * 0.8 + pressureNorm * 2.2), 1, 9);
+          spawnChips(
+            point.x, point.y, chipCount, currentTool,
+            chipStyleForMaterial(matRef.current), SPIN_TEXTURE_CONFIG.DIRECTION,
+            clamp(removalAmount / currentTool.width, 0, 1) + pressureNorm * 0.3
+          );
+        }
 
         const chatterOn = pressureNorm > 0.65 && rpmFactor > 1.15 &&
           (currentTool.shape === 'round' || currentTool.shape === 'flat');
@@ -1172,10 +1025,18 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     onCommit([...profileRef.current]);
   }, [onProfile, onCommit]);
 
+  // ── Gesture: gated on power ───────────────────────────────────
+  // onBegin/onUpdate now bail immediately when isPoweredSV.value is
+  // false, so with the motor off the tool cannot start or continue a
+  // cut -- matching the stock, which is also stopped by isPowered in
+  // the effect above. onEnd stays unconditional so a gesture that
+  // started while powered (then power got toggled off mid-drag) still
+  // cleans up and commits its history properly.
   const gesture = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => {
       'worklet';
+      if (!isPoweredSV.value) return;
       fingerX.value = e.x;
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
@@ -1184,6 +1045,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     })
     .onUpdate((e) => {
       'worklet';
+      if (!isPoweredSV.value) return;
       fingerX.value = e.x;
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
@@ -1194,11 +1056,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
       runOnJS(stopProcessing)();
       runOnJS(syncReactState)();
     });
-  // ── Blade: real cutting-edge geometry per tool shape ────────
-  // Every profile is built at y=0 (the tip, touching the stock) up to
-  // y=-BLADE_LEN (the shoulder, where it meets the ferrule). Width is
-  // bladeVisualWidth(tool.width), so it scales with the real cutting
-  // width but never collapses to an unreadable sliver.
+
   const buildToolCursor = useCallback(() => {
     const bw = bladeVisualWidth(tool.width);
     const half = bw / 2;
@@ -1207,7 +1065,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     switch (tool.shape) {
       case 'flat': {
         if (tool.id === 'skew') {
-          // Diagonal ground edge -- classic skew chisel silhouette.
           const skew = half * 0.85;
           p.moveTo(-half, 0);
           p.lineTo(-half, -BLADE_LEN * 0.82);
@@ -1216,7 +1073,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
           p.lineTo(half, 0);
           p.close();
         } else {
-          // Scraper -- flat square-ground edge.
           p.moveTo(-half, 0);
           p.lineTo(-half, -BLADE_LEN * 0.85);
           p.lineTo(-half * 0.9, -BLADE_LEN);
@@ -1227,8 +1083,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
         }
         break;
       }
-
-      case 'narrow': { // parting -- thin diamond cross-section blade
+      case 'narrow': {
         p.moveTo(-half * 0.45, 0);
         p.lineTo(-half, -BLADE_LEN * 0.5);
         p.lineTo(-half * 0.3, -BLADE_LEN);
@@ -1238,8 +1093,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
         p.close();
         break;
       }
-
-      case 'point': { // spindle gouge -- narrow blade, small round nose
+      case 'point': {
         p.moveTo(-half * 0.6, 0);
         p.lineTo(-half * 0.65, -BLADE_LEN * 0.72);
         p.quadTo(-half * 0.65, -BLADE_LEN, 0, -BLADE_LEN);
@@ -1248,9 +1102,8 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
         p.close();
         break;
       }
-
       case 'round':
-      default: { // gouge / roughing / bead -- U-fluted round-nose blade
+      default: {
         p.moveTo(-half, 0);
         p.lineTo(-half, -BLADE_LEN * 0.72);
         p.quadTo(-half, -BLADE_LEN, 0, -BLADE_LEN);
@@ -1263,9 +1116,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     return p;
   }, [tool]);
 
-  // Hollow-ground flute drawn on top of round-nose blades so gouge/
-  // roughing/bead read as real fluted steel, not a flat scraper with
-  // rounded corners. Returns null for flat/narrow/point tools.
   const buildToolFlute = useCallback(() => {
     if (tool.shape !== 'round') return null;
     const bw = bladeVisualWidth(tool.width);
@@ -1280,9 +1130,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     return p;
   }, [tool]);
 
-  // Steel ferrule collar joining blade shoulder to wood handle.
-  // Never thinner than a slim blade so parting/skew don't get a
-  // ferrule that looks wider than the blade it's crimping.
   const buildToolFerrule = useCallback(() => {
     const bw = bladeVisualWidth(tool.width);
     const half = Math.max(bw / 2, 5.5);
@@ -1294,9 +1141,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     return p;
   }, [tool]);
 
-  // Wood handle -- always drawn chunkier than the blade (real turning
-  // tool handles are, regardless of how fine the edge is) and always
-  // HANDLE_LEN long, independent of tool width or TOOL_LENGTH.
   const buildToolHandle = useCallback(() => {
     const bw = bladeVisualWidth(tool.width);
     const handleHalf = Math.max(bw * 0.85, 9);
@@ -1331,6 +1175,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
   const toolHandlePath = useMemo(() => buildToolHandle(), [buildToolHandle]);
   const toolShadowPath = useMemo(() => buildToolShadow(), [buildToolShadow]);
   const toolFerrulePath = useMemo(() => buildToolFerrule(), [buildToolFerrule]);
+  const toolFlutePath = useMemo(() => buildToolFlute(), [buildToolFlute]);
 
   const axisLines = useMemo(() => Array.from({ length: 8 }), []);
   const depthLines = useMemo(() => Array.from({ length: 10 }), []);
@@ -1399,8 +1244,6 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
     return p;
   });
 
-  const toolFlutePath = useMemo(() => buildToolFlute(), [buildToolFlute]);
-
   return (
     <View style={{ width: CANVAS_W, height: CANVAS_H }}>
       <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
@@ -1425,25 +1268,14 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
                     start={gradStart}
                     end={gradEnd}
                     colors={[
-                      '#2a0e04',
-                      '#6a2c10',
-                      '#b86030',
-                      '#ecb898',
-                      '#fad0b0',
-                      '#d08858',
-                      '#7a3a18',
-                      '#2a0e04',
+                      '#2a0e04', '#6a2c10', '#b86030', '#ecb898',
+                      '#fad0b0', '#d08858', '#7a3a18', '#2a0e04',
                     ]}
                     mode="clamp"
                   />
                 </Path>
                 <Group clip={fp}>
-                  <Path
-                    path={grainPath}
-                    style="stroke"
-                    strokeWidth={1}
-                    color="rgba(20,8,2,0.16)"
-                  />
+                  <Path path={grainPath} style="stroke" strokeWidth={1} color="rgba(20,8,2,0.16)" />
                 </Group>
               </>
             )}
@@ -1460,26 +1292,15 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
               </Group>
             ))}
 
-            <Path
-              path={cuttingIndicator}
-              style="fill"
-              color={tool.color + '10'}
-            />
-            <Path
-              path={cuttingIndicator}
-              style="stroke"
-              strokeWidth={1}
-              color={tool.color + '30'}
-            />
+            <Path path={cuttingIndicator} style="fill" color={tool.color + '10'} />
+            <Path path={cuttingIndicator} style="stroke" strokeWidth={1} color={tool.color + '30'} />
 
             {depthLines.map((_, i) => {
               const idx = Math.floor((i / 10) * PROFILE_SEGS);
               const x = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
               const r = profile[idx];
               return (
-                <Line key={i}
-                  p1={vec(x, AXIS_Y - r)}
-                  p2={vec(x, AXIS_Y + r)}
+                <Line key={i} p1={vec(x, AXIS_Y - r)} p2={vec(x, AXIS_Y + r)}
                   strokeWidth={0.3} color="rgba(140,60,20,0.12)" />
               );
             })}
@@ -1488,31 +1309,19 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
             {Array.from({ length: 4 }).map((_, i) => {
               const x = STOCK_LEFT + (i / 3) * STOCK_WIDTH;
               return (
-                <Line key={i}
-                  p1={vec(x, AXIS_Y - 8)}
-                  p2={vec(x, AXIS_Y - 3)}
+                <Line key={i} p1={vec(x, AXIS_Y - 8)} p2={vec(x, AXIS_Y - 3)}
                   strokeWidth={1} color="rgba(70,110,160,0.45)" />
               );
             })}
 
             <ChipLayer chipSnapshot={chipSnapshot} />
 
-                {/* ── TOOL BODY ── */}
             <Group opacity={1} transform={toolBodyTransform}>
-              <Path
-                path={toolShadowPath}
-                style="fill"
-                color="rgba(0,0,0,0.4)"
-                transform={[{ translateX: 3 }, { translateY: 3 }]}
-              />
+              <Path path={toolShadowPath} style="fill" color="rgba(0,0,0,0.4)"
+                transform={[{ translateX: 3 }, { translateY: 3 }]} />
 
-              {/* wood handle */}
-              <Path
-                path={toolHandlePath}
-                style="fill"
-                color={WOOD_HANDLE_DK}
-                transform={[{ translateX: 1.5 }, { translateY: 1.5 }]}
-              />
+              <Path path={toolHandlePath} style="fill" color={WOOD_HANDLE_DK}
+                transform={[{ translateX: 1.5 }, { translateY: 1.5 }]} />
               <Path path={toolHandlePath} style="fill" color={WOOD_HANDLE} />
               {Array.from({ length: 3 }).map((_, i) => {
                 const yPos = -(BLADE_LEN + SHANK_LEN) - HANDLE_LEN * 0.22 * (i + 1);
@@ -1524,46 +1333,23 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
                   <Path key={i} path={line} style="stroke" strokeWidth={0.4} color="rgba(80,50,20,0.15)" />
                 );
               })}
-              <Path
-                path={toolHandlePath}
-                style="fill"
-                color="#ffffff"
-                opacity={0.1}
-                transform={[{ translateX: -1 }, { translateY: -1 }]}
-              />
+              <Path path={toolHandlePath} style="fill" color="#ffffff" opacity={0.1}
+                transform={[{ translateX: -1 }, { translateY: -1 }]} />
 
-              {/* steel ferrule */}
-              <Path
-                path={toolFerrulePath}
-                style="fill"
-                color="#5a6672"
-                transform={[{ translateX: 1 }, { translateY: 1 }]}
-              />
+              <Path path={toolFerrulePath} style="fill" color="#5a6672"
+                transform={[{ translateX: 1 }, { translateY: 1 }]} />
               <Path path={toolFerrulePath} style="fill" color={STEEL_DARK} />
               <Path path={toolFerrulePath} style="stroke" strokeWidth={0.5} color="#3d4650" />
 
-              {/* steel blade -- real edge geometry, sized by bladeVisualWidth */}
-              <Path
-                path={toolCursorPath}
-                style="fill"
-                color="rgba(0,0,0,0.25)"
-                transform={[{ translateX: 1 }, { translateY: 1 }]}
-              />
+              <Path path={toolCursorPath} style="fill" color="rgba(0,0,0,0.25)"
+                transform={[{ translateX: 1 }, { translateY: 1 }]} />
               <Path path={toolCursorPath} style="fill" color={STEEL_MID} />
-              <Path
-                path={toolCursorPath}
-                style="fill"
-                color={STEEL_LIGHT}
-                opacity={0.55}
-                transform={[{ translateX: -0.8 }, { translateY: -0.8 }]}
-              />
+              <Path path={toolCursorPath} style="fill" color={STEEL_LIGHT} opacity={0.55}
+                transform={[{ translateX: -0.8 }, { translateY: -0.8 }]} />
               {toolFlutePath && (
                 <Path path={toolFlutePath} style="fill" color={STEEL_DARK} opacity={0.45} />
               )}
               <Path path={toolCursorPath} style="stroke" strokeWidth={0.8} color={STEEL_DARK} opacity={0.7} />
-
-              {/* thin color-coded outline so the tool stays identifiable
-                  at a glance even though every blade is now real steel */}
               <Path path={toolCursorPath} style="stroke" strokeWidth={2} color={tool.color} opacity={0.5} />
 
               {toolLabelFont && (
@@ -1577,54 +1363,22 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
               )}
             </Group>
 
-            <Path
-              path={connectorPath}
-              style="stroke"
-              strokeWidth={1.5}
-              color="rgba(255,255,255,0.35)"
-            />
+            <Path path={connectorPath} style="stroke" strokeWidth={1.5} color="rgba(255,255,255,0.35)" />
             <Group transform={gripTransform}>
               <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.5)" />
               <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.25)" style="stroke" strokeWidth={1} />
             </Group>
 
-            {/* ── CUTTING TIP INDICATOR ── */}
             <Group transform={tipTransform}>
               <Circle cx={0} cy={0} r={tool.width / 2 + 6} color={tool.color + '15'} />
               <Circle cx={0} cy={0} r={tool.width / 2 + 3} color={tool.color + '25'} />
-              <Circle
-                cx={0}
-                cy={0}
-                r={tool.width / 2 + 1}
-                color={tool.color}
-                style="stroke"
-                strokeWidth={1.2}
-                opacity={0.5}
-              />
-              <Circle
-                cx={0}
-                cy={0}
-                r={tool.width / 2}
-                color={tool.color}
-                style="stroke"
-                strokeWidth={1.5}
-                opacity={0.7}
-              />
+              <Circle cx={0} cy={0} r={tool.width / 2 + 1} color={tool.color} style="stroke" strokeWidth={1.2} opacity={0.5} />
+              <Circle cx={0} cy={0} r={tool.width / 2} color={tool.color} style="stroke" strokeWidth={1.5} opacity={0.7} />
               <Circle cx={0} cy={0} r={2} color="#ffffff" opacity={0.9} />
               <Circle cx={0} cy={0} r={1.2} color={tool.color} opacity={0.8} />
 
-              <Line
-                p1={vec(-tool.width / 2 - 3, 0)}
-                p2={vec(tool.width / 2 + 3, 0)}
-                strokeWidth={0.4}
-                color="rgba(255,255,255,0.15)"
-              />
-              <Line
-                p1={vec(0, -tool.width / 2 - 3)}
-                p2={vec(0, tool.width / 2 + 3)}
-                strokeWidth={0.4}
-                color="rgba(255,255,255,0.15)"
-              />
+              <Line p1={vec(-tool.width / 2 - 3, 0)} p2={vec(tool.width / 2 + 3, 0)} strokeWidth={0.4} color="rgba(255,255,255,0.15)" />
+              <Line p1={vec(0, -tool.width / 2 - 3)} p2={vec(0, tool.width / 2 + 3)} strokeWidth={0.4} color="rgba(255,255,255,0.15)" />
 
               <Circle cx={0} cy={0} r={8} color="rgba(255,255,255,0.04)" />
               <Circle cx={0} cy={0} r={5} color="rgba(255,255,255,0.06)" />
@@ -1650,10 +1404,7 @@ if (pressureNorm > 0.35 && Math.random() < catchProb) {
 function MagazineToggleButton({ isOpen, onPress, tool }) {
   return (
     <TouchableOpacity
-      style={[
-        styles.magazineToggle,
-        isOpen && styles.magazineToggleOpen
-      ]}
+      style={[styles.magazineToggle, isOpen && styles.magazineToggleOpen]}
       onPress={onPress}
       activeOpacity={0.8}
     >
@@ -1663,10 +1414,7 @@ function MagazineToggleButton({ isOpen, onPress, tool }) {
         <View style={styles.toggleBadge}>
           <Text style={styles.toggleBadgeText}>{tool.name}</Text>
         </View>
-        <Text style={[
-          styles.toggleArrow,
-          isOpen && styles.toggleArrowOpen
-        ]}>▼</Text>
+        <Text style={[styles.toggleArrow, isOpen && styles.toggleArrowOpen]}>▼</Text>
       </View>
     </TouchableOpacity>
   );
@@ -1706,17 +1454,17 @@ export default function FreehandTurning() {
 
   const orbitTarget = useMemo(() => new THREE.Vector3(0, 0, 0), []);
 
-  // ── Motor/pulley load gating ──
-  // The 2D stock's spin texture shouldn't start until the 3D motor +
-  // pulley assembly (MotorPreview, the frozen background behind the
-  // 2D canvas) has actually loaded and is visible -- otherwise the
-  // stock appears to spin with no visible drive mechanism behind it.
-  // `Scene` (utils/components/glbPreview) is passed an `onLoad` here
-  // on the assumption it supports one, the same way most GLB-loader
-  // wrappers do -- unverified against that file's actual implementation.
-  // The timeout is a safety net either way: if `onLoad` never fires
-  // (unsupported prop, slow network, etc.) the stock still unblocks on
-  // its own after a few seconds instead of staying frozen forever.
+  // ── Power: defaults OFF ────────────────────────────────────
+  // The lathe now starts powered down -- stock isn't spinning, the
+  // motor/pulley rig is idle, and the cutting gesture (gated in
+  // DrawingCanvas via isPoweredSV) won't carve. Flipping this on is
+  // the single source of truth that brings every one of those back
+  // in sync in the same render/frame -- nothing partially "turns on".
+  const [isPowered, setIsPowered] = useState(false);
+  const togglePower = useCallback(() => {
+    setIsPowered(prev => !prev);
+  }, []);
+
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const handleModelsLoaded = useCallback(() => setModelsLoaded(true), []);
   useEffect(() => {
@@ -1724,21 +1472,14 @@ export default function FreehandTurning() {
     return () => clearTimeout(t);
   }, []);
 
-  // ── Spindle speed ──
   const [rpm, setRpm] = useState(BASE_RPM);
   const adjustRpm = useCallback((delta) => {
     setRpm(r => clamp(r + delta, MIN_RPM, MAX_RPM));
   }, []);
 
-  // ── Live RPM ref for the frozen motor/pulley/belt preview ──
-  // MotorPreview is memoized to never re-render (see its comment), so
-  // it can't pick up rpm through props/state the normal way. A ref
-  // gives it a live value to read every frame inside its own
-  // useR3FFrame loops without ever needing to re-render.
   const rpmRef = useRef(rpm);
   useEffect(() => { rpmRef.current = rpm; }, [rpm]);
 
-  // ── Tool wear, catches, finish quality ──
   const [toolWear, setToolWear] = useState({});
   const [catches, setCatches] = useState(0);
   const [finishScore, setFinishScore] = useState(100);
@@ -1758,7 +1499,6 @@ export default function FreehandTurning() {
     setToolWear(w => ({ ...w, [tool.id]: 0 }));
   }, [tool.id]);
 
-  // ── Undo / redo history ──
   const historyRef = useRef([Array.from(makeProfile())]);
   const historyIndexRef = useRef(0);
   const [historyTick, setHistoryTick] = useState(0);
@@ -1793,15 +1533,10 @@ export default function FreehandTurning() {
   const canUndo = historyIndexRef.current > 0;
   const canRedo = historyIndexRef.current < historyRef.current.length - 1;
 
-  // ── Saved parts -- persisted via AsyncStorage ──
-  // A "part" is a complete snapshot of a finished piece: the carved
-  // profile AND which material/texture it was shown with, so loading
-  // one restores exactly what you saved -- not just the shape.
   const [savedParts, setSavedParts] = useState([]);
   const [isPartsOpen, setIsPartsOpen] = useState(false);
   const hasLoadedPartsRef = useRef(false);
 
-  // Load once on mount.
   useEffect(() => {
     (async () => {
       try {
@@ -1815,9 +1550,6 @@ export default function FreehandTurning() {
     })();
   }, []);
 
-  // Persist whenever the list changes -- skip the write the initial
-  // load itself triggers, so mount doesn't immediately re-write
-  // storage with the exact data it just read.
   useEffect(() => {
     if (!hasLoadedPartsRef.current) return;
     AsyncStorage.setItem(SAVED_PARTS_KEY, JSON.stringify(savedParts)).catch((e) => {
@@ -1835,9 +1567,6 @@ export default function FreehandTurning() {
     }]);
   }, [profile, mat.id]);
 
-  // Loading a saved part restores both the shape and the material it
-  // was saved with, and switches to 3D so you immediately see the
-  // finished piece -- matching how it looked when you saved it.
   const loadPart = useCallback((part) => {
     const arr = Float32Array.from(part.profile);
     setProfile(arr);
@@ -1852,29 +1581,18 @@ export default function FreehandTurning() {
     setSavedParts(p => p.filter(x => x.id !== id));
   }, []);
 
-  // Magazine state
   const [isMagazineOpen, setIsMagazineOpen] = useState(false);
   const magazineAnim = useRef(new Animated.Value(0)).current;
   const magazineHeight = TOOLBAR_H + 40;
 
   const toggleMagazine = useCallback(() => {
     const toValue = isMagazineOpen ? 0 : 1;
-    Animated.spring(magazineAnim, {
-      toValue,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
+    Animated.spring(magazineAnim, { toValue, useNativeDriver: true, friction: 8, tension: 40 }).start();
     setIsMagazineOpen(!isMagazineOpen);
   }, [isMagazineOpen, magazineAnim]);
 
   const closeMagazine = useCallback(() => {
-    Animated.spring(magazineAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
+    Animated.spring(magazineAnim, { toValue: 0, useNativeDriver: true, friction: 8, tension: 40 }).start();
     setIsMagazineOpen(false);
   }, [magazineAnim]);
 
@@ -1883,28 +1601,16 @@ export default function FreehandTurning() {
     if (isMagazineOpen) {
       timeoutId = setTimeout(() => {
         if (isMagazineOpen) {
-          Animated.spring(magazineAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-            tension: 40,
-          }).start();
+          Animated.spring(magazineAnim, { toValue: 0, useNativeDriver: true, friction: 8, tension: 40 }).start();
           setIsMagazineOpen(false);
         }
       }, 5000);
     }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
+    return () => { if (timeoutId) clearTimeout(timeoutId); };
   }, [isMagazineOpen, magazineAnim]);
 
   const handleMagazineInteraction = useCallback(() => {
-    Animated.spring(magazineAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 40,
-    }).start();
+    Animated.spring(magazineAnim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 40 }).start();
     setIsMagazineOpen(true);
   }, [magazineAnim]);
 
@@ -1938,14 +1644,19 @@ export default function FreehandTurning() {
             <Text style={styles.logo}>🏺</Text>
             <View>
               <Text style={styles.title}>Pottery Studio</Text>
+              {/* Subtitle now reflects power state in 2D mode, so the
+                  header text and the actual carve-ability stay in sync. */}
               <Text style={styles.sub}>
-                {is3D ? `${mat.label} · ${rpm} RPM · drag to orbit` : `${tool.name} tool active`}
+                {is3D
+                  ? `${mat.label} · ${rpm} RPM · drag to orbit`
+                  : (isPowered ? `${tool.name} tool active` : 'Power off — spindle stopped')}
               </Text>
             </View>
           </View>
 
           <View style={styles.hRight}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }} contentContainerStyle={styles.hRightScroll}>
+              <PowerToggleButton isOn={isPowered} onPress={togglePower} />
               <View style={styles.rpmBox}>
                 <TouchableOpacity onPress={() => adjustRpm(-RPM_STEP)} style={styles.rpmBtn}>
                   <Text style={styles.rpmBtnTxt}>–</Text>
@@ -1976,10 +1687,6 @@ export default function FreehandTurning() {
                 </TouchableOpacity>
               )}
 
-              {/* Save/browse saved parts -- 3D only. A profile alone
-                  isn't a finished "part" the way it looks with its
-                  material/texture applied, and that's only visible in
-                  3D, so these controls stay out of the 2D header. */}
               {is3D && (
                 <>
                   <TouchableOpacity style={styles.aBtn} onPress={savePart}>
@@ -2008,7 +1715,6 @@ export default function FreehandTurning() {
           </View>
         </View>
 
-        {/* Accuracy / stats control strip -- 2D only */}
         {!is3D && (
           <View style={styles.controlStrip}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.controlStripRow}>
@@ -2050,20 +1756,16 @@ export default function FreehandTurning() {
           </View>
         )}
 
-        {/* Body */}
         <View style={[styles.body, { paddingBottom: is3D ? 0 : 60 }]}>
           {is3D ? (
             <View style={{ flex: 1 }}>
-              
-                <CanvaPovider camPosition={[0, 0, 2]}>
-                  <OrbitControls enablePan={false} enableZoom target={orbitTarget} />
-                  <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
-                </CanvaPovider>
-            
+              <CanvaPovider camPosition={[0, 0, 2]}>
+                <OrbitControls enablePan={false} enableZoom target={orbitTarget} />
+                <Scene3D profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
+              </CanvaPovider>
 
               <View style={styles.matBar}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.matRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.matRow}>
                   {MATERIALS.map((m, i) => (
                     <TouchableOpacity key={m.id}
                       style={[styles.matBtn, i === matIdx && { borderColor: m.color }]}
@@ -2091,17 +1793,21 @@ export default function FreehandTurning() {
                 onCatch={handleCatch}
                 onChatterTick={handleChatterTick}
                 spinEnabled={modelsLoaded}
+                isPowered={isPowered}
               />
-              <MotorPreview rpmRef={rpmRef} onLoad={handleModelsLoaded} />
+              <MotorPreview rpmRef={rpmRef} onLoad={handleModelsLoaded} isPowered={isPowered} />
               <View style={styles.hintWrap} pointerEvents="none">
-                <Text style={styles.hintTxt}>Draw toward center ↑↓ to carve · both sides cut</Text>
+                {/* Hint reflects power state too, in sync with the rest. */}
+                <Text style={styles.hintTxt}>
+                  {isPowered
+                    ? 'Draw toward center ↑↓ to carve · both sides cut'
+                    : '⏻ Turn on power to start the spindle'}
+                </Text>
               </View>
             </View>
           )}
         </View>
 
-        {/* Saved parts modal -- 3D only (see header). Lists every saved
-            part vertically with its material; tapping one loads it. */}
         <Modal
           visible={isPartsOpen}
           transparent
@@ -2152,11 +1858,7 @@ export default function FreehandTurning() {
         </Modal>
 
         {!is3D && (
-          <MagazineToggleButton
-            isOpen={isMagazineOpen}
-            onPress={toggleMagazine}
-            tool={tool}
-          />
+          <MagazineToggleButton isOpen={isMagazineOpen} onPress={toggleMagazine} tool={tool} />
         )}
 
         {!is3D && (
@@ -2165,15 +1867,9 @@ export default function FreehandTurning() {
               styles.toolBarMagazine,
               {
                 transform: [{
-                  translateY: magazineAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [magazineHeight, 0],
-                  })
+                  translateY: magazineAnim.interpolate({ inputRange: [0, 1], outputRange: [magazineHeight, 0] })
                 }],
-                opacity: magazineAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 1],
-                }),
+                opacity: magazineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
               }
             ]}
           >
@@ -2199,10 +1895,7 @@ export default function FreehandTurning() {
               {TOOLS.map(t => (
                 <TouchableOpacity
                   key={t.id}
-                  style={[
-                    styles.magazineItem,
-                    tool.id === t.id && styles.magazineItemActive,
-                  ]}
+                  style={[styles.magazineItem, tool.id === t.id && styles.magazineItemActive]}
                   onPress={() => {
                     setTool(t);
                     setShowTooltip(t.id);
@@ -2211,22 +1904,13 @@ export default function FreehandTurning() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <View style={[
-                    styles.magazineIconWrap,
-                    tool.id === t.id && styles.magazineIconWrapActive
-                  ]}>
-                    <Text style={[
-                      styles.magazineIcon,
-                      tool.id === t.id && styles.magazineIconActive
-                    ]}>
+                  <View style={[styles.magazineIconWrap, tool.id === t.id && styles.magazineIconWrapActive]}>
+                    <Text style={[styles.magazineIcon, tool.id === t.id && styles.magazineIconActive]}>
                       {t.icon}
                     </Text>
                   </View>
 
-                  <Text style={[
-                    styles.magazineToolName,
-                    tool.id === t.id && styles.magazineToolNameActive
-                  ]}>
+                  <Text style={[styles.magazineToolName, tool.id === t.id && styles.magazineToolNameActive]}>
                     {t.name}
                   </Text>
 
@@ -2270,6 +1954,7 @@ export default function FreehandTurning() {
     </GestureHandlerRootView>
   );
 }
+
 
 // ── Complete Styles ──────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -2712,5 +2397,61 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#4a6080',
     fontWeight: '500',
+  },
+  // ── Power Toggle Button Styles ──
+  powerToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginRight: 6,
+    backgroundColor: '#182030',
+  },
+  powerOn: {
+    borderColor: '#4ade80',
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+  },
+  powerOff: {
+    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  powerToggleInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  powerToggleText: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  powerTextOn: {
+    color: '#4ade80',
+  },
+  powerTextOff: {
+    color: '#ef4444',
+  },
+  powerIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 4,
+  },
+  powerIndicatorOn: {
+    backgroundColor: '#4ade80',
+    shadowColor: '#4ade80',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+  },
+  powerIndicatorOff: {
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
   },
 });

@@ -599,11 +599,7 @@ return (
        onTargetChange={setCameraTarget}
     />
   </>
-);
-
-
-
-});
+);});
 
 export const Scene = React.memo(SceneModel, (prevProps, nextProps) => {
   const prevConfig = JSON.stringify(prevProps.materialConfig);

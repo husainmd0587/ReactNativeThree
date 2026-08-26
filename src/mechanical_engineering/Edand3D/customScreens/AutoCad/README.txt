@@ -1,63 +1,44 @@
-AutoCad plugin — Trim (line-on-line)
-=======================================
+AutoCad plugin — Command Reference page
+==========================================
 
 Same drop-in rule: this zip's `AutoCad/` folder replaces yours wholesale.
 
 WHAT'S NEW
 ----------
-Trim: tap a line to use as the cutting edge, then tap the side of another
-line (crossing it) that you want removed. That side gets cut back to the
-crossing point; the other side stays. Tap a new cutting edge any time to
-trim something else. A hint line above the canvas tells you which of the
-two steps you're on.
+A new 📖 button next to the ⚙️ settings button in CAD Practice Home's
+header opens a Command Reference page: every command across all 4
+categories (2D Drawing, 2D Modify, 3D Create, 3D Boolean), with its
+description and — for every implemented command — the same step-by-step
+"how to draw it" instructions already shown on that command's own
+practice screen (no new content was written; this reuses the `steps`
+field already in commands/registry.js, so the reference page and the
+practice screen can never drift out of sync with each other).
 
-Scoped to line-on-line — trimming against a circle/rectangle/arc/polyline
-boundary needs real curve-intersection math per shape-type pair, which is
-a genuinely bigger feature (same reasoning as everything else marked
-"not done" so far). This covers the exact case the original spec itself
-used as its own Trim example: "Trim the horizontal line at the vertical
-boundary" — which is also what gets auto-seeded when you open the
-command with an empty canvas (two crossing lines, ready to trim).
+Tapping any implemented command jumps straight into practicing it — the
+reference page doubles as a launcher, not just a read-only list.
+Not-yet-implemented commands (currently just Sweep and Loft — see the
+last delivery for why those two specifically aren't done) show the same
+"Coming soon" treatment as they do on the home screen, so the reference
+page is honest about what's actually usable, not just an aspirational
+feature list.
 
-No new gesture code was needed — Trim only ever taps (never drags), and
-the existing tap gesture already worked for that; the two-step "pick
-cutting edge, then pick what to trim" logic lives entirely in
-screens/CommandPractice.jsx as a tiny bit of state.
-
-NEW FILE: engine/operations/trim.js — line-line intersection, and cutting
-a line back to whichever side of that intersection wasn't tapped.
+NEW FILE: screens/CommandReferenceScreen.jsx
 
 CHANGED
 -------
-  commands/registry.js — trim now implemented: true
-  screens/CommandPractice.jsx — trim's 2-tap select-then-trim flow, the
-    two-crossing-lines seed, a status hint above the canvas, and resetting
-    the in-progress trim selection on Undo/Redo/Delete/Clear all so it
-    never points at a shape that no longer exists in that history state
+  index.js — added the CommandReference route, and the header now shows
+    two icons (📖 then ⚙️) instead of one
 
-UNCHANGED: everything else, including PracticeCanvas.jsx (trim needed no
-gesture changes at all).
-
-A SAFETY CASE I FOUND WHILE TESTING
----------------------------------------
-Trimming a line that's already been trimmed back to the same crossing a
-second time would mathematically collapse it to a zero-length line (both
-endpoints landing on the same point). Added a guard: if a trim would
-leave less than ~1mm of line, it's declined instead of silently reducing
-the line to nothing.
+UNCHANGED: everything else, including CADPracticeHome.jsx, CommandList.jsx,
+CommandPractice.jsx/2D.jsx/3D.jsx, commands/registry.js (the reference
+page reads its existing data, doesn't need any new fields added to it)
 
 VERIFIED BEFORE SENDING
 ------------------------
-  - All 24 files pass a Babel parse against this project's own
+  - All 34 files pass a Babel parse against this project's own
     babel.config.js.
-  - Verified the intersection + correct-side-removal math directly:
-    tapping either side of a crossing line correctly keeps the untapped
-    side; non-intersecting lines correctly decline to trim.
-  - Ran the full 2-tap flow end-to-end matching CommandPractice's actual
-    handleCanvasTap logic: picked a cutting edge, trimmed a crossing
-    line, confirmed the remaining segment was exactly right — then found
-    (via my own test) the zero-length edge case above, fixed it, and
-    re-verified both that the guard declines the degenerate case and
-    that ordinary trims still work correctly afterward.
-
-Still "Coming soon": Extend, Fillet, Chamfer, Polar Array, and all of 3D.
+  - Actually loaded the real commands/registry.js (not a mock) and
+    confirmed every one of the 23 commands renders with the right
+    status: 21 implemented commands each carry real step instructions
+    (2-3 steps each), and Sweep/Loft correctly come back as "coming
+    soon" — exactly what the reference page will show.

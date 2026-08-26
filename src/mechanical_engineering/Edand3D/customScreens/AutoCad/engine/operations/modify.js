@@ -150,3 +150,26 @@ export function applyRectangularArray(shape, dragStart, dragEnd, rows, cols) {
   }
   return copies;
 }
+
+// Polar array: repeated Rotate copies spaced evenly around a center
+// point. The drag's start point is the center (its end point isn't used —
+// AutoCAD's own ARRAYPOLAR only asks for a center point too, not a
+// direction). Always a full circle; count comes from the caller (see
+// components/ArrayControls.jsx). Returns only the NEW copies' point
+// arrays — the original stays exactly where it is, same as Rectangular
+// Array.
+export function applyPolarArray(shape, center, count) {
+  const copies = [];
+  const angleStep = (2 * Math.PI) / count;
+  for (let i = 1; i < count; i += 1) {
+    const angle = angleStep * i;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    copies.push(shape.points.map((p) => {
+      const dx = p.x - center.x;
+      const dy = p.y - center.y;
+      return { x: center.x + dx * cos - dy * sin, y: center.y + dx * sin + dy * cos };
+    }));
+  }
+  return copies;
+}

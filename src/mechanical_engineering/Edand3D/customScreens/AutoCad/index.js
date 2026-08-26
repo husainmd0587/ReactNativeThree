@@ -1,9 +1,10 @@
 import React from 'react';
-import { TouchableOpacity, Text } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CADPracticeHome from './screens/CADPracticeHome';
 import CommandPractice from './screens/CommandPractice';
 import SettingsScreen from './screens/SettingsScreen';
+import CommandReferenceScreen from './screens/CommandReferenceScreen';
 import { SettingsProvider } from './state/SettingsContext';
 
 const Stack = createNativeStackNavigator();
@@ -18,13 +19,21 @@ function AutoCadPractice() {
           options={({ navigation }) => ({
             title: 'CAD Practice',
             headerRight: () => (
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Settings')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ paddingHorizontal: 4 }}
-              >
-                <Text style={{ fontSize: 20 }}>⚙️</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('CommandReference')}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={{ fontSize: 20 }}>📖</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Settings')}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ paddingRight: 4 }}
+                >
+                  <Text style={{ fontSize: 20 }}>⚙️</Text>
+                </TouchableOpacity>
+              </View>
             ),
           })}
         />
@@ -37,6 +46,11 @@ function AutoCadPractice() {
           name="Settings"
           component={SettingsScreen}
           options={{ title: 'Settings' }}
+        />
+        <Stack.Screen
+          name="CommandReference"
+          component={CommandReferenceScreen}
+          options={{ title: 'Command Reference' }}
         />
       </Stack.Navigator>
     </SettingsProvider>
