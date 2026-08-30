@@ -6,12 +6,98 @@ import {
   RoundedRect,
   Path,
   Skia,
+  RadialGradient,
+  LinearGradient,
+  vec,
 } from '@shopify/react-native-skia';
 
 const FILL   = '#90E0EF';
 const STROKE = '#0077B6';
 const FILL2  = '#C0E8F4';
 const WHITE  = '#FFFFFF';
+
+// ── 3D shading palette ────────────────────────────────────────────────────
+// Every solid fill below is swapped for one of these gradients — a light
+// hotspot toward the upper-left fading to a darker shadow edge — so flat
+// cross-sections read as lit, dimensional metal instead of flat color fills.
+const G_LIGHT  = '#E4F9FF';
+const G_MID    = '#90E0EF';
+const G_DARK   = '#0077B6';
+const G2_LIGHT = '#C9EEF7';
+const G2_MID   = '#5FB8CE';
+const G2_DARK  = '#03567F';
+const HOLE_LIGHT = '#FFFFFF';
+const HOLE_DARK  = '#CFE0E8';
+
+// Radial "glossy cylinder/sphere" shade for round profiles — highlight offset
+// up-left, darkening toward the far rim.
+function RadialShade({ cx, cy, r, dark }) {
+  const colors = dark ? [G2_LIGHT, G2_MID, G2_DARK] : [G_LIGHT, G_MID, G_DARK];
+  return (
+    <RadialGradient
+      c={vec(cx - r * 0.4, cy - r * 0.4)}
+      r={r * 1.35}
+      colors={colors}
+      positions={[0, 0.55, 1]}
+    />
+  );
+}
+
+// Diagonal "beveled slab" shade for flat/angular profiles — light top-left
+// corner fading to a dark bottom-right corner.
+function RectShade({ x, y, width, height, dark }) {
+  const colors = dark ? [G2_LIGHT, G2_MID, G2_DARK] : [G_LIGHT, G_MID, G_DARK];
+  return (
+    <LinearGradient
+      start={vec(x, y)}
+      end={vec(x + width, y + height)}
+      colors={colors}
+      positions={[0, 0.5, 1]}
+    />
+  );
+}
+
+// Same diagonal shade, but sized from an arbitrary Skia Path's own bounding
+// box — used for the built-up profiles (T-bar, I-beam, channel, angle, Z,
+// hexagon, octagon, triangle, trapezoid) whose silhouettes aren't a plain
+// rect or circle.
+function PathShade({ path, dark }) {
+  const b = path.getBounds();
+  const colors = dark ? [G2_LIGHT, G2_MID, G2_DARK] : [G_LIGHT, G_MID, G_DARK];
+  return (
+    <LinearGradient
+      start={vec(b.x, b.y)}
+      end={vec(b.x + b.width, b.y + b.height)}
+      colors={colors}
+      positions={[0, 0.5, 1]}
+    />
+  );
+}
+
+// Subtle recessed shading for a cut-through hole/bore — light center fading
+// to a darker rim — so it reads as drilled into the material instead of a
+// flat white patch sitting on top of it.
+function HoleShadeCircle({ cx, cy, r }) {
+  return (
+    <RadialGradient
+      c={vec(cx, cy)}
+      r={r}
+      colors={[HOLE_LIGHT, HOLE_LIGHT, HOLE_DARK]}
+      positions={[0, 0.7, 1]}
+    />
+  );
+}
+function HoleShadeRect({ x, y, width, height }) {
+  const cx = x + width / 2, cy = y + height / 2, r = Math.hypot(width, height) / 2;
+  return (
+    <RadialGradient
+      c={vec(cx, cy)}
+      r={r}
+      colors={[HOLE_LIGHT, HOLE_LIGHT, HOLE_DARK]}
+      positions={[0, 0.7, 1]}
+    />
+  );
+}
 
 // ── Shared helper ─────────────────────────────────────────────────────────────
 function hexPath(cx, cy, r) {
@@ -90,7 +176,7 @@ export function HexagonIcon({ size = 56 }) {
   const cx = size / 2, cy = size * 0.45, r = size * 0.38;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={hexPath(cx, cy, r)} color={FILL} />
+      <Path path={hexPath(cx, cy, r)}><PathShade path={hexPath(cx, cy, r)} /></Path>
       <Path path={hexPath(cx, cy, r)} color={STROKE} style="stroke" strokeWidth={1.5} />
     </Canvas>
   );
@@ -104,9 +190,9 @@ export function RoundBarIcon({ size = 56 }) {
   const r = size * 0.38, ri = size * 0.19, cx = size / 2, cy = size / 2;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Circle cx={cx} cy={cy} r={r} color={FILL} />
+      <Circle cx={cx} cy={cy} r={r}><RadialShade cx={cx} cy={cy} r={r} /></Circle>
       <Circle cx={cx} cy={cy} r={r} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Circle cx={cx} cy={cy} r={ri} color={FILL2} />
+      <Circle cx={cx} cy={cy} r={ri}><RadialShade cx={cx} cy={cy} r={ri} dark /></Circle>
       <Circle cx={cx} cy={cy} r={ri} color={STROKE} style="stroke" strokeWidth={1}
         strokeDash={{ intervals: [3, 2], phase: 0 }} opacity={0.5} />
     </Canvas>
@@ -117,9 +203,9 @@ export function RoundTubeIcon({ size = 56 }) {
   const r = size * 0.38, ri = size * 0.22, cx = size / 2, cy = size / 2;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Circle cx={cx} cy={cy} r={r} color={FILL} />
+      <Circle cx={cx} cy={cy} r={r}><RadialShade cx={cx} cy={cy} r={r} /></Circle>
       <Circle cx={cx} cy={cy} r={r} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Circle cx={cx} cy={cy} r={ri} color={WHITE} />
+      <Circle cx={cx} cy={cy} r={ri}><HoleShadeCircle cx={cx} cy={cy} r={ri} /></Circle>
       <Circle cx={cx} cy={cy} r={ri} color={STROKE} style="stroke" strokeWidth={1} />
     </Canvas>
   );
@@ -131,10 +217,10 @@ export function SquareBarIcon({ size = 56 }) {
   return (
     <Canvas style={{ width: size, height: size }}>
       {/* back face */}
-      <Rect x={x1 + off} y={y1 - off} width={s2} height={s2} color={FILL2} />
+      <Rect x={x1 + off} y={y1 - off} width={s2} height={s2}><RectShade x={x1 + off} y={y1 - off} width={s2} height={s2} dark /></Rect>
       <Rect x={x1 + off} y={y1 - off} width={s2} height={s2} color={STROKE} style="stroke" strokeWidth={1} />
       {/* front face */}
-      <Rect x={x1} y={y1} width={s1} height={s1} color={FILL} />
+      <Rect x={x1} y={y1} width={s1} height={s1}><RectShade x={x1} y={y1} width={s1} height={s1} /></Rect>
       <Rect x={x1} y={y1} width={s1} height={s1} color={STROKE} style="stroke" strokeWidth={1.5} />
       {/* connecting edges */}
       {[[x1, y1, x1 + off, y1 - off],[x1 + s1, y1, x1 + s1 + off, y1 - off],[x1 + s1, y1 + s1, x1 + s1 + off, y1 + s1 - off]].map(([ax,ay,bx,by], i) => {
@@ -149,9 +235,9 @@ export function SquareTubeIcon({ size = 56 }) {
   const s = size * 0.76, t = size * 0.18, x = (size - s) / 2, y = (size - s) / 2;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Rect x={x} y={y} width={s} height={s} color={FILL} />
+      <Rect x={x} y={y} width={s} height={s}><RectShade x={x} y={y} width={s} height={s} /></Rect>
       <Rect x={x} y={y} width={s} height={s} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x + t} y={y + t} width={s - t * 2} height={s - t * 2} color={WHITE} />
+      <Rect x={x + t} y={y + t} width={s - t * 2} height={s - t * 2}><HoleShadeRect x={x + t} y={y + t} width={s - t * 2} height={s - t * 2} /></Rect>
       <Rect x={x + t} y={y + t} width={s - t * 2} height={s - t * 2} color={STROKE} style="stroke" strokeWidth={1} />
     </Canvas>
   );
@@ -163,7 +249,7 @@ export function TBarIcon({ size = 56 }) {
   const path = tBarOutline(fx, fy, fw, fh, wx, wy, ww, wh);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -176,7 +262,7 @@ export function BeamsIcon({ size = 56 }) {
   const path = iBeamOutline(fx, fy1, fw, fh, fy2, wx, ww);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -189,7 +275,7 @@ export function ChannelIcon({ size = 56 }) {
   const path = channelOutline(wx, fy, wt, ht, fx, fw, fh);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -200,9 +286,9 @@ export function FlatBarIcon({ size = 56 }) {
   const x1 = size * 0.08, y1 = size * 0.38;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={FILL2} />
+      <Rect x={x1 + off} y={y1 - off} width={w} height={h}><RectShade x={x1 + off} y={y1 - off} width={w} height={h} dark /></Rect>
       <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1} />
-      <Rect x={x1} y={y1} width={w} height={h} color={FILL} />
+      <Rect x={x1} y={y1} width={w} height={h}><RectShade x={x1} y={y1} width={w} height={h} /></Rect>
       <Rect x={x1} y={y1} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1.5} />
       {[[x1,y1,x1+off,y1-off],[x1+w,y1,x1+w+off,y1-off],[x1,y1+h,x1+off,y1+h-off]].map(([ax,ay,bx,by], i) => {
         const p = Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -218,7 +304,7 @@ export function AngleIcon({ size = 56 }) {
   const path = angleOutline(x0, y0, t, ht, bw);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -236,7 +322,7 @@ export function HexagonPreview() {
   dashPath.lineTo(cx + r, cy);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
       <Path path={dashPath} color={STROKE} style="stroke" strokeWidth={1}
         strokeDash={{ intervals: [4, 3], phase: 0 }} opacity={0.5} />
@@ -256,9 +342,9 @@ export function RoundBarPreview() {
   const w = 110, h = 100, cx = 55, cy = 46, r = 40, ri = 20;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Circle cx={cx} cy={cy} r={r} color={FILL} />
+      <Circle cx={cx} cy={cy} r={r}><RadialShade cx={cx} cy={cy} r={r} /></Circle>
       <Circle cx={cx} cy={cy} r={r} color={STROKE} style="stroke" strokeWidth={2} />
-      <Circle cx={cx} cy={cy} r={ri} color={FILL2} />
+      <Circle cx={cx} cy={cy} r={ri}><RadialShade cx={cx} cy={cy} r={ri} dark /></Circle>
       <Circle cx={cx} cy={cy} r={ri} color={STROKE} style="stroke" strokeWidth={1}
         strokeDash={{ intervals: [4, 3], phase: 0 }} opacity={0.5} />
     </Canvas>
@@ -269,9 +355,9 @@ export function RoundTubePreview() {
   const w = 110, h = 100, cx = 55, cy = 46, r = 40, ri = 22;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Circle cx={cx} cy={cy} r={r} color={FILL} />
+      <Circle cx={cx} cy={cy} r={r}><RadialShade cx={cx} cy={cy} r={r} /></Circle>
       <Circle cx={cx} cy={cy} r={r} color={STROKE} style="stroke" strokeWidth={2} />
-      <Circle cx={cx} cy={cy} r={ri} color={WHITE} />
+      <Circle cx={cx} cy={cy} r={ri}><HoleShadeCircle cx={cx} cy={cy} r={ri} /></Circle>
       <Circle cx={cx} cy={cy} r={ri} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -281,9 +367,9 @@ export function SquareBarPreview() {
   const w = 110, h = 100, s = 56, off = 20, x1 = 8, y1 = 26;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x1 + off} y={y1 - off} width={s} height={s} color={FILL2} />
+      <Rect x={x1 + off} y={y1 - off} width={s} height={s}><RectShade x={x1 + off} y={y1 - off} width={s} height={s} dark /></Rect>
       <Rect x={x1 + off} y={y1 - off} width={s} height={s} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x1} y={y1} width={s} height={s} color={FILL} />
+      <Rect x={x1} y={y1} width={s} height={s}><RectShade x={x1} y={y1} width={s} height={s} /></Rect>
       <Rect x={x1} y={y1} width={s} height={s} color={STROKE} style="stroke" strokeWidth={2} />
       {[[x1,y1,x1+off,y1-off],[x1+s,y1,x1+s+off,y1-off],[x1+s,y1+s,x1+s+off,y1+s-off]].map(([ax,ay,bx,by],i) => {
         const p = Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -297,9 +383,9 @@ export function SquareTubePreview() {
   const w = 110, h = 100, s = 80, t = 18, x = 15, y = 10;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x} y={y} width={s} height={s} color={FILL} />
+      <Rect x={x} y={y} width={s} height={s}><RectShade x={x} y={y} width={s} height={s} /></Rect>
       <Rect x={x} y={y} width={s} height={s} color={STROKE} style="stroke" strokeWidth={2} />
-      <Rect x={x+t} y={y+t} width={s-t*2} height={s-t*2} color={WHITE} />
+      <Rect x={x+t} y={y+t} width={s-t*2} height={s-t*2}><HoleShadeRect x={x+t} y={y+t} width={s-t*2} height={s-t*2} /></Rect>
       <Rect x={x+t} y={y+t} width={s-t*2} height={s-t*2} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -310,7 +396,7 @@ export function TBarPreview() {
   const path = tBarOutline(fx, fy, fw, fh, wx, wy, ww, wh);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -321,7 +407,7 @@ export function BeamsPreview() {
   const path = iBeamOutline(fx, 6, fw, fh, 78, 44, 22);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -332,7 +418,7 @@ export function ChannelPreview() {
   const path = channelOutline(8, fy, wt, ht, fx, fw, fh);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -342,9 +428,9 @@ export function FlatBarPreview() {
   const w = 110, h = 100, bw = 72, bh = 28, off = 18, x1 = 8, y1 = 36;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x1+off} y={y1-off} width={bw} height={bh} color={FILL2} />
+      <Rect x={x1+off} y={y1-off} width={bw} height={bh}><RectShade x={x1+off} y={y1-off} width={bw} height={bh} dark /></Rect>
       <Rect x={x1+off} y={y1-off} width={bw} height={bh} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x1} y={y1} width={bw} height={bh} color={FILL} />
+      <Rect x={x1} y={y1} width={bw} height={bh}><RectShade x={x1} y={y1} width={bw} height={bh} /></Rect>
       <Rect x={x1} y={y1} width={bw} height={bh} color={STROKE} style="stroke" strokeWidth={2} />
       {[[x1,y1,x1+off,y1-off],[x1+bw,y1,x1+bw+off,y1-off],[x1,y1+bh,x1+off,y1+bh-off]].map(([ax,ay,bx,by],i)=>{
         const p=Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -359,7 +445,7 @@ export function AnglePreview() {
   const path = angleOutline(8, y0, t, ht, bw);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -378,10 +464,10 @@ export function RectBarIcon({ size = 56 }) {
   return (
     <Canvas style={{ width: size, height: size }}>
       {/* back face */}
-      <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={FILL2} />
+      <Rect x={x1 + off} y={y1 - off} width={w} height={h}><RectShade x={x1 + off} y={y1 - off} width={w} height={h} dark /></Rect>
       <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1} />
       {/* front face */}
-      <Rect x={x1} y={y1} width={w} height={h} color={FILL} />
+      <Rect x={x1} y={y1} width={w} height={h}><RectShade x={x1} y={y1} width={w} height={h} /></Rect>
       <Rect x={x1} y={y1} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1.5} />
       {/* connecting edges */}
       {[[x1,y1,x1+off,y1-off],[x1+w,y1,x1+w+off,y1-off],[x1,y1+h,x1+off,y1+h-off]].map(([ax,ay,bx,by], i) => {
@@ -397,9 +483,9 @@ export function RectTubeIcon({ size = 56 }) {
   const x = (size - w) / 2, y = (size - h) / 2;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Rect x={x} y={y} width={w} height={h} color={FILL} />
+      <Rect x={x} y={y} width={w} height={h}><RectShade x={x} y={y} width={w} height={h} /></Rect>
       <Rect x={x} y={y} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x + t} y={y + t} width={w - t * 2} height={h - t * 2} color={WHITE} />
+      <Rect x={x + t} y={y + t} width={w - t * 2} height={h - t * 2}><HoleShadeRect x={x + t} y={y + t} width={w - t * 2} height={h - t * 2} /></Rect>
       <Rect x={x + t} y={y + t} width={w - t * 2} height={h - t * 2} color={STROKE} style="stroke" strokeWidth={1} />
     </Canvas>
   );
@@ -410,9 +496,9 @@ export function SheetIcon({ size = 56 }) {
   const x1 = size * 0.06, y1 = size * 0.42;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={FILL2} />
+      <Rect x={x1 + off} y={y1 - off} width={w} height={h}><RectShade x={x1 + off} y={y1 - off} width={w} height={h} dark /></Rect>
       <Rect x={x1 + off} y={y1 - off} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1} />
-      <Rect x={x1} y={y1} width={w} height={h} color={FILL} />
+      <Rect x={x1} y={y1} width={w} height={h}><RectShade x={x1} y={y1} width={w} height={h} /></Rect>
       <Rect x={x1} y={y1} width={w} height={h} color={STROKE} style="stroke" strokeWidth={1.5} />
       {[[x1,y1,x1+off,y1-off],[x1+w,y1,x1+w+off,y1-off],[x1,y1+h,x1+off,y1+h-off],[x1+w,y1+h,x1+w+off,y1+h-off]].map(([ax,ay,bx,by], i) => {
         const p = Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -438,7 +524,7 @@ export function OctagonBarIcon({ size = 56 }) {
   const cx = size / 2, cy = size * 0.46, r = size * 0.36;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={octPath(cx, cy, r)} color={FILL} />
+      <Path path={octPath(cx, cy, r)}><PathShade path={octPath(cx, cy, r)} /></Path>
       <Path path={octPath(cx, cy, r)} color={STROKE} style="stroke" strokeWidth={1.5} />
     </Canvas>
   );
@@ -456,7 +542,7 @@ export function HalfRoundIcon({ size = 56 }) {
   flat.lineTo(cx + r, cy);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={arc} color={FILL} />
+      <Path path={arc}><PathShade path={arc} /></Path>
       <Path path={arc} color={STROKE} style="stroke" strokeWidth={1.5} />
       <Path path={flat} color={STROKE} style="stroke" strokeWidth={1} />
     </Canvas>
@@ -472,7 +558,7 @@ export function ZSectionIcon({ size = 56 }) {
   const path = zSectionOutline(wx, fy1, fy2, t, fw);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -486,7 +572,7 @@ export function SphereIcon({ size = 56 }) {
   ovalV.addOval({ x: c - r * 0.3, y: c - r, width: r * 0.6, height: r * 2 });
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Circle cx={c} cy={c} r={r} color={FILL} />
+      <Circle cx={c} cy={c} r={r}><RadialShade cx={c} cy={c} r={r} /></Circle>
       <Circle cx={c} cy={c} r={r} color={STROKE} style="stroke" strokeWidth={1.2} />
       <Path path={ovalH} color={STROKE} style="stroke" strokeWidth={1} opacity={0.55} />
       <Path path={ovalV} color={STROKE} style="stroke" strokeWidth={1} opacity={0.55} />
@@ -500,7 +586,7 @@ export function OvalIcon({ size = 56 }) {
   path.addOval({ x: c - size * 0.42, y: c - size * 0.26, width: size * 0.84, height: size * 0.52 });
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -510,7 +596,7 @@ export function CrSquareIcon({ size = 56 }) {
   const s = size * 0.72, x = (size - s) / 2, y = (size - s) / 2, r = size * 0.14;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <RoundedRect x={x} y={y} width={s} height={s} r={r} color={FILL} />
+      <RoundedRect x={x} y={y} width={s} height={s} r={r}><RectShade x={x} y={y} width={s} height={s} /></RoundedRect>
       <RoundedRect x={x} y={y} width={s} height={s} r={r} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -520,7 +606,7 @@ export function CrRectIcon({ size = 56 }) {
   const w = size * 0.8, h = size * 0.56, x = (size - w) / 2, y = (size - h) / 2, r = size * 0.12;
   return (
     <Canvas style={{ width: size, height: size }}>
-      <RoundedRect x={x} y={y} width={w} height={h} r={r} color={FILL} />
+      <RoundedRect x={x} y={y} width={w} height={h} r={r}><RectShade x={x} y={y} width={w} height={h} /></RoundedRect>
       <RoundedRect x={x} y={y} width={w} height={h} r={r} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -532,7 +618,7 @@ export function TriangleIcon({ size = 56 }) {
   ]);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -545,7 +631,7 @@ export function TrapezoidIcon({ size = 56 }) {
   ]);
   return (
     <Canvas style={{ width: size, height: size }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={1.2} />
     </Canvas>
   );
@@ -559,9 +645,9 @@ export function RectBarPreview() {
   const w = 110, h = 100, bw = 72, bh = 36, off = 20, x1 = 8, y1 = 34;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x1+off} y={y1-off} width={bw} height={bh} color={FILL2} />
+      <Rect x={x1+off} y={y1-off} width={bw} height={bh}><RectShade x={x1+off} y={y1-off} width={bw} height={bh} dark /></Rect>
       <Rect x={x1+off} y={y1-off} width={bw} height={bh} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x1} y={y1} width={bw} height={bh} color={FILL} />
+      <Rect x={x1} y={y1} width={bw} height={bh}><RectShade x={x1} y={y1} width={bw} height={bh} /></Rect>
       <Rect x={x1} y={y1} width={bw} height={bh} color={STROKE} style="stroke" strokeWidth={2} />
       {[[x1,y1,x1+off,y1-off],[x1+bw,y1,x1+bw+off,y1-off],[x1,y1+bh,x1+off,y1+bh-off]].map(([ax,ay,bx,by],i)=>{
         const p=Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -575,9 +661,9 @@ export function RectTubePreview() {
   const w = 110, h = 100, rw = 90, rh = 68, t = 14, x = 10, y = 16;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x} y={y} width={rw} height={rh} color={FILL} />
+      <Rect x={x} y={y} width={rw} height={rh}><RectShade x={x} y={y} width={rw} height={rh} /></Rect>
       <Rect x={x} y={y} width={rw} height={rh} color={STROKE} style="stroke" strokeWidth={2} />
-      <Rect x={x+t} y={y+t} width={rw-t*2} height={rh-t*2} color={WHITE} />
+      <Rect x={x+t} y={y+t} width={rw-t*2} height={rh-t*2}><HoleShadeRect x={x+t} y={y+t} width={rw-t*2} height={rh-t*2} /></Rect>
       <Rect x={x+t} y={y+t} width={rw-t*2} height={rh-t*2} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -587,9 +673,9 @@ export function SheetPreview() {
   const w = 110, h = 100, sw = 88, sh = 20, off = 16, x1 = 6, y1 = 42;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Rect x={x1+off} y={y1-off} width={sw} height={sh} color={FILL2} />
+      <Rect x={x1+off} y={y1-off} width={sw} height={sh}><RectShade x={x1+off} y={y1-off} width={sw} height={sh} dark /></Rect>
       <Rect x={x1+off} y={y1-off} width={sw} height={sh} color={STROKE} style="stroke" strokeWidth={1.5} />
-      <Rect x={x1} y={y1} width={sw} height={sh} color={FILL} />
+      <Rect x={x1} y={y1} width={sw} height={sh}><RectShade x={x1} y={y1} width={sw} height={sh} /></Rect>
       <Rect x={x1} y={y1} width={sw} height={sh} color={STROKE} style="stroke" strokeWidth={2} />
       {[[x1,y1,x1+off,y1-off],[x1+sw,y1,x1+sw+off,y1-off],[x1,y1+sh,x1+off,y1+sh-off],[x1+sw,y1+sh,x1+sw+off,y1+sh-off]].map(([ax,ay,bx,by],i)=>{
         const p=Skia.Path.Make(); p.moveTo(ax,ay); p.lineTo(bx,by);
@@ -603,7 +689,7 @@ export function OctagonBarPreview() {
   const w = 110, h = 100, cx = 55, cy = 46, r = 40;
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={octPath(cx, cy, r)} color={FILL} />
+      <Path path={octPath(cx, cy, r)}><PathShade path={octPath(cx, cy, r)} /></Path>
       <Path path={octPath(cx, cy, r)} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -623,7 +709,7 @@ export function HalfRoundPreview() {
   diam.moveTo(cx - r + 4, cy); diam.lineTo(cx + r - 4, cy);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={arc} color={FILL} />
+      <Path path={arc}><PathShade path={arc} /></Path>
       <Path path={arc} color={STROKE} style="stroke" strokeWidth={2} />
       <Path path={diam} color={STROKE} style="stroke" strokeWidth={1}
         strokeDash={{ intervals: [5, 4], phase: 0 }} opacity={0.5} />
@@ -639,7 +725,7 @@ export function ZSectionPreview() {
   const path = zSectionOutline(wx, fy1, fy2, t, fw);
   return (
     <Canvas style={{ width: w, height: h }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -653,7 +739,7 @@ export function SpherePreview() {
   ovalV.addOval({ x: cx - r * 0.3, y: cy - r, width: r * 0.6, height: r * 2 });
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <Circle cx={cx} cy={cy} r={r} color={FILL} />
+      <Circle cx={cx} cy={cy} r={r}><RadialShade cx={cx} cy={cy} r={r} /></Circle>
       <Circle cx={cx} cy={cy} r={r} color={STROKE} style="stroke" strokeWidth={2} />
       <Path path={ovalH} color={STROKE} style="stroke" strokeWidth={1.2} opacity={0.55} />
       <Path path={ovalV} color={STROKE} style="stroke" strokeWidth={1.2} opacity={0.55} />
@@ -666,7 +752,7 @@ export function OvalPreview() {
   path.addOval({ x: 10, y: 26, width: 90, height: 40 });
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -676,7 +762,7 @@ export function CrSquarePreview() {
   const s = 68, x = (110 - s) / 2, y = (100 - s) / 2, r = 14;
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <RoundedRect x={x} y={y} width={s} height={s} r={r} color={FILL} />
+      <RoundedRect x={x} y={y} width={s} height={s} r={r}><RectShade x={x} y={y} width={s} height={s} /></RoundedRect>
       <RoundedRect x={x} y={y} width={s} height={s} r={r} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -686,7 +772,7 @@ export function CrRectPreview() {
   const w = 84, h = 56, x = (110 - w) / 2, y = (100 - h) / 2, r = 14;
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <RoundedRect x={x} y={y} width={w} height={h} r={r} color={FILL} />
+      <RoundedRect x={x} y={y} width={w} height={h} r={r}><RectShade x={x} y={y} width={w} height={h} /></RoundedRect>
       <RoundedRect x={x} y={y} width={w} height={h} r={r} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -696,7 +782,7 @@ export function TrianglePreview() {
   const path = outlinePath([[55, 12], [98, 88], [12, 88]]);
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );
@@ -706,7 +792,7 @@ export function TrapezoidPreview() {
   const path = outlinePath([[38, 14], [72, 14], [92, 86], [18, 86]]);
   return (
     <Canvas style={{ width: 110, height: 100 }}>
-      <Path path={path} color={FILL} />
+      <Path path={path}><PathShade path={path} /></Path>
       <Path path={path} color={STROKE} style="stroke" strokeWidth={2} />
     </Canvas>
   );

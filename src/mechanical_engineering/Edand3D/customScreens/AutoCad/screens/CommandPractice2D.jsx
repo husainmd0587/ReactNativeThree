@@ -1,7 +1,7 @@
 import React, {
   useCallback, useEffect, useMemo, useState,
 } from 'react';
-import { SafeAreaView, ScrollView, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { getCommandById } from '../commands/registry';
 import { computeLineGeometry } from '../engine/operations/line';
 import { computeCircleGeometry } from '../engine/operations/circle';
@@ -377,12 +377,18 @@ export default function CommandPractice2D({ route }) {
     ],
   );
 
+  // Only Polyline supports finishing at an arbitrary point count (2+).
+  // Arc always auto-completes at exactly 3 points on its own (see
+  // handleCanvasTap) — calling handleDrawComplete with fewer than 3
+  // points would crash computeArcGeometry, which destructures exactly
+  // [p1, p2, p3]. So for Arc, "Enter" can only mean cancel the in-
+  // progress draft, never commit it early.
   const handleFinishDraft = useCallback(() => {
-    if (draftPoints.length >= 2) {
+    if (practiceType === 'polyline' && draftPoints.length >= 2) {
       handleDrawComplete(draftPoints);
     }
     setDraftPoints([]);
-  }, [draftPoints, handleDrawComplete]);
+  }, [draftPoints, practiceType, handleDrawComplete]);
 
   const handleEditProperty = useCallback(
     (key, value) => {
@@ -430,7 +436,7 @@ export default function CommandPractice2D({ route }) {
       <SafeAreaView style={styles.safe}>
         <View style={styles.body}>
           <Text style={styles.title}>{command.name}</Text>
-          <Text style={styles.desc}>{command.description}</Text>
+          <Text style={styles.desc}>{command.details || command.description}</Text>
           <View style={styles.placeholder}>
             <Text style={styles.placeholderText}>Practice canvas coming soon.</Text>
           </View>
@@ -443,7 +449,7 @@ export default function CommandPractice2D({ route }) {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>{command.name}</Text>
-        <Text style={styles.desc}>{command.description}</Text>
+        <Text style={styles.desc}>{command.details || command.description}</Text>
         {command.steps?.length > 0 && (
           <View style={styles.steps}>
             {command.steps.map((step, i) => (
@@ -469,9 +475,6 @@ export default function CommandPractice2D({ route }) {
         )}
 
         <Toolbar
-          showFinish={practiceType === 'polyline'}
-          onFinish={handleFinishDraft}
-          canFinish={draftPoints.length >= 2}
           onUndo={handleUndo}
           canUndo={canUndo}
           onRedo={handleRedo}
@@ -509,6 +512,14 @@ export default function CommandPractice2D({ route }) {
           onCanvasLongPress={handleFinishDraft}
         />
 
+        {isTapType && draftPoints.length > 0 && (
+          <TouchableOpacity style={styles.enterBtn} onPress={handleFinishDraft} activeOpacity={0.85}>
+            <Text style={styles.enterBtnText}>
+              {practiceType === 'polyline' ? 'Enter (finish)' : 'Cancel'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <PropertiesPanel
           properties={toProperties(activeGeometry)}
           onEditValue={handleEditProperty}
@@ -523,7 +534,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { padding: 16, paddingBottom: 32 },
   title: { fontSize: 20, fontWeight: '700', color: '#1A1A2E' },
-  desc: { fontSize: 13, color: '#8A8A9A', marginTop: 6, lineHeight: 18 },
+  desc: { fontSize: 11, color: '#8A8A9A', marginTop: 6, lineHeight: 15, maxWidth: '96%' },
   steps: { marginTop: 10, marginBottom: 4 },
   stepText: { fontSize: 12, color: '#6B6B78', marginTop: 2 },
   hint: {
@@ -533,6 +544,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
+  enterBtn: {
+    marginTop: 10,
+    backgroundColor: '#2E7DAF',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  enterBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   placeholder: {
     flex: 1,
     minHeight: 220,

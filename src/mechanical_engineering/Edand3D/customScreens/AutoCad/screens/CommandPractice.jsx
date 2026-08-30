@@ -9,7 +9,7 @@ import CommandPractice3D from './CommandPractice3D';
 // (registration in index.js, navigation.navigate('CommandPractice', ...)
 // from CADPracticeHome) is unchanged; both screens live behind the one
 // route name.
-const THREE_D_TYPES = new Set(['extrude', 'revolve', 'union', 'subtract', 'intersect']);
+const THREE_D_TYPES = new Set(['extrude', 'revolve', 'union', 'subtract', 'intersect', 'sweep', 'loft']);
 
 export default function CommandPractice({ route }) {
   const commandId = route?.params?.commandId;

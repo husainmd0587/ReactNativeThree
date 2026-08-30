@@ -8,19 +8,27 @@ import CanvaProvider from '../../../../../utils/ThreeJs_Utils/provider';
 import DistanceControl from '../components/DistanceControl';
 import OptionToggle from '../components/OptionToggle';
 import {
-  EXTRUDE_PROFILE, REVOLVE_PROFILE,
+  EXTRUDE_PROFILE, REVOLVE_PROFILE, SWEEP_PROFILE,
   buildFlatProfileGeometry, buildBooleanSetupGeometries,
-  runExtrude, runRevolve, runBoolean,
+  buildSweepPathPreviewGeometry, buildLoftSetupGeometries,
+  runExtrude, runRevolve, runBoolean, runSweep, runLoft,
 } from '../engine/three/practiceSolids';
 
 const BOOLEAN_TYPES = new Set(['union', 'subtract', 'intersect']);
 const RUN_LABEL = {
-  extrude: 'Extrude', revolve: 'Revolve', union: 'Union', subtract: 'Subtract', intersect: 'Intersect',
+  extrude: 'Extrude', revolve: 'Revolve', union: 'Union', subtract: 'Subtract', intersect: 'Intersect', sweep: 'Sweep', loft: 'Loft',
 };
+// Sweep and Loft are pure client-side geometry (see
+// engine/three/practiceSolids.js) — no native module involved, so unlike
+// the other five they work on iOS too.
+const CLIENT_SIDE_TYPES = new Set(['sweep', 'loft']);
 
 const DEFAULT_DEPTH = 15;
 const DEFAULT_ANGLE = 360;
 const DEFAULT_OFFSET = 12;
+const DEFAULT_BEND = 20;
+const DEFAULT_TOP_WIDTH = 15;
+const DEFAULT_LOFT_HEIGHT = 20;
 
 function ResultModel({ geometry }) {
   if (!geometry) return null;
@@ -61,18 +69,56 @@ function BooleanSetupPreview({ offset }) {
   );
 }
 
+// Sweep's setup: the flat profile plus a thin tube tracing the path it's
+// about to follow — both of the things a real AutoCAD SWEEP prompt asks
+// you to pick (an object to sweep, and a path).
+function SweepSetupPreview({ bendOut }) {
+  const profileGeometry = useMemo(() => buildFlatProfileGeometry(SWEEP_PROFILE), []);
+  const pathGeometry = useMemo(() => buildSweepPathPreviewGeometry(bendOut), [bendOut]);
+  return (
+    <>
+      <mesh geometry={profileGeometry}>
+        <meshStandardMaterial color="#5CA9E0" side={THREE.DoubleSide} transparent opacity={0.85} />
+      </mesh>
+      <mesh geometry={pathGeometry}>
+        <meshStandardMaterial color="#E0A93E" />
+      </mesh>
+    </>
+  );
+}
+
+// Loft's setup: the two cross-sections it's about to blend between.
+function LoftSetupPreview({ topHalfWidth, heightPx }) {
+  const { bottom, top } = useMemo(
+    () => buildLoftSetupGeometries(topHalfWidth, heightPx),
+    [topHalfWidth, heightPx],
+  );
+  return (
+    <>
+      <mesh geometry={bottom}>
+        <meshStandardMaterial color="#5CA9E0" side={THREE.DoubleSide} transparent opacity={0.85} />
+      </mesh>
+      <mesh geometry={top}>
+        <meshStandardMaterial color="#E0A93E" side={THREE.DoubleSide} transparent opacity={0.85} />
+      </mesh>
+    </>
+  );
+}
+
 // Two stages, same as using the real command in AutoCAD: Setup (see the
 // input geometry, choose options — height/angle/direction/which-object-
 // is-which) and Result (the finished solid, with an Edit action to go
-// back and try different options). Nothing runs the native engine until
-// the student explicitly commits — unlike the previous version of this
-// screen, which extruded/revolved/combined immediately on opening the
-// command with no chance to set options first.
+// back and try different options). Nothing runs until the student
+// explicitly commits — Sweep/Loft are synchronous (no native call), but
+// still go through the same explicit Setup -> Result flow as the other
+// five, so every 3D command feels consistent rather than some running
+// instantly and others requiring a tap.
 export default function CommandPractice3D({ route }) {
   const commandId = route?.params?.commandId;
   const command = getCommandById(commandId);
   const practiceType = command?.practice?.type;
   const isBoolean = BOOLEAN_TYPES.has(practiceType);
+  const isClientSide = CLIENT_SIDE_TYPES.has(practiceType);
 
   const [stage, setStage] = useState('setup'); // 'setup' | 'result'
   const [geometry, setGeometry] = useState(null);
@@ -85,10 +131,10 @@ export default function CommandPractice3D({ route }) {
   const [revolveDirection, setRevolveDirection] = useState('cw');
   const [offset, setOffset] = useState(DEFAULT_OFFSET);
   const [subtractSwap, setSubtractSwap] = useState(false);
+  const [bendOut, setBendOut] = useState(DEFAULT_BEND);
+  const [topHalfWidth, setTopHalfWidth] = useState(DEFAULT_TOP_WIDTH);
+  const [loftHeight, setLoftHeight] = useState(DEFAULT_LOFT_HEIGHT);
 
-  // Any option change invalidates whatever's currently shown as a
-  // "result" — back to Setup so the viewport never shows a solid that no
-  // longer matches the chosen options.
   const backToSetup = useCallback(() => {
     setStage('setup');
     setGeometry(null);
@@ -103,18 +149,25 @@ export default function CommandPractice3D({ route }) {
       if (practiceType === 'extrude') result = await runExtrude(depth, extrudeDirection);
       else if (practiceType === 'revolve') result = await runRevolve(angle, revolveDirection);
       else if (isBoolean) result = await runBoolean(practiceType, offset, subtractSwap);
+      else if (practiceType === 'sweep') result = await runSweep(bendOut);
+      else if (practiceType === 'loft') result = await runLoft(topHalfWidth, loftHeight);
       setGeometry(result);
       setStage('result');
     } catch (e) {
       setGeometry(null);
       setError(
         e?.message
-        || 'Could not build this solid — the native 3D engine may not be available on this device.',
+        || (isClientSide
+          ? 'Could not build this solid.'
+          : 'Could not build this solid — the native 3D engine may not be available on this device.'),
       );
     } finally {
       setBusy(false);
     }
-  }, [practiceType, depth, extrudeDirection, angle, revolveDirection, offset, subtractSwap, isBoolean]);
+  }, [
+    practiceType, depth, extrudeDirection, angle, revolveDirection, offset, subtractSwap,
+    bendOut, topHalfWidth, loftHeight, isBoolean, isClientSide,
+  ]);
 
   if (!command) {
     return (
@@ -130,9 +183,12 @@ export default function CommandPractice3D({ route }) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>{command.name}</Text>
+        <Text style={styles.detailsText}>{command.details || command.description}</Text>
         <Text style={styles.desc}>
           {stage === 'setup'
-            ? (isBoolean ? 'Choose options, then run the operation.' : 'This is the 2D profile. Choose options, then run the command.')
+            ? (isBoolean || practiceType === 'loft'
+              ? 'Choose options, then run the command.'
+              : 'This is the input geometry. Choose options, then run the command.')
             : 'Result. Edit to change options and run again.'}
         </Text>
       </View>
@@ -178,6 +234,17 @@ export default function CommandPractice3D({ route }) {
           )}
         </View>
       )}
+      {stage === 'setup' && practiceType === 'sweep' && (
+        <View style={styles.controls}>
+          <DistanceControl label="Path bend" value={bendOut} unit="mm" step={2} min={10} max={30} onChange={setBendOut} dark />
+        </View>
+      )}
+      {stage === 'setup' && practiceType === 'loft' && (
+        <View style={styles.controls}>
+          <DistanceControl label="Top size" value={topHalfWidth} unit="mm" step={1} min={5} max={25} onChange={setTopHalfWidth} dark />
+          <DistanceControl label="Height" value={loftHeight} unit="mm" step={2} min={10} max={40} onChange={setLoftHeight} dark />
+        </View>
+      )}
 
       <View style={styles.viewport}>
         <CanvaProvider instanceId={`autocad-${practiceType}-${stage}`}>
@@ -185,6 +252,10 @@ export default function CommandPractice3D({ route }) {
           {stage === 'setup' && practiceType === 'extrude' && <ProfilePreview points={EXTRUDE_PROFILE} />}
           {stage === 'setup' && practiceType === 'revolve' && <ProfilePreview points={REVOLVE_PROFILE} />}
           {stage === 'setup' && isBoolean && <BooleanSetupPreview offset={offset} />}
+          {stage === 'setup' && practiceType === 'sweep' && <SweepSetupPreview bendOut={bendOut} />}
+          {stage === 'setup' && practiceType === 'loft' && (
+            <LoftSetupPreview topHalfWidth={topHalfWidth} heightPx={loftHeight} />
+          )}
         </CanvaProvider>
 
         {busy && (
@@ -219,6 +290,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   title: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  detailsText: { fontSize: 11, color: '#B5B5BE', marginTop: 5, lineHeight: 15 },
   desc: { fontSize: 13, color: '#9A9AA6', marginTop: 4 },
   controls: { paddingHorizontal: 16, paddingTop: 8 },
   viewport: { flex: 1 },

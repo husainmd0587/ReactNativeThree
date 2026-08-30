@@ -21,7 +21,7 @@ export default function DistanceControl({
         >
           <Text style={[styles.btnText, { color: theme.accent }]}>−</Text>
         </TouchableOpacity>
-        <Text style={[styles.value, { color: theme.value }]}>{value}{unit ? ` ${unit}` : ''}</Text>
+        <Text style={[styles.valueText, { color: theme.valueColor }]}>{value}{unit ? ` ${unit}` : ''}</Text>
         <TouchableOpacity
           onPress={() => onChange(Math.min(max, value + step))}
           disabled={value >= max}
@@ -36,10 +36,10 @@ export default function DistanceControl({
 }
 
 const lightTheme = {
-  label: '#6B6B78', border: '#E8E6F0', accent: '#2E7DAF', value: '#1A1A2E',
+  label: '#6B6B78', border: '#E8E6F0', accent: '#2E7DAF', valueColor: '#1A1A2E',
 };
 const darkTheme = {
-  label: '#9A9AA6', border: '#3A3A42', accent: '#5CA9E0', value: '#FFFFFF',
+  label: '#9A9AA6', border: '#3A3A42', accent: '#5CA9E0', valueColor: '#FFFFFF',
 };
 
 const styles = StyleSheet.create({
@@ -62,5 +62,5 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.4 },
   btnText: { fontSize: 15, fontWeight: '700', color: '#2E7DAF' },
-  value: { fontSize: 13, fontWeight: '700', color: '#1A1A2E', minWidth: 52, textAlign: 'center' },
+  valueText: { fontSize: 13, fontWeight: '700', color: '#1A1A2E', minWidth: 52, textAlign: 'center' },
 });

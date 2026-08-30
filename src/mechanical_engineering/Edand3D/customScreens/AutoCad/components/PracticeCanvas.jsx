@@ -85,6 +85,14 @@ export default function PracticeCanvas({
   const canvasWidth = width - SCREEN_PADDING;
   const font = useFont(require('../../../../../assets/fonts/roboto.ttf'), 12);
   const { settings } = useSettings();
+  const isTapType = practiceType === 'arc' || practiceType === 'polyline';
+  // Captured fresh each render (plain JS, closed over by the worklets
+  // below) so a drag-to-place-a-point knows where to rubber-band FROM —
+  // the last point already confirmed in the current draft, or null if
+  // this drag is placing the very first point.
+  const lastDraftPointForPreview = draftPoints && draftPoints.length > 0
+    ? draftPoints[draftPoints.length - 1]
+    : null;
 
   // AutoCAD-style crosshair — visible the moment the screen opens
   // (defaults to canvas center), follows any touch across every command
@@ -112,6 +120,15 @@ export default function PracticeCanvas({
   const rotationOriginalPoints = useSharedValue([]);
   const rotationOriginalType = useSharedValue('');
 
+  // Arc/Polyline point placement: same drag-with-live-rubber-band feel as
+  // Line/Circle/Rectangle already have, instead of only a bare tap.
+  // Dragging still ends by committing a point (via the same handleTap
+  // path a plain tap uses) — this only adds live visual feedback while
+  // the finger is down, and a second way to place a point precisely.
+  const dragPointActive = useSharedValue(false);
+  const dragPointX = useSharedValue(0);
+  const dragPointY = useSharedValue(0);
+
   const handleDrawEnd = useCallback(
     (points) => {
       onDrawComplete(points);
@@ -132,7 +149,7 @@ export default function PracticeCanvas({
 
   const pan = Gesture.Pan()
     .minDistance(6)
-    .enabled(DRAG_TYPES.has(practiceType))
+    .enabled(DRAG_TYPES.has(practiceType) || isTapType)
     .onTouchesMove((e) => {
       'worklet';
       const t = e.allTouches[0];
@@ -143,6 +160,12 @@ export default function PracticeCanvas({
     })
     .onBegin((e) => {
       'worklet';
+      if (isTapType) {
+        dragPointX.value = e.x;
+        dragPointY.value = e.y;
+        dragPointActive.value = true;
+        return;
+      }
       startX.value = e.x;
       startY.value = e.y;
       currentX.value = e.x;
@@ -160,11 +183,21 @@ export default function PracticeCanvas({
     })
     .onUpdate((e) => {
       'worklet';
+      if (isTapType) {
+        dragPointX.value = e.x;
+        dragPointY.value = e.y;
+        return;
+      }
       currentX.value = e.x;
       currentY.value = e.y;
     })
-    .onEnd(() => {
+    .onEnd((e) => {
       'worklet';
+      if (isTapType) {
+        dragPointActive.value = false;
+        runOnJS(handleTap)({ x: e.x, y: e.y });
+        return;
+      }
       dragging.value = false;
       runOnJS(handleDrawEnd)([
         { x: startX.value, y: startY.value },
@@ -210,8 +243,7 @@ export default function PracticeCanvas({
       runOnJS(handleLongPress)();
     });
 
-  const isTapType = practiceType === 'arc' || practiceType === 'polyline';
-  const gesture = isTapType ? Gesture.Exclusive(longPress, tap) : Gesture.Race(tap, pan);
+  const gesture = isTapType ? Gesture.Exclusive(longPress, pan, tap) : Gesture.Race(tap, pan);
 
   // ── Live, in-progress DRAG shape (line/circle/rectangle) — worklet-
   // driven, smooth per-frame updates, zero React re-renders while
@@ -480,6 +512,24 @@ export default function PracticeCanvas({
     return { linePath, dotsPath, label, labelX, labelY };
   }, [draftPoints, practiceType]);
 
+  // Live rubber-band while dragging to place an arc/polyline point — a
+  // line from the last confirmed draft point to wherever the finger
+  // currently is (or, for the very first point of a fresh draft, just a
+  // small dot at the finger, since there's nothing to rubber-band from
+  // yet). Worklet-driven like every other live preview, so it updates
+  // every frame with no React re-render.
+  const dragPointPreviewPath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    if (!dragPointActive.value) return path;
+    if (lastDraftPointForPreview) {
+      path.moveTo(lastDraftPointForPreview.x, lastDraftPointForPreview.y);
+      path.lineTo(dragPointX.value, dragPointY.value);
+    } else {
+      path.addCircle(dragPointX.value, dragPointY.value, 3);
+    }
+    return path;
+  });
+
   // AutoCAD-style crosshair path: a "+" with a small gap for the pickbox
   // square in the middle, same visual language as the real desktop tool.
   const crosshairPath = useDerivedValue(() => {
@@ -560,6 +610,11 @@ export default function PracticeCanvas({
               )}
             </>
           )}
+
+          {/* Live rubber-band while dragging to place the next
+              arc/polyline point — separate from draftVisual above, which
+              only shows already-confirmed points. */}
+          <Path path={dragPointPreviewPath} color={settings.shapeColor} style="stroke" strokeWidth={2} opacity={0.5} />
 
           {/* AutoCAD-style rotate gizmo: pivot dot, reference arrow, live
               angle readout, and a live-rotating preview of the selected

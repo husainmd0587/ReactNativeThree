@@ -7,6 +7,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import storage from '../utils/store/localStorage/asynStorage.js';
 import ProgressRing from '../utils/components/common/progressBar.js';
+import Profile from '../components/screens/profile.js';
+import Notification from '../components/screens/notification.js'
 
 import HomeCad from '../mechanical_engineering/Edand3D/index.js'
 import HomeTurningMilling from '../turning_milling/index.js';
@@ -22,15 +24,35 @@ import MCQ from '../mechanical_engineering/management/mcq/index.js';
 
 // special simulations screens
 import AutoCadPractice from '../mechanical_engineering/Edand3D/customScreens/AutoCad/index.js';
-import FreehandTurning from '../turning_milling/customScreens/mannualTurning/freehandTurning.js';
+import FreehandTurning from '../turning_milling/customScreens/freehandTurning/FreehandTurning.js';
 import CncSimulatorPro from '../turning_milling/customScreens/cnc/CncSimulatorPro.js';
-import RoboticSimulator from '../mechanical_engineering/robots/customScreens/robotics/mannualRobot/robotTestScreen.js';
+import {RoboticsNavigator} from '../mechanical_engineering/robots/customScreens/robotics/navigation/RoboticsNavigator.jsx';
 import ScientificCalculator from '../mechanical_engineering/calculator/allCalculators/ScientificCalculator.js';
 
-import { Header } from '../components/common/index.js';
-import SplashScreen from './splash.js';
+import Header from '../components/common/Header.jsx'
+
 const Stack = createNativeStackNavigator();
 const { width } = Dimensions.get('window');
+
+// ── Welcome Banner Component ──
+const WelcomeBanner = React.memo(() => (
+  <View style={styles.welcomeBanner}>
+    <View style={styles.welcomeTextWrap}>
+      <Text style={styles.welcomeTitle}>Welcome back, Engineer! 👋</Text>
+      <Text style={styles.welcomeSubtitle}>
+        Learn, practice and master mechanical{'\n'}engineering with 3D & simulations.
+      </Text>
+    </View>
+    <View style={styles.welcomeImageWrap}>
+      <ImageBackground
+        source={require('../assets/images/icons/banner.png')}
+        style={styles.welcomeImage}
+        imageStyle={styles.welcomeImageStyle}
+        resizeMode="contain"
+      />
+    </View>
+  </View>
+));
 
 const FeaturedSimulatorCard = React.memo(({ simulator, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -64,36 +86,21 @@ const FeaturedSimulatorCard = React.memo(({ simulator, onPress }) => {
       ]}
     >
       <TouchableOpacity
-        style={styles.featuredCard}
+        style={[styles.featuredCard, { backgroundColor: simulator.accent }]}
         onPress={() => onPress(simulator.route)}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
       >
-        <ImageBackground
+        <View style={styles.featuredTextWrap}>
+          <Text style={styles.featuredName} numberOfLines={2}>{simulator.label}</Text>
+          <Text style={styles.featuredDesc} numberOfLines={2}>{simulator.desc}</Text>
+        </View>
+        <Image
           source={simulator.bgImage}
           style={styles.featuredImage}
-          imageStyle={styles.featuredImageStyle}
           resizeMode="cover"
-        >
-          <View style={[styles.featuredOverlay, { backgroundColor: simulator.accent + '30' }]} />
-          <View style={styles.featuredBadge}>
-            <Text style={styles.featuredBadgeText}>⭐ FEATURED</Text>
-          </View>
-          <View style={styles.featuredEmojiContainer}>
-            <Text style={styles.featuredEmoji}>{simulator.emoji}</Text>
-          </View>
-          <View style={[styles.featuredColorBar, { backgroundColor: simulator.accent }]} />
-        </ImageBackground>
-        <View style={styles.featuredContent}>
-          <Text style={styles.featuredName} numberOfLines={1}>{simulator.label}</Text>
-          <Text style={styles.featuredDesc} numberOfLines={2}>{simulator.desc}</Text>
-          <View style={[styles.featuredTag, { backgroundColor: simulator.accent + '20' }]}>
-            <Text style={[styles.featuredTagText, { color: simulator.accent }]}>
-              🎯 Try Now
-            </Text>
-          </View>
-        </View>
+        />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -204,8 +211,8 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
     <View style={styles.featuredSection}>
       <View style={styles.featuredHeader}>
         <View style={styles.featuredHeaderLeft}>
-          <Text style={styles.featuredTitle}>🌟 Featured Simulators</Text>
-          <Text style={styles.featuredSubtitle}>Most popular interactive experiences</Text>
+          <Text style={styles.featuredBadgeIcon}>⭐</Text>
+          <Text style={styles.featuredTitle}>Special Simulators</Text>
         </View>
         <TouchableOpacity 
           style={styles.featuredSeeAllBtn}
@@ -252,55 +259,33 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
   );
 });
 
-// ── Simulator Grid Component ──
+// ── Simulator Grid Component (3-per-row, full-bleed image cards) ──
 const SimulatorGrid = React.memo(({ simulators, onSimulatorPress }) => {
   if (simulators.length === 0) return null;
 
   return (
-    <View style={styles.simulatorSection}>
-      <View style={styles.simulatorHeader}>
-        <View style={styles.simulatorHeaderLeft}>
-          <Text style={styles.simulatorTitle}>🚀 All Simulators</Text>
-          <Text style={styles.simulatorSubtitle}>Hands-on learning experiences</Text>
-        </View>
+    <>
+      <Text style={styles.sectionLabel}>SIMULATORS</Text>
+      <View style={styles.grid}>
+        {simulators.map((simulator) => (
+          <SimulatorCard
+            key={simulator.route}
+            simulator={simulator}
+            onPress={onSimulatorPress}
+          />
+        ))}
       </View>
-
-      <View style={styles.simulatorGrid}>
-        {simulators.map((simulator, index) => {
-          const isLastInRow = (index + 1) % 3 === 0;
-          return (
-            <View 
-              key={simulator.route} 
-              style={[
-                styles.simulatorGridItem,
-                isLastInRow && styles.simulatorGridItemLast
-              ]}
-            >
-              <SimulatorCard
-                simulator={simulator}
-                onPress={onSimulatorPress}
-              />
-            </View>
-          );
-        })}
-      </View>
-    </View>
+    </>
   );
 });
 
-// ── Simulator Card Component (Grid) ──
+// ── Simulator Card Component (Grid, full-cover image) ──
 const SimulatorCard = React.memo(({ simulator, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.95,
-      useNativeDriver: true,
-      speed: 50,
-    }).start();
-    Animated.spring(translateY, {
-      toValue: 2,
+      toValue: 0.96,
       useNativeDriver: true,
       speed: 50,
     }).start();
@@ -312,24 +297,12 @@ const SimulatorCard = React.memo(({ simulator, onPress }) => {
       useNativeDriver: true,
       speed: 50,
     }).start();
-    Animated.spring(translateY, {
-      toValue: 0,
-      useNativeDriver: true,
-      speed: 50,
-    }).start();
   };
 
   return (
-    <Animated.View
-      style={[
-        styles.simulatorCardWrapper,
-        {
-          transform: [{ scale: scaleAnim }, { translateY }],
-        }
-      ]}
-    >
+    <Animated.View style={[styles.simCard, { transform: [{ scale: scaleAnim }] }]}>
       <TouchableOpacity
-        style={styles.simulatorCard}
+        style={styles.simCardTouchable}
         onPress={() => onPress(simulator.route)}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -337,26 +310,21 @@ const SimulatorCard = React.memo(({ simulator, onPress }) => {
       >
         <ImageBackground
           source={simulator.bgImage}
-          style={styles.simulatorImage}
-          imageStyle={styles.simulatorImageStyle}
+          style={styles.simCardImage}
+          imageStyle={styles.simCardImageStyle}
           resizeMode="cover"
         >
-          <View style={[styles.simulatorOverlay, { backgroundColor: simulator.accent + '40' }]} />
-          <View style={styles.simulatorBadge}>
-            <Text style={styles.simulatorBadgeText}>SIM</Text>
+          <View style={styles.simCardBadge}>
+            <Text style={styles.simCardBadgeText}>{simulator.emoji}</Text>
           </View>
-          <Text style={styles.simulatorEmoji}>{simulator.emoji}</Text>
-          <View style={[styles.simulatorColorBar, { backgroundColor: simulator.accent }]} />
+
+          <View style={styles.simCardTextWrap}>
+            <Text style={styles.simCardName} numberOfLines={1}>{simulator.label}</Text>
+            <Text style={styles.simCardDesc} numberOfLines={2}>{simulator.desc}</Text>
+          </View>
+
+          <View style={[styles.simCardColorBar, { backgroundColor: simulator.accent }]} />
         </ImageBackground>
-        <View style={styles.simulatorContent}>
-          <Text style={styles.simulatorName} numberOfLines={1}>{simulator.label}</Text>
-          <Text style={styles.simulatorDesc} numberOfLines={2}>{simulator.desc}</Text>
-          <View style={[styles.simulatorTag, { backgroundColor: simulator.accent + '20' }]}>
-            <Text style={[styles.simulatorTagText, { color: simulator.accent }]}>
-              Interactive
-            </Text>
-          </View>
-        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -364,49 +332,64 @@ const SimulatorCard = React.memo(({ simulator, onPress }) => {
 
 // ── Module card component ──
 const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false }) => {
-  const cardStyles = [
-    styles.card,
-    wide && styles.cardWide,
-    listView && styles.cardList,
-    listView && styles.cardListFull
-  ];
+  const horizontal = wide || listView;
 
-  const imageStyles = [
-    styles.cardImg,
-    wide && styles.cardImgWide,
-    listView && styles.cardImgList
-  ];
+  if (horizontal) {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.cardHorizontal,
+          { borderColor: screen.accent, backgroundColor: screen.accentBg || '#FFFFFF' },
+          wide && styles.cardWide,
+          listView && styles.cardListItem,
+        ]}
+        onPress={onPress}
+        activeOpacity={0.82}
+      >
+        <ImageBackground
+          source={screen.bgImage}
+          style={styles.cardIconWrapHorizontal}
+          imageStyle={styles.cardIconImage}
+          resizeMode="cover"
+        >
+          <View style={styles.cardEmojiBadgeSmall}>
+            <Text style={styles.cardEmojiBadgeTextSmall}>{screen.emoji}</Text>
+          </View>
+        </ImageBackground>
 
-  const bodyStyles = [
-    styles.cardBody,
-    wide && styles.cardBodyWide,
-    listView && styles.cardBodyList
-  ];
+        <View style={styles.cardBodyHorizontal}>
+          <Text style={styles.cardNameHorizontal} numberOfLines={1}>{screen.label}</Text>
+          <Text style={styles.cardDescHorizontal} numberOfLines={2}>{screen.desc}</Text>
+        </View>
+
+        <View style={[styles.colorBarVertical, { backgroundColor: screen.accent }]} />
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
-      style={cardStyles}
+      style={[styles.card, { borderColor: screen.accent, backgroundColor: screen.accentBg || '#FFFFFF' }]}
       onPress={onPress}
       activeOpacity={0.82}
     >
       <ImageBackground
         source={screen.bgImage}
-        style={imageStyles}
-        imageStyle={styles.cardImageStyle}
+        style={styles.cardIconWrap}
+        imageStyle={styles.cardIconImage}
         resizeMode="cover"
       >
-        <View style={[styles.imageOverlay, { backgroundColor: screen.accentBg + '80' }]} />
-        <Text style={styles.cardEmoji}>{screen.emoji}</Text>
-        <View style={[styles.colorBar, { backgroundColor: screen.accent }]} />
+        <View style={styles.cardEmojiBadge}>
+          <Text style={styles.cardEmojiBadgeText}>{screen.emoji}</Text>
+        </View>
       </ImageBackground>
 
-      <View style={bodyStyles}>
-        <View style={styles.cardContent}>
-          <Text style={styles.cardName} numberOfLines={1}>{screen.label}</Text>
-          <Text style={styles.cardDesc} numberOfLines={2}>{screen.desc}</Text>
-        </View>
-        <Text style={[styles.cardArrow, { color: screen.accent }]}>→</Text>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardName} numberOfLines={2}>{screen.label}</Text>
+        <Text style={styles.cardDesc} numberOfLines={2}>{screen.desc}</Text>
       </View>
+
+      <View style={[styles.colorBar, { backgroundColor: screen.accent }]} />
     </TouchableOpacity>
   );
 });
@@ -506,7 +489,7 @@ const NavigationMain = ({ navigation }) => {
     
     if (!normalizedSearch) return modules;
     
-    return modules.filter((screen) => {
+return modules.filter((screen) => {
       const label = (screen.label || '').toLowerCase();
       const desc = (screen.desc || '').toLowerCase();
       return label.includes(normalizedSearch) || desc.includes(normalizedSearch);
@@ -537,7 +520,7 @@ const NavigationMain = ({ navigation }) => {
       label: 'AutoCAD Practice',
       desc: 'Practice 2D/3D drafting and modeling',
       emoji: '📐',
-      bgImage: require('../assets/images/navigations/drawing_cad.png'),
+      bgImage: require('../assets/images/icons/cadSim.png'),
       accent: '#7F77DD',
     },
     {
@@ -545,7 +528,7 @@ const NavigationMain = ({ navigation }) => {
       label: 'Freehand Turning',
       desc: 'Manual lathe operation simulation',
       emoji: '🔧',
-      bgImage: require('../assets/images/navigations/drawing_cad.png'),
+      bgImage: require('../assets/images/icons/lathSim.png'),
       accent: '#1D9E75',
     },
     {
@@ -553,7 +536,7 @@ const NavigationMain = ({ navigation }) => {
       label: 'CNC Simulator Pro',
       desc: 'Professional CNC programming simulation',
       emoji: '⚙️',
-      bgImage: require('../assets/images/navigations/drawing_cad.png'),
+      bgImage: require('../assets/images/icons/cncSim.png'),
       accent: '#378ADD',
     },
     {
@@ -561,7 +544,7 @@ const NavigationMain = ({ navigation }) => {
       label: 'Robotics Simulator',
       desc: 'Program and simulate robot arms',
       emoji: '🤖',
-      bgImage: require('../assets/images/navigations/drawing_cad.png'),
+      bgImage: require('../assets/images/icons/robotSim.png'),
       accent: '#D4537E',
     },
     {
@@ -569,7 +552,7 @@ const NavigationMain = ({ navigation }) => {
       label: 'Scientific Calculator',
       desc: 'Advanced calculations for engineers',
       emoji: '🧮',
-      bgImage: require('../assets/images/navigations/drawing_cad.png'),
+      bgImage: require('../assets/images/icons/calculatorSim.png'),
       accent: '#FFA500',
     }
   ], []);
@@ -618,32 +601,39 @@ const NavigationMain = ({ navigation }) => {
    
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffff" />
 
-      {/* Header with Background Image */}
+        {/* Header */}
       <View style={styles.headerContainer}>
-        <ImageBackground
-          source={require('../assets/images/navigations/drawing_cad.png')}
-          style={styles.headerBackground}
-          imageStyle={styles.headerBackgroundImage}
-          resizeMode="cover"
-        >
-          <Header/>
-          <View style={styles.headerOverlay}>
-            <View style={styles.headerContent}>
-              <View style={styles.headerLeft}>
-                <Text style={styles.headerTitle}>ME Studio</Text>
-                <Text style={styles.headerSubtitle}>Mechanical Engineering · Learn Easily</Text>
-              </View>
-              <View style={styles.headerRight}>
-                <TouchableOpacity style={styles.headerProfileBtn}>
-                  <Text style={styles.headerProfileEmoji}>👤</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </ImageBackground>
+        <Header
+          title="ME Studio"
+          subtitle="Mechanical Engineering · Learn Easily"
+          showViewToggle={true}
+          viewMode={listView ? 'list' : 'grid'}
+          onToggleViewMode={handleToggleListView}
+          drawerItems={drawerItems}
+          onDrawerItemPress={(item) => {
+            if (item.route) navigation.navigate(item.route);
+          }}
+          drawerBottomItem={{
+            key: 'settings',
+            label: 'Settings',
+            emoji: '⚙️',
+          }}
+          onDrawerBottomPress={(item) => {
+            console.log('Bottom item pressed:', item);
+          }}
+          navigation={navigation}
+        />
       </View>
+      <ScrollView 
+        style={styles.scroll} 
+        contentContainerStyle={[styles.body, listView && styles.bodyList]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+      {/* Welcome Banner */}
+      <WelcomeBanner />
 
       <Toolbox
         listView={listView}
@@ -660,21 +650,9 @@ const NavigationMain = ({ navigation }) => {
           onSearchChange={handleSearchChange}
         />
       )}
-
-      <ScrollView 
-        style={styles.scroll} 
-        contentContainerStyle={[styles.body, listView && styles.bodyList]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Featured Simulator Scroll Section */}
-        <FeaturedSimulatorScroll 
-          simulators={simulators}
-          onSimulatorPress={handleSimulatorPress}
-        />
-
-        {/* Simulator Grid Section */}
-        <SimulatorGrid 
+      
+            {/* Simulators Section - 3-per-row grid, same layout as Modules */}
+        <SimulatorGrid
           simulators={simulators}
           onSimulatorPress={handleSimulatorPress}
         />
@@ -699,6 +677,14 @@ const NavigationMain = ({ navigation }) => {
         ) : (
           <EmptyState />
         )}
+
+   
+
+        {/* Special Simulators Section */}
+        {/* <FeaturedSimulatorScroll 
+          simulators={simulators}
+          onSimulatorPress={handleSimulatorPress}
+        /> */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -714,7 +700,7 @@ const AllScreens = [
     desc: 'Sketch, model and export 2D/3D parts',
     component: HomeCad,
     emoji: '✏️',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/cad.png'),
     accent: '#7F77DD', 
     accentBg: '#EEEDFE',
     slogan: [
@@ -729,7 +715,7 @@ const AllScreens = [
     desc: 'Simulate CNC turning programs',
     component: HomeTurningMilling,
     emoji: '⚙️',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/cnc.png'),
     accent: '#1D9E75', 
     accentBg: '#E1F5EE',
     slogan: [
@@ -744,7 +730,7 @@ const AllScreens = [
     desc: 'Calipers, micrometers & gauges',
     component: AllMeasuringTools,
     emoji: '📏',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/vernier.png'),
     accent: '#D85A30', 
     accentBg: '#FAECE7',
     slogan: [
@@ -758,7 +744,7 @@ const AllScreens = [
     desc: 'Gears, shafts, fasteners & bearings',
     component: MachineElements,
     emoji: '🔩',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/gear.png'),
     accent: '#378ADD', 
     accentBg: '#E6F1FB',
     slogan: [
@@ -772,7 +758,7 @@ const AllScreens = [
     desc: 'Kinematics, arms and automation systems',
     component: Robots,
     emoji: '🤖',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/robot.png'),
     accent: '#D4537E', 
     accentBg: '#FBEAF0',
     slogan: ['Automate the future.', 'Explore robot kinematics.'],
@@ -783,7 +769,7 @@ const AllScreens = [
     label: 'Calculators',
     desc: 'Material weight & more',
     emoji: '🧮',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/calculator.png'),
     accent: '#FFA500', 
     accentBg: '#FFF5E6',
     slogan: ['Quick calculations.', 'Material weight & more.'],
@@ -793,7 +779,7 @@ const AllScreens = [
     label:'All WorkShops',
     component: Workshop,
     emoji: '🔧',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/workshop.png'),
     accent: '#5CB85C', 
     accentBg: '#EAFDEB',
     slogan: ['Welding, smithy & more.', 'Your workshop reference.'],
@@ -803,7 +789,7 @@ const AllScreens = [
     label:'Automobile Engineering',
     component: AutomobileHome,
     emoji: '🚗',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/automobile.png'),
     accent: '#FF5733', 
     accentBg: '#FFEDE8',
     slogan: ['Engines, systems & design.', 'Explore automobile engineering.'],
@@ -813,7 +799,7 @@ const AllScreens = [
     label:'Materials Science',
     component: MaterialsHome,
     emoji: '🧱',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/materials.png'),
     accent: '#6A5ACD', 
     accentBg: '#F0E8FF',
     slogan: ['Metals, polymers & ceramics.', 'Discover material properties.'],
@@ -823,7 +809,7 @@ const AllScreens = [
     label: 'Production Management',
     component: ProductionManagement,
     emoji: '📋',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/production.png'),
     wide: true,
     accent: '#854F0B', 
     accentBg: '#FAEEDA',
@@ -834,7 +820,7 @@ const AllScreens = [
     label: '500 Q&A Practice',
     component: MCQ,
     emoji: '📝',
-    bgImage: require('../assets/images/navigations/drawing_cad.png'),
+    bgImage: require('../assets/images/icons/mcq.png'),
     accent: '#3B82F6', 
     accentBg: '#DBEAFE',
     slogan: ['Test your knowledge.', 'Practice makes perfect.'],
@@ -847,6 +833,10 @@ function MainStack() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home_Main" component={NavigationMain} />
+        {/* app utility screens that not show in ui*/}
+          <Stack.Screen name="Profile" component={Profile} />
+          <Stack.Screen name="Notification" component={Notification} />
+        {/* related core engineering topic  */}
         {AllScreens.map(screen => (
           <Stack.Screen
             key={screen.name}
@@ -858,8 +848,10 @@ function MainStack() {
         <Stack.Screen name="AutoCadPractice" component={AutoCadPractice} />
         <Stack.Screen name="FreehandTurning" component={FreehandTurning} />
         <Stack.Screen name="CncSimulatorPro" component={CncSimulatorPro} />
-        <Stack.Screen name="RoboticSimulator" component={RoboticSimulator} />
+        <Stack.Screen name="RoboticSimulator" component={RoboticsNavigator} />
         <Stack.Screen name="ScientificCalculator" component={ScientificCalculator} />
+        
+
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -945,6 +937,47 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
 
+  // Welcome Banner Styles
+  welcomeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F2657',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingLeft: 20,
+    paddingRight: 16,
+    marginBottom: 16,
+    minHeight: 150,
+  },
+  welcomeTextWrap: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 10,
+  },
+  welcomeSubtitle: {
+    fontSize: 13,
+    color: '#B9C4DE',
+    lineHeight: 19,
+    fontWeight: '500',
+  },
+  welcomeImageWrap: {
+    width: 130,
+    height: 110,
+    borderRadius: 14,
+    // overflow: 'hidden',
+    flexShrink: 0,
+  },
+  welcomeImage: {
+    width: '100%',
+    height: '100%',
+  },
+
   // Featured Section Styles
   featuredSection: {
     marginBottom: 20,
@@ -966,16 +999,17 @@ const styles = StyleSheet.create({
   },
   featuredHeaderLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featuredBadgeIcon: {
+    fontSize: 15,
+    marginRight: 8,
   },
   featuredTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1A1A2E',
-    marginBottom: 2,
-  },
-  featuredSubtitle: {
-    fontSize: 11,
-    color: '#9AA0B5',
   },
   featuredSeeAllBtn: {
     paddingHorizontal: 12,
@@ -996,7 +1030,7 @@ const styles = StyleSheet.create({
     gap: 16, // Add gap between items
   },
   featuredCardWrapper: {
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1007,87 +1041,34 @@ const styles = StyleSheet.create({
   },
   featuredCard: {
     flex: 1, // Make card fill the wrapper
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#F0EEF5',
+    minHeight: 140,
+    padding: 16,
+    justifyContent: 'space-between',
   },
-  featuredImage: {
-    height: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  featuredImageStyle: {
-    borderRadius: 0,
-  },
-  featuredOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  featuredBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    zIndex: 3,
-  },
-  featuredBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  featuredEmojiContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featuredEmoji: {
-    fontSize: 40,
+  featuredTextWrap: {
     zIndex: 2,
-  },
-  featuredColorBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    zIndex: 2,
-  },
-  featuredContent: {
-    padding: 12,
   },
   featuredName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 3,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   featuredDesc: {
     fontSize: 11,
-    color: '#9898AA',
-    lineHeight: 14,
-    marginBottom: 6,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 15,
   },
-  featuredTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  featuredTagText: {
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  featuredImage: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    width: 78,
+    height: 78,
+    borderRadius: 10,
+    opacity: 0.95,
   },
   featuredDotsContainer: {
     flexDirection: 'row',
@@ -1106,140 +1087,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 6,
     borderRadius: 3,
-  },
-
-  // Simulator Grid Section Styles
-  simulatorSection: {
-    marginBottom: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  simulatorHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  simulatorHeaderLeft: {
-    flex: 1,
-  },
-  simulatorTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 2,
-  },
-  simulatorSubtitle: {
-    fontSize: 11,
-    color: '#9AA0B5',
-  },
-  simulatorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-    justifyContent: 'flex-start',
-  },
-  simulatorGridItem: {
-    width: '31.33%',
-    marginBottom: 8,
-    marginRight: '2%',
-  },
-  simulatorGridItemLast: {
-    marginRight: 0,
-  },
-  simulatorCardWrapper: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  simulatorCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#F0EEF5',
-  },
-  simulatorImage: {
-    height: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  simulatorImageStyle: {
-    borderRadius: 0,
-  },
-  simulatorOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  simulatorBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 8,
-    zIndex: 3,
-  },
-  simulatorBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 6,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  simulatorEmoji: {
-    fontSize: 28,
-    zIndex: 2,
-  },
-  simulatorColorBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    zIndex: 2,
-  },
-  simulatorContent: {
-    padding: 8,
-  },
-  simulatorName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 2,
-  },
-  simulatorDesc: {
-    fontSize: 9,
-    color: '#9898AA',
-    lineHeight: 12,
-    marginBottom: 4,
-  },
-  simulatorTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  simulatorTagText: {
-    fontSize: 7,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
 
   // Toolbox Styles
@@ -1321,125 +1168,189 @@ const styles = StyleSheet.create({
   },
 
   card: { 
-    width: width < 768 ? '48%' : '30%',
+    width: width < 768 ? '31%' : '18.4%',
+    height: 172,
     backgroundColor: '#FFFFFF', 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    borderColor: '#F0EEF5', 
+    borderRadius: 14, 
+    borderWidth: 1.5, 
     overflow: 'hidden',
-    minWidth: 140,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    minWidth: 100,
+    alignItems: 'center',
   },
-  cardWide: { 
-    width: '100%', 
-    flexDirection: 'row', 
-    marginBottom: 12,
-    borderRadius: 16,
+  cardIconWrap: {
+    width: '100%',
+    height: 78,
+    flexShrink: 0,
   },
-  cardImg: { 
-    height: 110, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  cardImageStyle: {
+  cardIconImage: {
     borderRadius: 0,
   },
-  imageOverlay: {
+  cardEmojiBadge: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  cardImgWide: { 
-    width: 130, 
-    height: 130, 
-    flexShrink: 0,
-    borderRadius: 16,
-  },
-  cardList: { 
-    width: '100%', 
-    flexDirection: 'row',
-    borderRadius: 16,
-  },
-  cardListFull: { 
-    width: '100%', 
-    flexDirection: 'row', 
-    marginBottom: 10,
-    borderRadius: 16,
-  },
-  cardImgList: { 
-    width: 100, 
-    height: 100, 
-    flexShrink: 0,
-    borderRadius: 16,
-  },
-  cardEmoji: { 
-    fontSize: 34,
-    zIndex: 2,
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  cardEmojiBadgeText: {
+    fontSize: 13,
   },
   colorBar: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
+    width: '100%',
     height: 4,
-    zIndex: 2,
+    flexShrink: 0,
   },
   cardBody: { 
-    padding: 12,
-    flexDirection: 'row',
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 8,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  cardBodyWide: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  cardBodyList: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  cardContent: { 
-    flex: 1,
-    marginRight: 8,
+    justifyContent: 'center',
   },
   cardName: { 
-    fontSize: 14, 
+    fontSize: 12, 
     fontWeight: '700', 
     color: '#1A1A2E', 
-    marginBottom: 4 
+    marginBottom: 3,
+    textAlign: 'center',
   },
   cardDesc: { 
-    fontSize: 11, 
+    fontSize: 10, 
     color: '#9898AA', 
-    lineHeight: 15 
+    lineHeight: 13,
+    textAlign: 'center',
   },
-  cardArrow: { 
-    fontSize: 20,
-    marginTop: 4,
-    alignSelf: 'flex-start',
+
+  // Horizontal card variant (used for wide modules and list view)
+  cardHorizontal: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  cardWide: {
+    marginBottom: 12,
+  },
+  cardListItem: {
+    marginBottom: 10,
+  },
+  cardIconWrapHorizontal: {
+    width: 70,
+    height: 70,
+    flexShrink: 0,
+  },
+  cardEmojiBadgeSmall: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardEmojiBadgeTextSmall: {
+    fontSize: 10,
+  },
+  cardBodyHorizontal: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  cardNameHorizontal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 3,
+  },
+  cardDescHorizontal: {
+    fontSize: 11,
+    color: '#9898AA',
+    lineHeight: 15,
+  },
+  colorBarVertical: {
+    width: 4,
+    alignSelf: 'stretch',
+  },
+
+  // Simulator grid card (full-bleed image, same slot size as module cards)
+  simCard: {
+    width: width < 768 ? '48%' : '31%',
+    height: 120,
+    minWidth: 100,
+  },
+  simCardTouchable: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  simCardImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  simCardImageStyle: {
+    borderRadius: 0,
+  },
+  simCardBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  simCardBadgeText: {
+    fontSize: 12,
+  },
+  simCardTextWrap: {
+    paddingHorizontal: 8,
+    paddingBottom: 5,
+    zIndex: 2,
+  },
+  simCardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+    maxWidth:'80%'
+  },
+  simCardDesc: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 12,
+  },
+  simCardColorBar: {
+    height: 3,
+    width: '100%',
+    zIndex: 2,
   },
 
   emptyState: { 

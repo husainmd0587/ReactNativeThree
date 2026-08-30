@@ -40,6 +40,13 @@ export const COLORS = {
   textPrimary: '#f5f7fa',
   textSecondary: '#aab2c5',
   textMuted: '#6b7385',
+
+  // Semi-transparent panels for chrome floating ON TOP of a full-bleed
+  // 3D canvas (see RobotSimulatorScreen) - the model must stay visible
+  // through them, not be covered by an opaque bar.
+  overlayStrong: 'rgba(10,12,18,0.78)',
+  overlay: 'rgba(15,17,24,0.62)',
+  overlayLight: 'rgba(21,24,34,0.45)',
 };
 
 export const SPACING = {

@@ -3,23 +3,19 @@
  *
  * A dedicated program-creation flow: pick a starter template (Blank /
  * Pick and Place / Welding Pass), pick a language, name it, and save.
- * This is separate from the inline "New" button in RobotProgramEditor
- * (which just clears the current editor to a blank example) - this is
- * the guided path for creating a proper named, saved program from a
- * template.
+ * This is a different path from ProgramEditorScreen's own blank "+New"
+ * (which just starts from that dialect's plain example) - this one
+ * starts from a purpose-built template instead.
  *
- * Saves directly via core/programStorage.js (same storage the
- * Program tab's file manager reads from), then returns to the
- * Robotics home screen - open the new program from there via the
- * Simulator's Program tab -> Open. (Deep-linking straight into the
- * editor with the new program pre-loaded would need the editor's
- * text/dialect state lifted out of RobotProgramEditor into shared
- * context - a reasonable next step, not done here to keep this screen
- * decoupled from the editor's internals.)
+ * Saves directly via core/programStorage.js, then navigates straight
+ * into ProgramEditorScreen with the new program loaded, so it can be
+ * reviewed/tweaked immediately - editing lives exclusively there now
+ * (see ProgramEditorScreen.jsx and RobotSimulatorScreen.jsx's
+ * docstrings for the run/edit separation).
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { DIALECTS } from '../engine/dialects';
 import { listTemplates, getTemplate } from '../core/programTemplates';
 import { saveProgram } from '../core/programStorage';
@@ -78,12 +74,7 @@ export function NewProgramScreen({ navigation }) {
     });
 
     setSaving(false);
-
-    Alert.alert(
-      'Program Created',
-      `"${record.name}" was saved. Open it from the Simulator's Program tab \u2192 Open.`,
-      [{ text: 'OK', onPress: () => navigation?.goBack?.() }]
-    );
+    navigation?.replace?.('ProgramEditor', { programId: record.id });
   };
 
   return (

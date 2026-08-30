@@ -42,7 +42,7 @@ export function RoboticsHomeScreen({ navigation }) {
         icon="🦾"
         title="Robot Simulator"
         description="Jog joints manually or run a program - Fanuc, ABB, KUKA, or the built-in language"
-        onPress={() => navigation.navigate('RobotSimulator')}
+        onPress={() => navigation.navigate('SimulatorModeSelect')}
       />
       <HomeCard
         icon="🛠"

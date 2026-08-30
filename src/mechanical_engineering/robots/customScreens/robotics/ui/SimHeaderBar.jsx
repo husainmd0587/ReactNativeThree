@@ -2,10 +2,13 @@
  * SimHeaderBar.jsx
  *
  * ONE compact header row replacing the previous stack of
- * RoboticsToolbar + SimulationControlsBar (two separate bars that,
- * combined with the Manual/Program tabs and the Program editor's own
- * buttons, pushed the 3D canvas out of view entirely on real devices -
- * see RobotSimulatorScreen.jsx for the actual layout fix).
+ * RoboticsToolbar + SimulationControlsBar. Now floats as a
+ * semi-transparent overlay on top of a full-bleed 3D canvas (see
+ * RobotSimulatorScreen.jsx) rather than sitting in a docked opaque bar
+ * above it - the model should be visible through it, not pushed down
+ * by it. This is also now the ONLY header shown on the simulator
+ * screen - the native stack header is hidden there (headerShown:
+ * false in the navigator), so this includes its own back button.
  *
  * Deliberately dense: icon-only transport buttons, short labels,
  * COMPACT_TOUCH_TARGET-sized controls. Speed presets (Slow motion/
@@ -14,6 +17,11 @@
  * they don't need to be permanently visible taking up screen space
  * the model should have.
  *
+ * `showActions` (default true) hides the Grip/Reset buttons - used in
+ * program mode, where there's no manual override of what a running
+ * program is doing; only the simulation clock (Play/Pause/Stop/Step/
+ * Speed) stays relevant there.
+ *
  * Still drives the exact same engine calls as before: play/pause/
  * stop/stepFrame/setSpeed for the simulation clock, setGrip/resetBox
  * for the gripper and box.
@@ -21,6 +29,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useRoboticsCanvas } from '../providers/RoboticsCanvasProvider';
 import { GRIP_STATES, PLAYBACK_STATES, SPEED_PRESETS } from '../core/robotConstants';
 import { COLORS, SPACING, RADII, FONT_SIZE, FONT_WEIGHT, COMPACT_TOUCH_TARGET } from '../core/theme';
@@ -73,7 +82,8 @@ function SpeedChip({ speed, onSelect }) {
   );
 }
 
-export function SimHeaderBar({ onResetBox }) {
+export function SimHeaderBar({ onResetBox, showActions = true }) {
+  const navigation = useNavigation();
   const { engine, state, playbackState } = useRoboticsCanvas();
   const { state: clockState, speed } = playbackState;
   const isPlaying = clockState === PLAYBACK_STATES.PLAYING;
@@ -83,8 +93,11 @@ export function SimHeaderBar({ onResetBox }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="box-none">
       <View style={styles.transportGroup}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
         <IconButton icon="▶" active={isPlaying} onPress={() => engine.play()} />
         <IconButton
           icon="⏸"
@@ -101,16 +114,18 @@ export function SimHeaderBar({ onResetBox }) {
         <SpeedChip speed={speed} onSelect={(v) => engine.setSpeed(v)} />
       </View>
 
-      <View style={styles.actionGroup}>
-        <TouchableOpacity style={styles.smallButton} onPress={onResetBox}>
-          <Text style={styles.smallButtonText}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.gripButton} onPress={toggleGrip}>
-          <Text style={styles.gripButtonText}>
-            {state.grip === GRIP_STATES.OPEN ? 'Close Grip' : 'Open Grip'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {showActions && (
+        <View style={styles.actionGroup}>
+          <TouchableOpacity style={styles.smallButton} onPress={onResetBox}>
+            <Text style={styles.smallButtonText}>Reset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.gripButton} onPress={toggleGrip}>
+            <Text style={styles.gripButtonText}>
+              {state.grip === GRIP_STATES.OPEN ? 'Close Grip' : 'Open Grip'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -122,9 +137,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.overlay,
+    marginHorizontal: SPACING.sm,
+    marginTop: SPACING.sm,
+    borderRadius: RADII.md,
   },
   transportGroup: {
     flexDirection: 'row',
@@ -135,6 +151,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+  },
+  backButton: {
+    width: COMPACT_TOUCH_TARGET,
+    height: COMPACT_TOUCH_TARGET,
+    borderRadius: RADII.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceRaised,
+  },
+  backIcon: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
   },
   iconButton: {
     width: COMPACT_TOUCH_TARGET,

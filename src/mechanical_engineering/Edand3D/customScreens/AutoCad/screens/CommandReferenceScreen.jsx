@@ -33,7 +33,7 @@ function CommandEntry({ command, onPress }) {
       </View>
 
       <Text style={[styles.entryDesc, disabled && styles.entryDescDisabled]}>
-        {command.description}
+        {command.details || command.description}
       </Text>
 
       {!disabled && command.steps?.length > 0 && (

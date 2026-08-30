@@ -3,11 +3,12 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
 } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import MetalWeightCalculator2 from './allCalculators/maetalWaight'
-import MetalCalculatorNavigator from './allCalculators/metalWeightCalculator/metalCalculatorNavigator'
+
+import MetalCalculatorNavigator from './allCalculators/metalWeightCalculator/metalCalculatorNavigator.js'
 import RPMCalculator from './allCalculators/RPM_cutting_speed'
 import ScientificCalculator from './allCalculators/ScientificCalculator'
 import UnitConverter from './allCalculators/unitConvertor'
+import BeamDeflectionCalculator from './allCalculators/BeamdeflectionCalculator.js'
 
 const Stack = createNativeStackNavigator()
 const MODULES = [
@@ -21,16 +22,6 @@ const MODULES = [
     accent: '#0F6E56',
     accentBg: '#e1e7f5',
   },
-{
-    name: 'MetalWeightCalculator2',
-    label: 'Metal Weight Calculator2',
-    screen: MetalWeightCalculator2,
-    description: 'Calculate weight of metal parts based on dimensions and material.',
-    badge: 'Weight',
-    icon: '⚖️',
-    accent: '#293fbb',
-    accentBg: '#84d65e',
-},
 { 
   name:'RPM CalCulator',
   label:'RPM Calculator',
@@ -60,7 +51,17 @@ const MODULES = [
   icon:'🔄',
   accent:'#4CAF50',
   accentBg:'#e8f5e9'
-}
+},
+{ 
+  name:'BeamDeflectionCalculator',
+  label:'Beam Deflection Calculator',
+  screen:BeamDeflectionCalculator,
+  description:'calculate Beam deflection',  
+  badge:'RPM',
+  icon:'🔄',
+  accent:'#7f90f3',
+  accentBg:'#e0e4f8'
+},
 
 ]
 

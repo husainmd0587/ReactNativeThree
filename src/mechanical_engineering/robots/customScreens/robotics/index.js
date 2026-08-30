@@ -16,6 +16,9 @@
 export { RoboticsNavigator } from './navigation/RoboticsNavigator';
 
 export { RoboticsHomeScreen } from './screens/RoboticsHomeScreen';
+export { SimulatorModeSelectScreen } from './screens/SimulatorModeSelectScreen';
+export { ProgramPickerScreen } from './screens/ProgramPickerScreen';
+export { ProgramEditorScreen } from './screens/ProgramEditorScreen';
 export { RobotSimulatorScreen } from './screens/RobotSimulatorScreen';
 export { RobotBuilderScreen } from './screens/RobotBuilderScreen';
 export { LanguageReferenceScreen } from './screens/LanguageReferenceScreen';
@@ -30,9 +33,8 @@ export { MotionController, createMotionController } from './engine/MotionControl
 export { parseProgram, INSTRUCTION_TYPES } from './engine/ProgramInterpreter';
 export { DIALECTS, getDialect } from './engine/dialects';
 
-export { RobotProgramEditor } from './ui/RobotProgramEditor';
-export { ProgramFileManager } from './ui/ProgramFileManager';
 export { SimHeaderBar } from './ui/SimHeaderBar';
+export { LiveCodeHud } from './ui/LiveCodeHud';
 
 export {
   listSavedPrograms,

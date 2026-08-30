@@ -20,7 +20,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 3599',
     color: '#1F4E79',
     lightColor: '#D6E4F0',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A Vernier caliper measures internal/external dimensions, depths, and step heights using a main scale and sliding vernier scale. Available in analog, dial, and digital versions.',
     useCases: [
@@ -59,7 +59,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 3611',
     color: '#155724',
     lightColor: '#D4EDDA',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A micrometer uses a precision-ground screw to measure small distances or thicknesses with extremely high accuracy, typically to 0.001 mm. Types include outside, inside, and depth micrometers.',
     useCases: [
@@ -98,7 +98,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 13225',
     color: '#7B3F00',
     lightColor: '#FDEBD0',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A height gauge measures the height of objects or marks lines at specific heights from a reference surface plate. Used with a granite or steel surface plate.',
     useCases: [
@@ -134,7 +134,7 @@ export const INSTRUMENTS = [
     standard: 'DIN 2275',
     color: '#4A235A',
     lightColor: '#E8DAEF',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A feeler gauge consists of a set of thin metal blades of precisely known thickness, used to measure gaps and clearances between two surfaces.',
     useCases: [
@@ -170,7 +170,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 2768',
     color: '#1A5276',
     lightColor: '#D6EAF8',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'The most basic linear measurement tool made from stainless or carbon steel. Rules are rigid for short measurements; tapes are flexible for longer distances.',
     useCases: [
@@ -202,7 +202,7 @@ export const INSTRUMENTS = [
     standard: 'DIN 2264',
     color: '#1F618D',
     lightColor: '#D6EAF8',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       "A bevel protractor is a precision angular measuring tool with a movable blade and vernier scale to measure angles with accuracy to 5 minutes (5') of arc.",
     useCases: [
@@ -237,7 +237,7 @@ export const INSTRUMENTS = [
     standard: 'BS 3217',
     color: '#0E4D3B',
     lightColor: '#D5F5E3',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A sine bar measures or sets angles using slip (gauge) blocks, working on the trigonometric principle of a right-angled triangle. Accurate to seconds of arc.',
     useCases: [
@@ -273,7 +273,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 10360',
     color: '#512E5F',
     lightColor: '#E8DAEF',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A Coordinate Measuring Machine (CMM) measures the geometry of physical objects by sensing discrete points on the surface with a probe in three dimensions (X, Y, Z).',
     useCases: [
@@ -311,7 +311,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 4287',
     color: '#7D3C98',
     lightColor: '#F4ECF7',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A surface roughness tester (profilometer) uses a diamond-tipped stylus to trace surface texture. Key parameters: Ra (average roughness), Rz (mean roughness depth), Rmax.',
     useCases: [
@@ -349,7 +349,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 463',
     color: '#1F618D',
     lightColor: '#D6EAF8',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A dial indicator converts small linear plunger movement into rotary motion of a pointer on a dial. Widely used for detecting runout, alignment errors, and surface variations.',
     useCases: [
@@ -388,7 +388,7 @@ export const INSTRUMENTS = [
     standard: 'JIS B 7184',
     color: '#145A32',
     lightColor: '#D5F5E3',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'An optical comparator (profile projector) projects a magnified shadow silhouette of a part onto a screen for comparison with an overlay template. Non-contact method.',
     useCases: [
@@ -425,7 +425,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 6789',
     color: '#784212',
     lightColor: '#FDEBD0',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A torque wrench applies a specific torque to fasteners such as nuts and bolts, ensuring joints are tightened to required specification to prevent loosening or damage.',
     useCases: [
@@ -462,7 +462,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 463',
     color: '#1A5276',
     lightColor: '#D6EAF8',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A bore gauge measures internal diameters by expanding spring-loaded contacts to the bore walls, then transferring the measurement to a micrometer or dial indicator.',
     useCases: [
@@ -497,7 +497,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 286',
     color: '#0E4D3B',
     lightColor: '#D5F5E3',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'Plug gauges (for holes) and ring gauges (for shafts) are GO/NO-GO type gauges for rapid pass/fail dimensional checking. No numerical readout — accept or reject only.',
     useCases: [
@@ -532,7 +532,7 @@ export const INSTRUMENTS = [
     standard: 'DIN 2256',
     color: '#4A235A',
     lightColor: '#E8DAEF',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A thread pitch gauge is a set of thin blades with tooth profiles matching standard thread pitches, used to quickly identify the pitch of a thread by finding the best-matching blade.',
     useCases: [
@@ -565,7 +565,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 3611',
     color: '#784212',
     lightColor: '#FDEBD0',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'A thread micrometer measures the pitch diameter of external threads using special interchangeable anvil and spindle tips shaped to contact the thread flanks accurately.',
     useCases: [
@@ -600,7 +600,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 6508',
     color: '#17202A',
     lightColor: '#D5D8DC',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'The Rockwell hardness test measures hardness by pressing a diamond cone (Brale) or ball indenter into the surface under a set load. Derived from depth of penetration.',
     useCases: [
@@ -639,7 +639,7 @@ export const INSTRUMENTS = [
     standard: 'ASTM E10',
     color: '#2E4057',
     lightColor: '#D6E4F0',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'The Brinell test uses a 10 mm tungsten carbide ball pressed into the material under heavy load. Hardness number (HB) is calculated from the diameter of the indentation.',
     useCases: [
@@ -674,7 +674,7 @@ export const INSTRUMENTS = [
     standard: 'ISO 6507',
     color: '#2C3E50',
     lightColor: '#D5D8DC',
-    image: require('../../assets/images/measuring/vernier.png'),
+    image: require('../../assets/images/others/motor.png'),
     description:
       'The Vickers test uses a square-based diamond pyramid indenter over a wide load range, suitable for testing thin sections, coatings, case depths, and very hard materials.',
     useCases: [

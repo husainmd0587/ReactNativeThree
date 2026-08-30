@@ -2,20 +2,29 @@
  * RoboticsNavigator.jsx
  *
  * Stack navigator for the Robotics module, built on
- * @react-navigation/native-stack (the standard RN navigation library).
+ * @react-navigation/native-stack.
  *
- * NOTE: no existing project navigation setup was available to inspect,
- * so this assumes React Navigation's native-stack. If the existing app
- * uses a different navigator (e.g. a different stack config, a custom
- * header, or is nested under another navigator), swap the
- * createNativeStackNavigator() call for the app's existing pattern and
- * mount <RoboticsNavigator /> as a screen/route in the app's root
- * navigator.
+ * RobotSimulator has headerShown: false - it's a full-bleed 3D canvas
+ * with its own floating SimHeaderBar (including its own back button),
+ * so the native stack header would just be a second, redundant header
+ * eating into the screen space the model is supposed to have.
+ *
+ * Mode (Manual vs Program) is chosen BEFORE entering RobotSimulator,
+ * via SimulatorModeSelectScreen -> (ProgramPickerScreen if Program) ->
+ * RobotSimulator with route.params.mode/programId/autorun already
+ * set. There's no in-screen mode switch anymore.
+ *
+ * ProgramEditorScreen is the only place editing happens now - reached
+ * from ProgramPickerScreen's "+ New"/"Edit" or NewProgramScreen's
+ * template flow, never from inside the simulator.
  */
 
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RoboticsHomeScreen } from '../screens/RoboticsHomeScreen';
+import { SimulatorModeSelectScreen } from '../screens/SimulatorModeSelectScreen';
+import { ProgramPickerScreen } from '../screens/ProgramPickerScreen';
+import { ProgramEditorScreen } from '../screens/ProgramEditorScreen';
 import { RobotSimulatorScreen } from '../screens/RobotSimulatorScreen';
 import { RobotBuilderScreen } from '../screens/RobotBuilderScreen';
 import { LanguageReferenceScreen } from '../screens/LanguageReferenceScreen';
@@ -33,9 +42,24 @@ export function RoboticsNavigator() {
         options={{ title: 'Robotics' }}
       />
       <Stack.Screen
+        name="SimulatorModeSelect"
+        component={SimulatorModeSelectScreen}
+        options={{ title: 'Robot Simulator' }}
+      />
+      <Stack.Screen
+        name="ProgramPicker"
+        component={ProgramPickerScreen}
+        options={{ title: 'Choose a Program' }}
+      />
+      <Stack.Screen
+        name="ProgramEditor"
+        component={ProgramEditorScreen}
+        options={{ title: 'Program Editor' }}
+      />
+      <Stack.Screen
         name="RobotSimulator"
         component={RobotSimulatorScreen}
-        options={{ title: 'Robot Simulator' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="RobotBuilder"

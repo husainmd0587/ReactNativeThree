@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Canvas, useThree, useFrame } from '@react-three/fiber/native';
 import {
-  PerspectiveCamera, OrthographicCamera, Vector3,  Box3,Box3Helper, DataTexture, RGBAFormat, LinearFilter, MathUtils,
+  PerspectiveCamera, OrthographicCamera, Vector3, Box3, Box3Helper, DataTexture, RGBAFormat, LinearFilter, MathUtils,
   Raycaster, Vector2, Color, TextureLoader, RepeatWrapping, BufferAttribute, Sphere
 } from 'three';
 import useControls from 'r3f-native-orbitcontrols';
@@ -18,8 +18,53 @@ import Tts from 'react-native-tts';
 import Slider from './slider.js';
 import { usePortal, usePortalKey } from '../../utils/ThreeJs_Utils/portal';
 import { Textures, useTextureLoader } from '../materials/textures.js';
-import bg1 from '../../assets/images/bg/nature.jpg';
-import bg2 from '../../assets/images/bg/gradient.jpg';
+
+
+
+const BG_IMAGES = [
+  { id: 'nature', source:require('../../assets/images/bg/nature.jpg'), label: 'Nature' },
+  { id: 'gradient', source: require('../../assets/images/bg/gradient.jpg'), label: 'Gradient' },
+    {
+    id: 'concrete',
+    source: require('../../assets/images/textures/concrete.jpg'),
+    label: 'Concrete',
+  },
+  {
+    id: 'marble',
+    source: require('../../assets/images/textures/marbels.jpg'),
+    label: 'Marble',
+  },
+  {
+    id: 'carbon-fiber',
+    source: require('../../assets/images/textures/carbonFiber.jpg'),
+    label: 'Carbon Fiber',
+  },
+  {
+    id: 'wood',
+    source: require('../../assets/images/textures/woodTextures.jpg'),
+    label: 'Wood',
+  },
+  {
+    id: 'stones',
+    source: require('../../assets/images/textures/stones.jpg'),
+    label: 'Stone',
+  },
+  {
+    id: 'pattern',
+    source: require('../../assets/images/textures/pattern.jpg'),
+    label: 'Pattern',
+  },
+  {
+    id: 'pattern2',
+    source: require('../../assets/images/textures/pattern2.jpg'),
+    label: 'Pattern 2',
+  },
+  {
+    id: 'pattern3',
+    source: require('../../assets/images/textures/pattern3.jpg'),
+    label: 'Pattern 3',
+  },
+];
 
 
 import { useGLTF } from '../components/hooks/useGLTF.js';
@@ -50,6 +95,14 @@ const CubeModel = memo(({ scale = 1 }) => {
   return <primitive object={model} />;
 });
 
+// ─── AutoFitCamera ──────────────────────────────────────────────────────
+// Fits the camera to a group's bounding sphere, respecting BOTH vertical
+// and horizontal FOV (camera.fov is vertical only — horizontal is derived
+// via aspect, and on portrait screens it's narrower, so fitting against
+// vertical alone overflows the sides). Also reports the box center via
+// onTargetChange so the orbit target (drei OrbitControls + the custom
+// CameraOrbitController) stays synced to where the model actually is,
+// instead of orbiting around world origin.
 export function AutoFitCamera({
   groupRef,
   trigger,
@@ -89,11 +142,9 @@ export function AutoFitCamera({
 
     if (!Number.isFinite(radius) || radius <= 0) return;
 
-    // ── Fit against BOTH vertical and horizontal FOV, use whichever
-    // needs more distance. camera.fov is vertical; horizontal is derived
-    // via aspect. This is what was missing — the old code only checked
-    // vertical, so wide models overflowed the (narrower) horizontal cone
-    // on portrait screens.
+    // NOTE: this branch assumes a PerspectiveCamera (camera.fov). If
+    // `orthographic` is ever combined with autofit, this needs a separate
+    // zoom-based fit path — camera.fov is undefined on OrthographicCamera.
     const vFov = MathUtils.degToRad(camera.fov);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
 
@@ -101,7 +152,7 @@ export function AutoFitCamera({
     const distanceForWidth = radius / Math.sin(hFov / 2);
 
     const distance = Math.max(distanceForHeight, distanceForWidth);
-    const finalDistance = distance * 0.8; // padding, same as before
+    const finalDistance = distance * 0.8; // padding
 
     const direction = new Vector3(0.7, 0.5, 0.7).normalize();
     camera.position.copy(center).add(direction.clone().multiplyScalar(finalDistance));
@@ -122,14 +173,12 @@ export function AutoFitCamera({
 // ─── Context for 3D scene state ────────────────────────────────────────────
 const SceneContext = createContext();
 export const useScene = () => useContext(SceneContext);
+
 const canvasBackgrounds = [
   '#FFFFFF', '#E5E7EB', '#D6EAF8', '#D5F5E3', '#FDEBD0',
   '#374151', '#2F3E46', '#2C3E50', '#3E3E3E', '#1F2937',
 ];
-const BG_IMAGES = [
-  { id: 'nature', source: bg1, label: 'Nature' },
-  { id: 'gradient', source: bg2, label: 'Gradient' },
-];
+
 
 const TAP_MOVE_THRESHOLD = 10;
 const TAP_TIME_THRESHOLD = 300;
@@ -1252,6 +1301,33 @@ const AdvancedVerticalPanel = memo(({
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={[S.imageRow, { marginTop: 10 }]}
               >
+                {/* ── None / Default — reverts the selection (or whole
+                    model, if nothing is selected) back to the material it
+                    shipped with in the GLB. Uses the same `null` sentinel
+                    `selectedTextureName` already carries when a mesh has
+                    no applied texture, so this swatch highlights exactly
+                    when "default" is the active state. */}
+                <TouchableOpacity
+                  onPress={() => onApplyTexture(null)}
+                  activeOpacity={0.8}
+                  style={[
+                    S.imageThumbWrap,
+                    selectedTextureName === null && S.imageThumbActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      S.imageThumb,
+                      { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
+                    ]}
+                  >
+                    <Text style={{ color: MUTED, fontSize: 16, fontWeight: '700' }}>⌀</Text>
+                  </View>
+                  <Text style={S.imageThumbLabel} numberOfLines={1}>
+                    Default
+                  </Text>
+                </TouchableOpacity>
+
                 {Textures.map((t) => (
                   <TouchableOpacity
                     key={t.name}
@@ -1632,6 +1708,30 @@ const LiveControlDock = memo(({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={dockS.imageRow}
             >
+              {/* ── None / Default — same restore-to-shipped-material
+                  swatch as the drawer's Display tab, mirrored here so
+                  the live-control dock's Material tab has it too. */}
+              <TouchableOpacity
+                onPress={() => onApplyTexture(null)}
+                activeOpacity={0.8}
+                style={[
+                  dockS.imageThumbWrap,
+                  selectedTextureName === null && dockS.imageThumbActive,
+                ]}
+              >
+                <View
+                  style={[
+                    dockS.imageThumb,
+                    { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+                  ]}
+                >
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '700' }}>⌀</Text>
+                </View>
+                <Text style={dockS.imageThumbLabel} numberOfLines={1}>
+                  Default
+                </Text>
+              </TouchableOpacity>
+
               {Textures.map((t) => (
                 <TouchableOpacity
                   key={t.name}
@@ -1850,7 +1950,13 @@ const CanvaProvider = ({
   const [measurements, setMeasurements]       = useState(false);
   const [snapToGrid, setSnapToGrid]           = useState(false);
   const [transparency, setTransparency]       = useState(false);
+
+  // ── Orbit target — declared early (before anything that reads it: the
+  // memoized orbitTarget Vector3, changePlane, applySliderCamera, etc.)
+  // to avoid a temporal-dead-zone access. Keep every future reference to
+  // cameraTarget/setCameraTarget BELOW this line.
   const [cameraTarget, setCameraTarget] = useState([0, 0, 0]);
+
   // ── Live Slider Controls ────────────────────────────────────────────
   // A second, independent way to drive the camera + a couple of scene
   // settings — all by dragging sliders in a bottom dock instead of touch
@@ -1990,6 +2096,60 @@ const CanvaProvider = ({
   // Cleared whenever a scoped (single-part) apply happens instead.
   const wholeModelPendingTextureRef = useRef(null);
 
+  // ── ensureOwnMaterial — clones a mesh's material exactly once (first
+  // touch by ANY of highlight / applyMaterialToMesh / toggleHideTransparent),
+  // and snapshots the untouched original material's key fields at that
+  // same moment, onto mesh.userData. This snapshot is what
+  // resetMeshMaterial() below restores — it's the mesh's as-authored GLB
+  // material, independent of whatever the working clone has since become.
+  const ensureOwnMaterial = useCallback((mesh) => {
+    if (!mesh || !mesh.isMesh || !mesh.material) return;
+    if (mesh.userData.__ownMaterial) return;
+
+    const orig = mesh.material;
+    mesh.userData.__originalMaterialSnapshot = {
+      map: orig.map || null,
+      color: orig.color ? orig.color.clone() : new Color('#999999'),
+      metalness: orig.metalness !== undefined ? orig.metalness : 0.9,
+      roughness: orig.roughness !== undefined ? orig.roughness : 0.4,
+      roughnessMap: orig.roughnessMap || null,
+      metalnessMap: orig.metalnessMap || null,
+      normalMap: orig.normalMap || null,
+    };
+
+    mesh.material = orig.clone();
+    mesh.userData.__ownMaterial = true;
+  }, []);
+
+  // ── resetMeshMaterial — restores a mesh's material to the snapshot
+  // ensureOwnMaterial captured at first touch. No-op if the mesh was
+  // never touched (nothing to revert to — it's already at its default).
+  const resetMeshMaterial = useCallback((mesh) => {
+    if (!mesh || !mesh.isMesh || !mesh.material) return;
+    const snapshot = mesh.userData.__originalMaterialSnapshot;
+    if (!snapshot) return;
+
+    const mat = mesh.material;
+    mat.map = snapshot.map;
+    mat.color.copy(snapshot.color);
+    mat.metalness = snapshot.metalness;
+    mat.roughness = snapshot.roughness;
+    mat.roughnessMap = snapshot.roughnessMap;
+    mat.metalnessMap = snapshot.metalnessMap;
+    mat.normalMap = snapshot.normalMap;
+    mat.needsUpdate = true;
+
+    delete mesh.userData.__textureName;
+
+    // Keep the highlight snapshot's "original color" in sync, same as
+    // applyMaterialToMesh already does after a forward apply — so a
+    // later clearHighlight() restores to the just-reset color, not a
+    // stale pre-reset one.
+    if (selectedRef.current.mesh === mesh) {
+      selectedRef.current.originalColor = mat.color.clone();
+    }
+  }, []);
+
   const clearHighlight = useCallback(() => {
     const sel = selectedRef.current;
     if (sel.mesh && sel.mesh.material) {
@@ -2001,10 +2161,7 @@ const CanvaProvider = ({
 
   const applyHighlight = useCallback((mesh) => {
     if (!mesh || !mesh.isMesh || !mesh.material) return;
-    if (!mesh.userData.__ownMaterial) {
-      mesh.material = mesh.material.clone();
-      mesh.userData.__ownMaterial = true;
-    }
+    ensureOwnMaterial(mesh);
 
     selectedRef.current = {
       mesh,
@@ -2013,7 +2170,7 @@ const CanvaProvider = ({
     };
 
     mesh.material.color.lerp(TAP_OVERLAY_COLOR, TAP_OVERLAY_ALPHA);
-  }, []);
+  }, [ensureOwnMaterial]);
 
   // Clear any highlight on unmount so a stale mesh reference never lingers.
   useEffect(() => {
@@ -2050,10 +2207,7 @@ const CanvaProvider = ({
       generateBoxUV(mesh.geometry);
     }
 
-    if (!mesh.userData.__ownMaterial) {
-      mesh.material = mesh.material.clone();
-      mesh.userData.__ownMaterial = true;
-    }
+    ensureOwnMaterial(mesh);
 
     const mat = mesh.material;
     if (texture) mat.map = texture;
@@ -2071,16 +2225,37 @@ const CanvaProvider = ({
     if (selectedRef.current.mesh === mesh) {
       selectedRef.current.originalColor = mat.color.clone();
     }
-  }, []);
+  }, [ensureOwnMaterial]);
 
   const handleApplyTexture = useCallback((name) => {
+    // ── None / Default — revert to the model's original (as-shipped)
+    // material. Uses the same `null` sentinel selectedTextureName already
+    // carries for "no texture applied", so the UI swatch and this handler
+    // agree on what "default" means without a separate flag.
+    if (name === null) {
+      const mesh = selectedRef.current.mesh;
+      if (mesh) {
+        wholeModelPendingTextureRef.current = null;
+        resetMeshMaterial(mesh);
+        setSelectedTextureName(null);
+        return;
+      }
+
+      const scene = bridgeRef.current.scene;
+      if (!scene) return;
+      scene.traverse((obj) => {
+        if (obj.isMesh) resetMeshMaterial(obj);
+      });
+      wholeModelPendingTextureRef.current = null;
+      setSelectedTextureName(null);
+      return;
+    }
+
     const textureDef = Textures.find((t) => t.name === name);
     if (!textureDef) {
       return;
     }
     const texture = bridgeRef.current.textures?.[name] || null;
-    if (!texture) {
-    }
 
     const mesh = selectedRef.current.mesh;
     if (mesh) {
@@ -2099,16 +2274,14 @@ const CanvaProvider = ({
     if (!scene) {
       return;
     }
-    let count = 0;
     scene.traverse((obj) => {
       if (obj.isMesh) {
         applyMaterialToMesh(obj, textureDef, texture);
-        count += 1;
       }
     });
     wholeModelPendingTextureRef.current = name;
     setSelectedTextureName(name);
-  }, [applyMaterialToMesh]);
+  }, [applyMaterialToMesh, resetMeshMaterial]);
 
   // Catch-up: if a swatch was applied before TextureLibrary finished
   // loading (texture was still null at apply-time), color/roughness/
@@ -2151,10 +2324,7 @@ const CanvaProvider = ({
   // TAP_HIDE_OPACITY comment above for why.
   const toggleHideTransparent = useCallback((mesh) => {
     if (!mesh || !mesh.isMesh || !mesh.material) return false;
-    if (!mesh.userData.__ownMaterial) {
-      mesh.material = mesh.material.clone();
-      mesh.userData.__ownMaterial = true;
-    }
+    ensureOwnMaterial(mesh);
 
     const hiddenMap = hiddenMeshesRef.current;
 
@@ -2173,7 +2343,7 @@ const CanvaProvider = ({
     mesh.material.transparent = true;
     mesh.material.opacity = TAP_HIDE_OPACITY;
     return true; // now hidden
-  }, []);
+  }, [ensureOwnMaterial]);
 
   // Restore any dimmed parts on unmount so a stale material reference
   // never lingers past this CanvaProvider instance.
@@ -2383,15 +2553,15 @@ function CubeCameraSync() {
   return null;
 }
 
-const orbitTarget = useMemo(
-  () => new Vector3(
-    cameraTarget[0],
-    cameraTarget[1],
-    cameraTarget[2]
-  ),
-  [cameraTarget]
-);
-  
+  const orbitTarget = useMemo(
+    () => new Vector3(
+      cameraTarget[0],
+      cameraTarget[1],
+      cameraTarget[2]
+    ),
+    [cameraTarget]
+  );
+
   // Keep the frustum in sync with size on the SAME camera instance — no
   // identity swap, no position reset, no flicker.
   useEffect(() => {
@@ -2595,9 +2765,6 @@ const orbitTarget = useMemo(
     setPanelOpen(false);
   }, [orthographic]);
 
-
-
-
   const toggleGesture        = useCallback(() => setCustomGesture(g => !g), []);
   const togglePanel          = useCallback(() => setPanelOpen(p => !p), []);
   const toggleGrid           = useCallback(() => setShowGrid(g => !g), []);
@@ -2774,7 +2941,7 @@ const orbitTarget = useMemo(
       measurements,
       snapToGrid,
       zoomLevel,
-        setCameraTarget,
+      setCameraTarget,
     }), [renderMode, wireframe, shadows, transparency, measurements, snapToGrid, zoomLevel, setCameraTarget])}>
       <ErrorBoundary>
         <View style={[S.root, style]} onLayout={handleLayout}>

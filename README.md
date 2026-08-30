@@ -7,144 +7,21 @@ Now it is "if ( renderer.debug.checkShaderErrors && program )".
 free glb download resources=[https://www.cgtrader.com/ ]
 change glb to jsx=[https://gltf.pmnd.rs/]
 
-
-
-    audioListener: AudioListenerProps;
-    positionalAudio: PositionalAudioProps;
-    mesh: MeshProps;
-    instancedMesh: InstancedMeshProps;
-    scene: SceneProps;
-    sprite: SpriteProps;
-    lOD: LODProps;
-    skinnedMesh: SkinnedMeshProps;
-    skeleton: SkeletonProps;
-    bone: BoneProps;
-    lineSegments: LineSegmentsProps;
-    lineLoop: LineLoopProps;
-    points: PointsProps;
-    group: GroupProps;
-    camera: CameraProps;
-    perspectiveCamera: PerspectiveCameraProps;
-    orthographicCamera: OrthographicCameraProps;
-    cubeCamera: CubeCameraProps;
-    arrayCamera: ArrayCameraProps;
-    instancedBufferGeometry: InstancedBufferGeometryProps;
-    bufferGeometry: BufferGeometryProps;
-    boxBufferGeometry: BoxBufferGeometryProps;
-    circleBufferGeometry: CircleBufferGeometryProps;
-    coneBufferGeometry: ConeBufferGeometryProps;
-    cylinderBufferGeometry: CylinderBufferGeometryProps;
-    dodecahedronBufferGeometry: DodecahedronBufferGeometryProps;
-    extrudeBufferGeometry: ExtrudeBufferGeometryProps;
-    icosahedronBufferGeometry: IcosahedronBufferGeometryProps;
-    latheBufferGeometry: LatheBufferGeometryProps;
-    octahedronBufferGeometry: OctahedronBufferGeometryProps;
-    planeBufferGeometry: PlaneBufferGeometryProps;
-    polyhedronBufferGeometry: PolyhedronBufferGeometryProps;
-    ringBufferGeometry: RingBufferGeometryProps;
-    shapeBufferGeometry: ShapeBufferGeometryProps;
-    sphereBufferGeometry: SphereBufferGeometryProps;
-    tetrahedronBufferGeometry: TetrahedronBufferGeometryProps;
-    torusBufferGeometry: TorusBufferGeometryProps;
-    torusKnotBufferGeometry: TorusKnotBufferGeometryProps;
-    tubeBufferGeometry: TubeBufferGeometryProps;
-    wireframeGeometry: WireframeGeometryProps;
-    tetrahedronGeometry: TetrahedronGeometryProps;
-    octahedronGeometry: OctahedronGeometryProps;
-    icosahedronGeometry: IcosahedronGeometryProps;
-    dodecahedronGeometry: DodecahedronGeometryProps;
-    polyhedronGeometry: PolyhedronGeometryProps;
-    tubeGeometry: TubeGeometryProps;
-    torusKnotGeometry: TorusKnotGeometryProps;
-    torusGeometry: TorusGeometryProps;
-    sphereGeometry: SphereGeometryProps;
-    ringGeometry: RingGeometryProps;
-    planeGeometry: PlaneGeometryProps;
-    latheGeometry: LatheGeometryProps;
-    shapeGeometry: ShapeGeometryProps;
-    extrudeGeometry: ExtrudeGeometryProps;
-    edgesGeometry: EdgesGeometryProps;
-    coneGeometry: ConeGeometryProps;
-    cylinderGeometry: CylinderGeometryProps;
-    circleGeometry: CircleGeometryProps;
-    boxGeometry: BoxGeometryProps;
-    capsuleGeometry: CapsuleGeometryProps;
-    material: MaterialProps;
-
-    shadowMaterial: ShadowMaterialProps;
-    spriteMaterial: SpriteMaterialProps;
-    rawShaderMaterial: RawShaderMaterialProps;
-    shaderMaterial: ShaderMaterialProps;
-    pointsMaterial: PointsMaterialProps;
-    
-    meshPhysicalMaterial: MeshPhysicalMaterialProps;
-    meshStandardMaterial: MeshStandardMaterialProps;
-    meshPhongMaterial: MeshPhongMaterialProps;
-    meshToonMaterial: MeshToonMaterialProps;
-    meshNormalMaterial: MeshNormalMaterialProps;
-    meshLambertMaterial: MeshLambertMaterialProps;
-    meshDepthMaterial: MeshDepthMaterialProps;
-    meshDistanceMaterial: MeshDistanceMaterialProps;
-    meshBasicMaterial: MeshBasicMaterialProps;
-    meshMatcapMaterial: MeshMatcapMaterialProps;
-    lineDashedMaterial: LineDashedMaterialProps;
-    lineBasicMaterial: LineBasicMaterialProps;
-
-    primitive: PrimitiveProps;
-    light: LightProps;
-    spotLightShadow: SpotLightShadowProps;
-    spotLight: SpotLightProps;
-    pointLight: PointLightProps;
-    rectAreaLight: RectAreaLightProps;
-    hemisphereLight: HemisphereLightProps;
-    directionalLightShadow: DirectionalLightShadowProps;
-    directionalLight: DirectionalLightProps;
-    ambientLight: AmbientLightProps;
-    lightShadow: LightShadowProps;
-    ambientLightProbe: AmbientLightProbeProps;
-    hemisphereLightProbe: HemisphereLightProbeProps;
-    lightProbe: LightProbeProps;
-    spotLightHelper: SpotLightHelperProps;
-    skeletonHelper: SkeletonHelperProps;
-    pointLightHelper: PointLightHelperProps;
-    hemisphereLightHelper: HemisphereLightHelperProps;
-    gridHelper: GridHelperProps;
-    polarGridHelper: PolarGridHelperProps;
-    directionalLightHelper: DirectionalLightHelperProps;
-    cameraHelper: CameraHelperProps;
-    boxHelper: BoxHelperProps;
-    box3Helper: Box3HelperProps;
-    planeHelper: PlaneHelperProps;
-    arrowHelper: ArrowHelperProps;
-    axesHelper: AxesHelperProps;
-    texture: TextureProps;
-    videoTexture: VideoTextureProps;
-    dataTexture: DataTextureProps;
-    dataTexture3D: DataTexture3DProps;
-    compressedTexture: CompressedTextureProps;
-    cubeTexture: CubeTextureProps;
-    canvasTexture: CanvasTextureProps;
-    depthTexture: DepthTextureProps;
-    raycaster: RaycasterProps;
-    vector2: Vector2Props;
-    vector3: Vector3Props;
-    vector4: Vector4Props;
-    euler: EulerProps;
-    matrix3: Matrix3Props;
-    matrix4: Matrix4Props;
-    quaternion: QuaternionProps;
-    bufferAttribute: BufferAttributeProps;
-    float16BufferAttribute: Float16BufferAttributeProps;
-    float32BufferAttribute: Float32BufferAttributeProps;
-    float64BufferAttribute: Float64BufferAttributeProps;
-    int8BufferAttribute: Int8BufferAttributeProps;
-    int16BufferAttribute: Int16BufferAttributeProps;
-    int32BufferAttribute: Int32BufferAttributeProps;
-    uint8BufferAttribute: Uint8BufferAttributeProps;
-    uint16BufferAttribute: Uint16BufferAttributeProps;
-    uint32BufferAttribute: Uint32BufferAttributeProps;
-    instancedBufferAttribute: InstancedBufferAttributeProps;
-    color: ColorProps;
-    fog: FogProps;
-    fogExp2: FogExp2Props;
-    shape: ShapeProps;
+cloude Ai ->>> [
+    husain68644@gmail.com:{
+         AutoCad: https://claude.ai/chat/daaffb8c-9268-457b-9046-3142a528e272
+    },
+    husain0587@gmail.com:{
+         cncTurning:https://claude.ai/chat/e5d10ae7-7e36-4bd4-bc1c-254e46a2a994
+         canvaProvider:https://claude.ai/chat/265541ab-d8fb-4ef5-8b2b-cc3304b1275c
+         glbPreview: https://claude.ai/chat/e259454e-7dc5-4d7d-953f-f72c9c49ab38
+         calculators: https://claude.ai/chat/774ce2b0-c970-49b5-afed-366df04c38cf
+    },
+    rewaweb@gmail.com:{
+      freeHandTurning:-https://claude.ai/chat/739a04d3-b20f-4ae2-9a31-6360ef2d2462,
+      ReactJs : https://claude.ai/chat/b02ad8d8-f19e-4563-9422-84ff0ada8501
+    },
+    aafiyanaj512@gmail.com:{
+      Robotics: https://claude.ai/chat/bbd65e38-86ee-4cc1-8d8d-c2534298b632,
+    }
+]
