@@ -319,7 +319,7 @@ const SimulatorCard = React.memo(({ simulator, onPress }) => {
           </View>
 
           <View style={styles.simCardTextWrap}>
-            <Text style={styles.simCardName} numberOfLines={1}>{simulator.label}</Text>
+            <Text style={styles.simCardName} numberOfLines={2}>{simulator.label}</Text>
             <Text style={styles.simCardDesc} numberOfLines={2}>{simulator.desc}</Text>
           </View>
 
@@ -1319,7 +1319,7 @@ const styles = StyleSheet.create({
   simCardBadge: {
     position: 'absolute',
     top: 2,
-    left: 2,
+    right: 2,
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -1331,16 +1331,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   simCardTextWrap: {
-    paddingHorizontal: 8,
+    height:'100%',
+    justifyContent:'space-between',
+    paddingHorizontal: 5,
     paddingBottom: 5,
     zIndex: 2,
   },
   simCardName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 2,
-    maxWidth:'80%'
+    marginTop: 20,
+    maxWidth:'60%'
   },
   simCardDesc: {
     fontSize: 9,
