@@ -353,7 +353,7 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
           resizeMode="cover"
         >
           <View style={styles.cardEmojiBadgeSmall}>
-            <Text style={styles.cardEmojiBadgeTextSmall}>{screen.emoji}</Text>
+            <Text style={styles.cardEmojiBadgeTextSmall}>{screen.emoji}</Text>  
           </View>
         </ImageBackground>
 
@@ -379,11 +379,10 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
         imageStyle={styles.cardIconImage}
         resizeMode="cover"
       >
-        <View style={styles.cardEmojiBadge}>
+      </ImageBackground>
+         <View style={styles.cardEmojiBadge}>
           <Text style={styles.cardEmojiBadgeText}>{screen.emoji}</Text>
         </View>
-      </ImageBackground>
-
       <View style={styles.cardBody}>
         <Text style={styles.cardName} numberOfLines={2}>{screen.label}</Text>
         <Text style={styles.cardDesc} numberOfLines={2}>{screen.desc}</Text>
@@ -1187,15 +1186,15 @@ const styles = StyleSheet.create({
   },
   cardEmojiBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    bottom: 5,
+    left: 5,
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    // backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: '#f7eaea',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 2,
