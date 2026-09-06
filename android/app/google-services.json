@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "815584273699",
+    "project_id": "rnthreed",
+    "storage_bucket": "rnthreed.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:815584273699:android:9ecc6babc600f1532fd896",
+        "android_client_info": {
+          "package_name": "com.threeapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "815584273699-h985qvlf6hmgo5n064681njuji11jcr8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.threeapp",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "815584273699-3dc3i5qkquh0cpfi4nno14odgt6aptuf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYv50lmDG-dFmV9qUIJC4dwdCfRPlj9LI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "815584273699-3dc3i5qkquh0cpfi4nno14odgt6aptuf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

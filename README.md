@@ -20,8 +20,15 @@ cloude Ai ->>> [
     rewaweb@gmail.com:{
       freeHandTurning:-https://claude.ai/chat/739a04d3-b20f-4ae2-9a31-6360ef2d2462,
       ReactJs : https://claude.ai/chat/b02ad8d8-f19e-4563-9422-84ff0ada8501
+      expressThree : https://claude.ai/chat/ef2e145d-c481-461c-90d4-07e3522278bc
     },
     aafiyanaj512@gmail.com:{
       Robotics: https://claude.ai/chat/bbd65e38-86ee-4cc1-8d8d-c2534298b632,
     }
 ]
+
+
+//playstore related
+Privacy Policy page-  
+
+testing@gmail.com,testing1234

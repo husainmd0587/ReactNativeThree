@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground, 
-  StatusBar, ScrollView, TextInput, FlatList, Dimensions, Animated 
+  StatusBar, ScrollView, TextInput, FlatList, Dimensions, Animated
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -248,7 +248,6 @@ const FeaturedSimulatorScroll = React.memo(({ simulators, onSimulatorPress }) =>
         onScroll={handleScroll}
         scrollEventThrottle={16}
         initialNumToRender={3}
-        showsHorizontalScrollIndicator={false}
         // Add these props for better snapping
         pagingEnabled={false}
         disableIntervalMomentum={true}
@@ -464,6 +463,11 @@ const NavigationMain = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+
+
+;
+
+
   useEffect(() => {      
     const loadViewMode = async () => {
       try {
@@ -600,7 +604,7 @@ return modules.filter((screen) => {
    
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffff" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" translucent={false} />
 
         {/* Header */}
       <View style={styles.headerContainer}>
@@ -829,7 +833,14 @@ const AllScreens = [
 // ── Navigation Content ──
 function MainStack() {
   return (
-    <NavigationContainer>
+       <NavigationContainer
+      onStateChange={(state) => {
+        console.log(
+          'NAV STATE:',
+          state?.routes?.map(r => r.name)
+        );
+      }}
+    >
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home_Main" component={NavigationMain} />
         {/* app utility screens that not show in ui*/}

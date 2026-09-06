@@ -9,6 +9,7 @@ import RPMCalculator from './allCalculators/RPM_cutting_speed'
 import ScientificCalculator from './allCalculators/ScientificCalculator'
 import UnitConverter from './allCalculators/unitConvertor'
 import BeamDeflectionCalculator from './allCalculators/BeamdeflectionCalculator.js'
+import GearDesignCalculator from './allCalculators/GearDesignCalculator.js'
 
 const Stack = createNativeStackNavigator()
 const MODULES = [
@@ -57,6 +58,16 @@ const MODULES = [
   label:'Beam Deflection Calculator',
   screen:BeamDeflectionCalculator,
   description:'calculate Beam deflection',  
+  badge:'RPM',
+  icon:'🔄',
+  accent:'#ec4bbc',
+  accentBg:'#758bf5'
+},
+{ 
+  name:'GearDesignCalculator',
+  label:'Gear Design Calculator',
+  screen:GearDesignCalculator,
+  description:'calculate gear related data',  
   badge:'RPM',
   icon:'🔄',
   accent:'#7f90f3',

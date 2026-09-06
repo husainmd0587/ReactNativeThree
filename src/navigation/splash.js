@@ -103,7 +103,7 @@ const SplashScreen = ({ onFinish }) => {
         resizeMode="stretch"
       />
       
-      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      <StatusBar backgroundColor="#fff" barStyle="dark-content" translucent={false} />
       
       <View style={styles.overlay}>
         <View style={styles.content}>

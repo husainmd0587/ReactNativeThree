@@ -1,38 +1,68 @@
-//React native Related provider
-import { StyleSheet, Text, View, StatusBar } from 'react-native'
-import React from 'react'
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
+// React Native related providers
+import React from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets
+} from 'react-native-safe-area-context';
+
 import { store } from './src/store';
 import FirstStack from './src/navigation/firstStack';
-import { Worker } from './src/all_glb/worker';
-import { PortalProvider } from './src/utils/ThreeJs_Utils/portal'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PortalProvider } from './src/utils/ThreeJs_Utils/portal';
+import { suppressWarnings } from './src/utils/config/surppressWarning';
 
-import { suppressWarnings } from './src/utils/config/surppressWarning'
-// Suppress warnings on app start
 suppressWarnings();
-
-
 
 const queryClient = new QueryClient();
 
-const App = () => {
+// Renders the white block behind the status bar.
+// Must live INSIDE SafeAreaProvider so useSafeAreaInsets has a provider to read from.
+const StatusBarBackground = () => {
+  const insets = useSafeAreaInsets();
+  return <View style={{ height: insets.top, backgroundColor: '#fff' }} />;
+};
 
+const AppContent = () => {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" hidden={false} translucent={false} />
-      <Provider store={store}>
-           <QueryClientProvider client={queryClient}>
-              <PortalProvider>
-                  <FirstStack />
-              </PortalProvider>
-           </QueryClientProvider>
-      </Provider>
+    <>
+      <StatusBar barStyle="dark-content" />
+      <StatusBarBackground />
+
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <Provider store={store}>
+          <QueryClientProvider client={queryClient}>
+            <PortalProvider>
+              <FirstStack />
+            </PortalProvider>
+          </QueryClientProvider>
+        </Provider>
+      </SafeAreaView>
+    </>
+  );
+};
+
+const App = () => {
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 };
 
-export default App
+export default App;
 
-const styles = StyleSheet.create({}) 
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0B1220',
+  },
+});
