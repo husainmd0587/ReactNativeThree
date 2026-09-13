@@ -20,6 +20,7 @@ const Header = ({
   drawerBottomItem,
   onDrawerBottomPress,
   navigation,
+  closed_testing = false,
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -152,8 +153,10 @@ const Header = ({
             ]}
             onPress={() => navigation?.navigate('Profile')}
             hitSlop={10}
+            disabled={closed_testing }
           >
             <Text style={s.profileIcon}>👤</Text>
+            <Text style={{position:'absolute', bottom:0, right:0, fontSize:12}}>🔒</Text>
           </Pressable>
         </View>
       </View>
@@ -231,7 +234,16 @@ const Header = ({
                     pressed && s.drawerItemPressed,
                   ]}
                   onPress={() => handleDrawerPress(item)}
+                  disabled={closed_testing }
                 >
+
+                  {/* delete after complete closed testing */}
+                  <View style={{position:'absolute',flexDirection:'row', left:0, bottom:0, backgroundColor:'rgba(69, 69, 70,0)', 
+                    width:'100%', height:'100%', alignItems:'flex-end', justifyContent:'flex-end'}}>
+                    <Text style={{fontSize:12}}>🔒</Text>
+                    <Text style={{color:'#1120a1',fontSize:10}}>under development</Text>
+                   </View>
+
                   <View style={s.drawerEmojiContainer}>
                     <Text style={s.drawerItemEmoji}>
                       {item.emoji || '•'}
@@ -254,6 +266,7 @@ const Header = ({
                     pressed && s.drawerItemPressed,
                   ]}
                   onPress={handleBottomPress}
+                  disabled={closed_testing }
                 >
                   <View style={s.drawerEmojiContainer}>
                     <Text style={s.drawerItemEmoji}>
@@ -266,6 +279,8 @@ const Header = ({
                   </Text>
 
                   <Text style={s.drawerItemArrow}>›</Text>
+
+
                 </Pressable>
               )}
             </ScrollView>

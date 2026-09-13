@@ -1,7 +1,7 @@
 {
   "name": "threeapp",
-  "displayName": "threeapp",
-    "expo": {
+  "displayName": "Engineering 3D",
+  "expo": {
     "assetBundlePatterns": [
       "assets/**"
     ]

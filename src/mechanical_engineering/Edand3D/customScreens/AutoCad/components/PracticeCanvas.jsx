@@ -4,6 +4,7 @@ import { Canvas, Path, Skia, Text as SkiaText, useFont } from '@shopify/react-na
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, useDerivedValue, runOnJS } from 'react-native-reanimated';
 import { buildShapeVisuals } from '../engine/geometry/shapeVisuals';
+import { buildSplinePath } from '../engine/operations/spline';
 import { useSettings } from '../state/SettingsContext';
 
 const CANVAS_HEIGHT = 280;
@@ -16,7 +17,7 @@ const CROSSHAIR_SIZE = 22; // px, each arm's length from the pickbox out
 const PICKBOX_SIZE = 3; // px, half-width of the center square
 
 const DRAG_TYPES = new Set([
-  'line', 'circle', 'rectangle',
+  'line', 'circle', 'rectangle', 'ellipse', 'polygon',
   'move', 'copy', 'rotate', 'scale', 'mirror', 'offset', 'array',
 ]);
 
@@ -77,6 +78,7 @@ export default function PracticeCanvas({
   selectedId,
   selectedShape,
   showDimensions,
+  polygonSideCount,
   onDrawComplete,
   onCanvasTap,
   onCanvasLongPress,
@@ -85,7 +87,7 @@ export default function PracticeCanvas({
   const canvasWidth = width - SCREEN_PADDING;
   const font = useFont(require('../../../../../assets/fonts/roboto.ttf'), 12);
   const { settings } = useSettings();
-  const isTapType = practiceType === 'arc' || practiceType === 'polyline';
+  const isTapType = practiceType === 'arc' || practiceType === 'polyline' || practiceType === 'spline';
   // Captured fresh each render (plain JS, closed over by the worklets
   // below) so a drag-to-place-a-point knows where to rubber-band FROM —
   // the last point already confirmed in the current draft, or null if
@@ -236,7 +238,7 @@ export default function PracticeCanvas({
     });
 
   const longPress = Gesture.LongPress()
-    .enabled(practiceType === 'polyline')
+    .enabled(practiceType === 'polyline' || practiceType === 'spline')
     .minDuration(450)
     .onStart(() => {
       'worklet';
@@ -267,6 +269,42 @@ export default function PracticeCanvas({
         currentY.value - startY.value,
       );
       path.addCircle(startX.value, startY.value, r);
+    } else if (practiceType === 'ellipse') {
+      // Same four-cubic-Bezier approximation shapeVisuals.js uses, sampled
+      // as a 64-gon for the live preview. Duplicated here (not shared)
+      // because this runs inside a worklet.
+      const cx = startX.value;
+      const cy = startY.value;
+      const ex = currentX.value;
+      const ey = currentY.value;
+      const major = Math.hypot(ex - cx, ey - cy) || 1;
+      const minor = major * 0.6;
+      const ang = Math.atan2(ey - cy, ex - cx);
+      const cA = Math.cos(ang);
+      const sA = Math.sin(ang);
+      const N = 64;
+      path.moveTo(cx + major * cA, cy + major * sA);
+      for (let i = 1; i <= N; i += 1) {
+        const t = (i / N) * 2 * Math.PI;
+        const lx = major * Math.cos(t);
+        const ly = minor * Math.sin(t);
+        path.lineTo(cx + lx * cA - ly * sA, cy + lx * sA + ly * cA);
+      }
+      path.close();
+    } else if (practiceType === 'polygon') {
+      const cx = startX.value;
+      const cy = startY.value;
+      const ex = currentX.value;
+      const ey = currentY.value;
+      const r = Math.hypot(ex - cx, ey - cy) || 1;
+      const base = Math.atan2(ey - cy, ex - cx);
+      const sides = polygonSideCount || 6;
+      path.moveTo(cx + r * Math.cos(base), cy + r * Math.sin(base));
+      for (let i = 1; i < sides; i += 1) {
+        const a = base + (i * 2 * Math.PI) / sides;
+        path.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      }
+      path.close();
     }
     return path;
   });
@@ -308,6 +346,39 @@ export default function PracticeCanvas({
     } else if (shapeType === 'circle' && rotated.length === 2) {
       const r = Math.hypot(rotated[1].x - rotated[0].x, rotated[1].y - rotated[0].y);
       path.addCircle(rotated[0].x, rotated[0].y, r);
+    } else if (shapeType === 'ellipse' && rotated.length === 2) {
+      const cx = rotated[0].x;
+      const cy = rotated[0].y;
+      const ex = rotated[1].x;
+      const ey = rotated[1].y;
+      const major = Math.hypot(ex - cx, ey - cy) || 1;
+      const minor = major * 0.6;
+      const ang = Math.atan2(ey - cy, ex - cx);
+      const cA = Math.cos(ang);
+      const sA = Math.sin(ang);
+      const N = 64;
+      path.moveTo(cx + major * cA, cy + major * sA);
+      for (let i = 1; i <= N; i += 1) {
+        const t = (i / N) * 2 * Math.PI;
+        const lx = major * Math.cos(t);
+        const ly = minor * Math.sin(t);
+        path.lineTo(cx + lx * cA - ly * sA, cy + lx * sA + ly * cA);
+      }
+      path.close();
+    } else if (shapeType === 'polygon' && rotated.length === 2) {
+      const cx = rotated[0].x;
+      const cy = rotated[0].y;
+      const ex = rotated[1].x;
+      const ey = rotated[1].y;
+      const r = Math.hypot(ex - cx, ey - cy) || 1;
+      const base = Math.atan2(ey - cy, ex - cx);
+      const sides = polygonSideCount || 6;
+      path.moveTo(cx + r * Math.cos(base), cy + r * Math.sin(base));
+      for (let i = 1; i < sides; i += 1) {
+        const a = base + (i * 2 * Math.PI) / sides;
+        path.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      }
+      path.close();
     }
     return path;
   });
@@ -365,7 +436,7 @@ export default function PracticeCanvas({
       path.lineTo(d2x, d2y);
       addArrow(path, d1x, d1y, -ux, -uy);
       addArrow(path, d2x, d2y, ux, uy);
-    } else if (practiceType === 'circle') {
+    } else if (practiceType === 'circle' || practiceType === 'ellipse') {
       const cx = startX.value;
       const cy = startY.value;
       const ex = currentX.value;
@@ -373,7 +444,6 @@ export default function PracticeCanvas({
       const r = Math.hypot(ex - cx, ey - cy) || 1;
       const ux = (ex - cx) / r;
       const uy = (ey - cy) / r;
-
       path.moveTo(cx, cy);
       path.lineTo(ex, ey);
       path.moveTo(cx - 4, cy);
@@ -381,6 +451,10 @@ export default function PracticeCanvas({
       path.moveTo(cx, cy - 4);
       path.lineTo(cx, cy + 4);
       addArrow(path, ex, ey, ux, uy);
+    } else if (practiceType === 'polygon') {
+      const cx = startX.value;
+      const cy = startY.value;
+      path.addCircle(cx, cy, 2);
     } else if (practiceType === 'rectangle') {
       const left = Math.min(startX.value, currentX.value);
       const right = Math.max(startX.value, currentX.value);
@@ -425,6 +499,14 @@ export default function PracticeCanvas({
       const radiusMm = Math.round((Math.hypot(dx, dy) / PX_PER_MM) * 10) / 10;
       return `R ${radiusMm} mm`;
     }
+    if (practiceType === 'ellipse') {
+      const majorMm = Math.round((Math.hypot(dx, dy) / PX_PER_MM) * 10) / 10;
+      return `R ${majorMm} mm`;
+    }
+    if (practiceType === 'polygon') {
+      const radiusMm = Math.round((Math.hypot(dx, dy) / PX_PER_MM) * 10) / 10;
+      return `${polygonSideCount || 6} sides   R ${radiusMm} mm`;
+    }
     if (practiceType === 'rectangle') {
       const widthMm = Math.round((Math.abs(dx) / PX_PER_MM) * 10) / 10;
       return `${widthMm} mm`;
@@ -433,7 +515,9 @@ export default function PracticeCanvas({
   });
 
   const livePrimaryX = useDerivedValue(() => {
-    if (practiceType === 'circle') return (startX.value + currentX.value) / 2 + 8;
+    if (practiceType === 'circle' || practiceType === 'ellipse' || practiceType === 'polygon') {
+      return (startX.value + currentX.value) / 2 + 8;
+    }
     if (practiceType === 'rectangle') return (startX.value + currentX.value) / 2 - 24;
     return (startX.value + currentX.value) / 2 - 30;
   });
@@ -445,7 +529,9 @@ export default function PracticeCanvas({
       const nlen = Math.hypot(nx, ny) || 1;
       return (startY.value + currentY.value) / 2 + (ny / nlen) * DIM_OFFSET - 8;
     }
-    if (practiceType === 'circle') return (startY.value + currentY.value) / 2 - 8;
+    if (practiceType === 'circle' || practiceType === 'ellipse' || practiceType === 'polygon') {
+      return (startY.value + currentY.value) / 2 - 8;
+    }
     if (practiceType === 'rectangle') {
       return Math.max(startY.value, currentY.value) + DIM_OFFSET + 16;
     }
@@ -471,7 +557,7 @@ export default function PracticeCanvas({
   const committedVisuals = useMemo(
     () => shapes.map((shape) => ({
       id: shape.id,
-      ...buildShapeVisuals(shape.type, shape.points),
+      ...buildShapeVisuals(shape.type, shape.points, shape.sides),
     })),
     [shapes],
   );
@@ -484,17 +570,30 @@ export default function PracticeCanvas({
     if (!draftPoints || draftPoints.length === 0) return null;
 
     const linePath = Skia.Path.Make();
-    draftPoints.forEach((pt, i) => {
-      if (i === 0) linePath.moveTo(pt.x, pt.y);
-      else linePath.lineTo(pt.x, pt.y);
-    });
+    if (practiceType === 'spline' && draftPoints.length >= 2) {
+      // Smooth Catmull-Rom curve through the placed points, so the draft
+      // looks exactly like the committed shape (this runs on the JS
+      // thread in a useMemo, so it can call the shared helper — the
+      // worklet previews below are the ones that have to stay
+      // self-contained).
+      const samples = buildSplinePath(draftPoints);
+      samples.forEach((pt, i) => {
+        if (i === 0) linePath.moveTo(pt.x, pt.y);
+        else linePath.lineTo(pt.x, pt.y);
+      });
+    } else {
+      draftPoints.forEach((pt, i) => {
+        if (i === 0) linePath.moveTo(pt.x, pt.y);
+        else linePath.lineTo(pt.x, pt.y);
+      });
+    }
     const dotsPath = Skia.Path.Make();
     draftPoints.forEach((pt) => dotsPath.addCircle(pt.x, pt.y, 3));
 
     let label = '';
     let labelX = 0;
     let labelY = 0;
-    if (practiceType === 'polyline' && draftPoints.length >= 2) {
+    if ((practiceType === 'polyline' || practiceType === 'spline') && draftPoints.length >= 2) {
       let totalPx = 0;
       for (let i = 1; i < draftPoints.length; i += 1) {
         totalPx += Math.hypot(
@@ -504,7 +603,9 @@ export default function PracticeCanvas({
       }
       const totalMm = Math.round((totalPx / PX_PER_MM) * 10) / 10;
       const last = draftPoints[draftPoints.length - 1];
-      label = `${draftPoints.length - 1} seg so far   ${totalMm} mm`;
+      label = practiceType === 'spline'
+        ? `${draftPoints.length} pts   ${totalMm} mm`
+        : `${draftPoints.length - 1} seg so far   ${totalMm} mm`;
       labelX = last.x + 8;
       labelY = last.y - 8;
     }

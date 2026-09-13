@@ -1,3 +1,6 @@
+
+const CLOSED_TESTING=false; // Set to false to disable closed testing features
+
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image, ImageBackground, 
@@ -28,6 +31,8 @@ import FreehandTurning from '../turning_milling/customScreens/freehandTurning/Fr
 import CncSimulatorPro from '../turning_milling/customScreens/cnc/CncSimulatorPro.js';
 import {RoboticsNavigator} from '../mechanical_engineering/robots/customScreens/robotics/navigation/RoboticsNavigator.jsx';
 import ScientificCalculator from '../mechanical_engineering/calculator/allCalculators/ScientificCalculator.js';
+import RobotMan from '../mechanical_engineering/robots/customScreens/robotMan/robotMan.js';
+
 
 import Header from '../components/common/Header.jsx'
 
@@ -344,6 +349,7 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
         ]}
         onPress={onPress}
         activeOpacity={0.82}
+        disabled={CLOSED_TESTING}
       >
         <ImageBackground
           source={screen.bgImage}
@@ -362,6 +368,17 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
         </View>
 
         <View style={[styles.colorBarVertical, { backgroundColor: screen.accent }]} />
+
+      {/* delete after complete closed testing */}
+       {
+        CLOSED_TESTING && 
+                    <View style={{position:'absolute',flexDirection:'row', left:0, bottom:0, backgroundColor:'rgba(240, 240, 245,0.2)', 
+                      width:'100%', height:'100%', alignItems:'flex-end', justifyContent:'flex-end'}}>
+                      <Text style={{fontSize:15}}>🔒</Text>
+                      <Text style={{color:'#000e01',fontSize:10}}>under development</Text>
+                     </View>
+       }
+
       </TouchableOpacity>
     );
   }
@@ -371,6 +388,7 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
       style={[styles.card, { borderColor: screen.accent, backgroundColor: screen.accentBg || '#FFFFFF' }]}
       onPress={onPress}
       activeOpacity={0.82}
+      disabled={CLOSED_TESTING}
     >
       <ImageBackground
         source={screen.bgImage}
@@ -388,6 +406,16 @@ const ModuleCard = React.memo(({ screen, onPress, wide = false, listView = false
       </View>
 
       <View style={[styles.colorBar, { backgroundColor: screen.accent }]} />
+
+        {/* delete after complete closed testing */}
+        {
+          CLOSED_TESTING && 
+                         <View style={{position:'absolute',flexDirection:'column', left:0, bottom:0, backgroundColor:'rgba(0, 0, 5,0.4)', 
+                      width:'100%', height:'100%', alignItems:'center', justifyContent:'center'}}>
+                      <Text style={{fontSize:25}}>🔒</Text>
+                      <Text style={{color:'#fbfdfb',fontSize:12}}>under development</Text>
+                     </View>
+        }
     </TouchableOpacity>
   );
 });
@@ -557,6 +585,14 @@ return modules.filter((screen) => {
       emoji: '🧮',
       bgImage: require('../assets/images/icons/calculatorSim.png'),
       accent: '#FFA500',
+    },
+      {
+      route: 'RobotMan',
+      label: 'Robot Man',
+      desc: 'Interactive robot model',
+      emoji: '�',
+      bgImage: require('../assets/images/icons/robotMan.jpg'),
+      accent: '#abbdf8',
     }
   ], []);
 
@@ -627,6 +663,7 @@ return modules.filter((screen) => {
             console.log('Bottom item pressed:', item);
           }}
           navigation={navigation}
+          closed_testing={CLOSED_TESTING}
         />
       </View>
       <ScrollView 
@@ -860,7 +897,7 @@ function MainStack() {
         <Stack.Screen name="CncSimulatorPro" component={CncSimulatorPro} />
         <Stack.Screen name="RoboticSimulator" component={RoboticsNavigator} />
         <Stack.Screen name="ScientificCalculator" component={ScientificCalculator} />
-        
+         <Stack.Screen name="RobotMan" component={RobotMan} />
 
       </Stack.Navigator>
     </NavigationContainer>

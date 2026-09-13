@@ -1,4 +1,6 @@
 import { circumcircle, normalizeDeg } from '../operations/arc';
+import { polygonVertices } from '../operations/polygon';
+import { buildSplinePath } from '../operations/spline';
 
 // Plain JS (not a worklet) — only called on tap, not per drag frame, so
 // there's no performance reason to push this onto the UI thread.
@@ -63,6 +65,51 @@ export function distanceToShape(point, shape) {
       Math.hypot(point.x - p1.x, point.y - p1.y),
       Math.hypot(point.x - p3.x, point.y - p3.y),
     );
+  }
+  if (shape.type === 'ellipse') {
+    const [center, edge] = points;
+    const major = Math.hypot(edge.x - center.x, edge.y - center.y) || 1;
+    const minor = major * 0.6;
+    const angle = Math.atan2(edge.y - center.y, edge.x - center.x);
+    const cA = Math.cos(angle);
+    const sA = Math.sin(angle);
+    let best = Infinity;
+    const N = 64;
+    let prev = {
+      x: center.x + major * cA,
+      y: center.y + major * sA,
+    };
+    for (let i = 1; i <= N; i += 1) {
+      const t = (i / N) * 2 * Math.PI;
+      const lx = major * Math.cos(t);
+      const ly = minor * Math.sin(t);
+      const cur = {
+        x: center.x + lx * cA - ly * sA,
+        y: center.y + lx * sA + ly * cA,
+      };
+      best = Math.min(best, distanceToSegment(point, prev, cur));
+      prev = cur;
+    }
+    return best;
+  }
+  if (shape.type === 'polygon') {
+    const [center, edge] = points;
+    const vertices = polygonVertices(center, edge, shape.sides || 6);
+    let best = Infinity;
+    for (let i = 0; i < vertices.length; i += 1) {
+      const a = vertices[i];
+      const b = vertices[(i + 1) % vertices.length];
+      best = Math.min(best, distanceToSegment(point, a, b));
+    }
+    return best;
+  }
+  if (shape.type === 'spline') {
+    const samples = buildSplinePath(points);
+    let best = Infinity;
+    for (let i = 1; i < samples.length; i += 1) {
+      best = Math.min(best, distanceToSegment(point, samples[i - 1], samples[i]));
+    }
+    return best;
   }
   return Infinity;
 }

@@ -30,6 +30,32 @@ export function applyCircleEdit(points, { radiusMm }) {
   ];
 }
 
+// Same idea as Circle, but the "radius" is the ellipse's major axis and the
+// "angle" is the major axis' orientation — both editable independently.
+export function applyEllipseEdit(points, { majorRadiusMm, majorAxisAngleDeg }) {
+  const [center] = points;
+  const rad = (majorAxisAngleDeg * Math.PI) / 180;
+  const lenPx = mmToPx(majorRadiusMm);
+  return [
+    center,
+    { x: center.x + lenPx * Math.cos(rad), y: center.y + lenPx * Math.sin(rad) },
+  ];
+}
+
+// Editing a polygon's radius keeps its center and first-vertex direction
+// fixed and only rescales how far the vertices sit from the center.
+export function applyPolygonEdit(points, { radiusMm }) {
+  const [center, edge] = points;
+  const angle = (edge.x === center.x && edge.y === center.y)
+    ? 0
+    : Math.atan2(edge.y - center.y, edge.x - center.x);
+  const rPx = mmToPx(radiusMm);
+  return [
+    center,
+    { x: center.x + rPx * Math.cos(angle), y: center.y + rPx * Math.sin(angle) },
+  ];
+}
+
 export function applyRectangleEdit(points, { widthMm, heightMm, angleDeg }) {
   const frame = getRectangleFrame(points);
   const rad = (angleDeg * Math.PI) / 180;

@@ -32,3 +32,10 @@ cloude Ai ->>> [
 Privacy Policy page-  
 
 testing@gmail.com,testing1234
+
+
+closed testing - https://play.google.com/store/apps/details?id=com.threeapp  //foe store
+                 https://play.google.com/apps/testing/com.threeapp    //for webpage
+
+paypal password- Wrappers@5858
+                 

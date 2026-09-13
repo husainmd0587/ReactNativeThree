@@ -1,12 +1,4 @@
 
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-
-} from 'react-native';
 
 import ContentNavigator from '../cms/contentNavigator'; 
 import { CustomCardsList,CustomScreensList } from './customContent';

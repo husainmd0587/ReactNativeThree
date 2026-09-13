@@ -44,6 +44,67 @@ function normalizeDeg(deg) {
   return d;
 }
 
+// Duplicated on purpose from engine/operations/polygon.js and
+// engine/operations/spline.js — see the note above buildShapeVisuals about
+// why the rendering layer keeps its own copy of the geometry math.
+function polygonVertices(center, edge, sides) {
+  const r = Math.hypot(edge.x - center.x, edge.y - center.y);
+  const startAngle = Math.atan2(edge.y - center.y, edge.x - center.x);
+  return Array.from({ length: sides }, (_, i) => {
+    const a = startAngle + (i * 2 * Math.PI) / sides;
+    return { x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) };
+  });
+}
+
+function catmullRomPoint(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    x: 0.5 * (
+      (2 * p1.x)
+      + (-p0.x + p2.x) * t
+      + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
+      + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+    ),
+    y: 0.5 * (
+      (2 * p1.y)
+      + (-p0.y + p2.y) * t
+      + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
+      + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+    ),
+  };
+}
+
+function buildSplinePath(points, samplesPerSegment = 48) {
+  const path = [];
+  if (points.length < 2) return path;
+  if (points.length === 2) {
+    for (let i = 0; i <= samplesPerSegment; i += 1) {
+      const t = i / samplesPerSegment;
+      path.push({
+        x: points[0].x + (points[1].x - points[0].x) * t,
+        y: points[0].y + (points[1].y - points[0].y) * t,
+      });
+    }
+    return path;
+  }
+  for (let i = 1; i < points.length; i += 1) {
+    const p0 = points[Math.max(0, i - 2)];
+    const p1 = points[i - 1];
+    const p2 = points[i];
+    const p3 = points[Math.min(points.length - 1, i + 1)];
+    const n = (i === 1 || i === points.length - 1)
+      ? samplesPerSegment
+      : Math.max(8, Math.floor(samplesPerSegment / 2));
+    for (let s = 0; s <= n; s += 1) {
+      if (s === n && i !== points.length - 1) continue;
+      const t = s / n;
+      path.push(catmullRomPoint(p0, p1, p2, p3, t));
+    }
+  }
+  return path;
+}
+
 // Builds the shape path, dimension annotation path, and label text/position
 // for one already-drawn shape. Runs on the JS thread (called from a
 // useMemo keyed on the shapes array) — deliberately separate from the
@@ -51,9 +112,9 @@ function normalizeDeg(deg) {
 // a UI-thread worklet for the shape currently being dragged. A worklet
 // can't call a plain imported function like this one, so the two stay
 // duplicated on purpose rather than sharing one implementation.
-export function buildShapeVisuals(type, points) {
+export function buildShapeVisuals(type, points, sides) {
   const shapePath = Skia.Path.Make();
-  const annotationPath = Skia.Path.Make();
+  let annotationPath = Skia.Path.Make();
   let primaryText = '';
   let primaryX = 0;
   let primaryY = 0;
@@ -207,12 +268,97 @@ export function buildShapeVisuals(type, points) {
       primaryX = p2.x + 8;
       primaryY = p2.y - 8;
     }
+  } else if (type === 'ellipse') {
+    const [center, edge] = points;
+    const { x: cx, y: cy } = center;
+    const { x: ex, y: ey } = edge;
+    const major = Math.hypot(ex - cx, ey - cy) || 1;
+    const minor = major * 0.6;
+    const angleRad = Math.atan2(ey - cy, ex - cx);
+    const cA = Math.cos(angleRad);
+    const sA = Math.sin(angleRad);
+    const majorMm = Math.round((major / PX_PER_MM) * 10) / 10;
+    const minorMm = Math.round((minor / PX_PER_MM) * 10) / 10;
+    const t = 0.5523;
+    const local = (lpx, lpy) => ({ x: cx + lpx * cA - lpy * sA, y: cy + lpx * sA + lpy * cA });
+
+    const px = local(major, 0);
+    const nx = local(-major, 0);
+    const py = local(0, minor);
+    const ny = local(0, -minor);
+    const c1 = local(major, minor * t);
+    const c2 = local(major * t, minor);
+    const c3 = local(-major * t, minor);
+    const c4 = local(-major, minor * t);
+    const c5 = local(-major, -minor * t);
+    const c6 = local(-major * t, -minor);
+    const c7 = local(major * t, -minor);
+    const c8 = local(major, -minor * t);
+
+    shapePath.moveTo(px.x, px.y);
+    shapePath.cubicTo(c1.x, c1.y, c2.x, c2.y, py.x, py.y);
+    shapePath.cubicTo(c3.x, c3.y, c4.x, c4.y, nx.x, nx.y);
+    shapePath.cubicTo(c5.x, c5.y, c6.x, c6.y, ny.x, ny.y);
+    shapePath.cubicTo(c7.x, c7.y, c8.x, c8.y, px.x, px.y);
+
+    // Dimension run from center to the major-axis edge.
+    annotationPath.moveTo(cx, cy);
+    annotationPath.lineTo(ex, ey);
+    annotationPath.moveTo(cx - 4, cy);
+    annotationPath.lineTo(cx + 4, cy);
+    annotationPath.moveTo(cx, cy - 4);
+    annotationPath.lineTo(cx, cy + 4);
+    const ux = (ex - cx) / major;
+    const uy = (ey - cy) / major;
+    addArrow(annotationPath, ex, ey, ux, uy);
+
+    primaryText = `R ${majorMm} mm  /  r ${minorMm} mm`;
+    primaryX = (cx + ex) / 2 + 10;
+    primaryY = (cy + ey) / 2 - 10;
+  } else if (type === 'polygon') {
+    const [center, edge] = points;
+    const sideCount = sides || 6;
+    const vertices = polygonVertices(center, edge, sideCount);
+    vertices.forEach((pt, i) => {
+      if (i === 0) shapePath.moveTo(pt.x, pt.y);
+      else shapePath.lineTo(pt.x, pt.y);
+    });
+    shapePath.close();
+
+    const radiusMm = Math.round((Math.hypot(edge.x - center.x, edge.y - center.y) / PX_PER_MM) * 10) / 10;
+    const first = vertices[0];
+    primaryText = `${sideCount} sides   R ${radiusMm} mm`;
+    primaryX = first.x + 10;
+    primaryY = first.y - 10;
+
+    // Center dot + a radius guide to the first vertex.
+    annotationPath.addCircle(center.x, center.y, 2);
+    annotationPath.moveTo(center.x, center.y);
+    annotationPath.lineTo(first.x, first.y);
+  } else if (type === 'spline') {
+    const samples = buildSplinePath(points);
+    samples.forEach((pt, i) => {
+      if (i === 0) shapePath.moveTo(pt.x, pt.y);
+      else shapePath.lineTo(pt.x, pt.y);
+    });
+    const dots = Skia.Path.Make();
+    points.forEach((pt) => dots.addCircle(pt.x, pt.y, 3));
+    annotationPath = dots;
+
+    let totalPx = 0;
+    for (let i = 1; i < samples.length; i += 1) {
+      totalPx += Math.hypot(samples[i].x - samples[i - 1].x, samples[i].y - samples[i - 1].y);
+    }
+    const totalMm = Math.round((totalPx / PX_PER_MM) * 10) / 10;
+    const last = points[points.length - 1];
+    primaryText = `${points.length} pts   ${totalMm} mm`;
+    primaryX = last.x + 8;
+    primaryY = last.y - 8;
   } else if (type === 'polyline') {
     points.forEach((pt, i) => {
       if (i === 0) shapePath.moveTo(pt.x, pt.y);
       else shapePath.lineTo(pt.x, pt.y);
     });
-
     let totalPx = 0;
     for (let i = 1; i < points.length; i += 1) {
       totalPx += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);

@@ -16,8 +16,7 @@ import {
   StatusBar,
   Dimensions,
   Platform,
-  Modal,
-  useColorScheme,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -242,7 +241,7 @@ const ThemeToggle = React.memo(({ theme, onToggle, colors }) => (
 ));
 
 // ─── Animated Button ──────────────────────────────────────────────────────────
-const AnimButton = React.memo(({ btn, onPress, shiftActive, index, colors }) => {
+const AnimButton = React.memo(({ btn, onPress, shiftActive, index, colors, customHeight }) => {
   const scale = useSharedValue(1);
   const pressed = useSharedValue(0);
   const isEq = btn.type === 'eq';
@@ -309,7 +308,7 @@ const AnimButton = React.memo(({ btn, onPress, shiftActive, index, colors }) => 
       activeOpacity={1}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={[btnStyles.btnTouch, { width: BTN_W, height: BTN_H }]}
+      style={[btnStyles.btnTouch, { width: BTN_W, height: customHeight }]}
     >
       <Animated.View style={[btnStyles.btnInner, { backgroundColor: bgColor }, animStyle]}>
         <View style={[btnStyles.btnHighlight, isEq && { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
@@ -467,8 +466,8 @@ const CalcDisplay = ({ expression, result, history, angleMode, memActive, onShow
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ScientificCalculator() {
-  const systemColorScheme = useColorScheme();
-  const [theme, setTheme] = useState(systemColorScheme === 'dark' ? 'dark' : 'light');
+ 
+  const [theme, setTheme] = useState('dark');
 
   const [expression, setExpression] = useState('');
   const [result, setResult] = useState('');
@@ -479,6 +478,7 @@ export default function ScientificCalculator() {
   const [memActive, setMemActive] = useState(false);
   const [lastResult, setLastResult] = useState('');
   const [historyModal, setHistoryModal] = useState(false);
+  const [btnHeight, setBtnHeight] = useState(BTN_H);
 
   const colors = { ...THEMES[theme], theme };
 
@@ -616,7 +616,16 @@ export default function ScientificCalculator() {
           />
         </Animated.View>
 
-        <View style={rootStyles.grid}>
+        <View
+          style={rootStyles.grid}
+          onLayout={(event) => {
+            const availableH = event.nativeEvent.layout.height - BTN_GAP * (ROWS - 1);
+            const newBtnHeight = Math.floor(availableH / ROWS);
+            setBtnHeight((currentHeight) => (
+              currentHeight === newBtnHeight ? currentHeight : newBtnHeight
+            ));
+          }}
+        >
           {BUTTONS.map((btn, idx) => (
             <AnimButton
               key={idx}
@@ -625,6 +634,7 @@ export default function ScientificCalculator() {
               shiftActive={shiftActive}
               index={idx + 1}
               colors={colors}
+              customHeight={btnHeight}
             />
           ))}
         </View>
@@ -652,13 +662,13 @@ const rootStyles = StyleSheet.create({
   root: {
     flex: 1,
     paddingHorizontal: PAD,
-    paddingTop: 4,
+    paddingTop: 0,
     paddingBottom: 8,
     justifyContent: 'space-between',
   },
   glowBehind: {
     position: 'absolute',
-    top: 60,
+    top: 50,
     left: SCREEN_W * 0.1,
     width: SCREEN_W * 0.8,
     height: 120,
@@ -685,9 +695,9 @@ const displayStyles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 5,
     flex: 1,
-    overflow: 'hidden',
+    overflow: 'visible',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.12,
     shadowRadius: 18,
@@ -695,9 +705,13 @@ const displayStyles = StyleSheet.create({
   },
   displayStatus: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 4,
+    gap: 10,
+    width: '100%',
     alignItems: 'center',
+    top:-22,
+    left:5,
+    position:"absolute",
+    justifyContent:'space-between'
   },
   statusChip: {
     fontSize: 10,

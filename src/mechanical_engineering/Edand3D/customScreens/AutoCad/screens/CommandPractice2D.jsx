@@ -8,8 +8,12 @@ import { computeCircleGeometry } from '../engine/operations/circle';
 import { computeRectangleGeometry } from '../engine/operations/rectangle';
 import { computeArcGeometry } from '../engine/operations/arc';
 import { computePolylineGeometry } from '../engine/operations/polyline';
+import { computeEllipseGeometry } from '../engine/operations/ellipse';
+import { computePolygonGeometry } from '../engine/operations/polygon';
+import { computeSplineGeometry } from '../engine/operations/spline';
 import {
   applyLineEdit, applyCircleEdit, applyRectangleEdit, applyArcEdit, applyPolylineEdit,
+  applyEllipseEdit, applyPolygonEdit,
 } from '../engine/operations/edit';
 import {
   applyMove, applyRotate, applyScale, applyMirror, applyOffset,
@@ -27,8 +31,10 @@ import PropertiesPanel from '../components/PropertiesPanel';
 import Toolbar from '../components/Toolbar';
 import ArrayControls from '../components/ArrayControls';
 import DistanceControl from '../components/DistanceControl';
+import SideCountControl from '../components/SideCountControl';
+import { POLYGON_DEFAULT_SIDES } from '../engine/operations/polygon';
 
-const TAP_TYPES = new Set(['arc', 'polyline']);
+const TAP_TYPES = new Set(['arc', 'polyline', 'spline']);
 const MODIFY_TYPES = new Set(['move', 'copy', 'rotate', 'scale', 'mirror', 'offset', 'array']);
 // Trim/Extend/Chamfer/Fillet all share the same "tap a line, then tap a
 // second line" flow — see handleCanvasTap. What differs is only which
@@ -49,15 +55,23 @@ const GEOMETRY_BUILDERS = {
   rectangle: computeRectangleGeometry,
   arc: computeArcGeometry,
   polyline: computePolylineGeometry,
+  ellipse: computeEllipseGeometry,
+  polygon: computePolygonGeometry,
+  spline: computeSplineGeometry,
 };
 
 // Edited property value -> new points array — also keyed by shape type.
+// Spline is deliberately absent: it has no editable properties (the
+// control-point count and total length are both read-only measurements of
+// the placed points), so there is nothing for a Properties edit to do.
 const EDIT_APPLIERS = {
   line: applyLineEdit,
   circle: applyCircleEdit,
   rectangle: applyRectangleEdit,
   arc: applyArcEdit,
   polyline: applyPolylineEdit,
+  ellipse: applyEllipseEdit,
+  polygon: applyPolygonEdit,
 };
 
 // Drag (base point -> destination) -> new points array for the selected
@@ -116,6 +130,31 @@ function toProperties(geometry) {
     return [
       { key: 'segments', label: 'Segments', value: geometry.segments, unit: '', editable: false },
       { key: 'totalLengthMm', label: 'Total length', value: geometry.totalLengthMm, unit: 'mm' },
+    ];
+  }
+  if (geometry.type === 'ellipse') {
+    return [
+      { key: 'majorRadiusMm', label: 'Major radius', value: geometry.majorRadiusMm, unit: 'mm' },
+      {
+        key: 'minorRadiusMm',
+        label: 'Minor radius',
+        value: geometry.minorRadiusMm,
+        unit: 'mm',
+        editable: false,
+      },
+      { key: 'majorAxisAngleDeg', label: 'Angle', value: geometry.majorAxisAngleDeg, unit: '°' },
+    ];
+  }
+  if (geometry.type === 'polygon') {
+    return [
+      { key: 'sides', label: 'Sides', value: geometry.sides, unit: '', editable: false },
+      { key: 'radiusMm', label: 'Radius', value: geometry.radiusMm, unit: 'mm' },
+    ];
+  }
+  if (geometry.type === 'spline') {
+    return [
+      { key: 'controlPoints', label: 'Control points', value: geometry.controlPoints, unit: '', editable: false },
+      { key: 'totalLengthMm', label: 'Total length', value: geometry.totalLengthMm, unit: 'mm', editable: false },
     ];
   }
   return [];
@@ -187,6 +226,7 @@ export default function CommandPractice2D({ route }) {
   const [arrayCount, setArrayCount] = useState(6);
   const [chamferDistanceMm, setChamferDistanceMm] = useState(15);
   const [filletRadiusMm, setFilletRadiusMm] = useState(15);
+  const [polygonSideCount, setPolygonSideCount] = useState(POLYGON_DEFAULT_SIDES);
   // Trim/Extend/Chamfer/Fillet's shared 2-tap state machine: null = "pick
   // the first line next tap"; a shape id = "that's the first line, pick
   // the second (and, for Trim/Extend, the side/end) next tap".
@@ -238,7 +278,7 @@ export default function CommandPractice2D({ route }) {
   );
 
   const activeGeometry = useMemo(
-    () => (activeShape ? GEOMETRY_BUILDERS[activeShape.type]?.(activeShape.points) ?? null : null),
+    () => (activeShape ? GEOMETRY_BUILDERS[activeShape.type]?.(activeShape.points, activeShape.sides) ?? null : null),
     [activeShape],
   );
 
@@ -254,7 +294,7 @@ export default function CommandPractice2D({ route }) {
             ? applyPolarArray(activeShape, points[0], arrayCount)
             : applyRectangularArray(activeShape, points[0], points[1], arrayRows, arrayCols);
           const newShapes = copiesPoints.map((pts) => ({
-            id: makeShapeId(), type: activeShape.type, points: pts,
+            id: makeShapeId(), type: activeShape.type, points: pts, sides: activeShape.sides,
           }));
           commitShapes([...shapes, ...newShapes]);
           return;
@@ -268,7 +308,7 @@ export default function CommandPractice2D({ route }) {
           const updated = { ...activeShape, points: newPoints };
           commitShapes(shapes.map((s) => (s.id === activeShape.id ? updated : s)));
         } else {
-          const newShape = { id: makeShapeId(), type: activeShape.type, points: newPoints };
+          const newShape = { id: makeShapeId(), type: activeShape.type, points: newPoints, sides: activeShape.sides };
           commitShapes([...shapes, newShape]);
           setSelectedId(newShape.id);
         }
@@ -282,13 +322,17 @@ export default function CommandPractice2D({ route }) {
         // 4 explicit corners (see engine/geometry/rectangleFrame.js) so
         // it can represent a rotation later, not just an axis-aligned box.
         points: practiceType === 'rectangle' ? rectangleFromDragCorners(points[0], points[1]) : points,
+        // Polygon stores the side count beside its points (not inside
+        // them) so point-wise modify ops (move/copy/rotate/scale) work on
+        // a clean [center, edge] pair just like Circle.
+        sides: practiceType === 'polygon' ? polygonSideCount : undefined,
       };
       commitShapes([...shapes, newShape]);
       setSelectedId(newShape.id);
     },
     [
       shapes, practiceType, hasEngine, isModifyType, activeShape,
-      arrayMode, arrayRows, arrayCols, arrayCount, commitShapes,
+      arrayMode, arrayRows, arrayCols, arrayCount, polygonSideCount, commitShapes,
     ],
   );
 
@@ -377,14 +421,14 @@ export default function CommandPractice2D({ route }) {
     ],
   );
 
-  // Only Polyline supports finishing at an arbitrary point count (2+).
-  // Arc always auto-completes at exactly 3 points on its own (see
+  // Only Polyline and Spline support finishing at an arbitrary point count
+  // (2+). Arc always auto-completes at exactly 3 points on its own (see
   // handleCanvasTap) — calling handleDrawComplete with fewer than 3
   // points would crash computeArcGeometry, which destructures exactly
   // [p1, p2, p3]. So for Arc, "Enter" can only mean cancel the in-
   // progress draft, never commit it early.
   const handleFinishDraft = useCallback(() => {
-    if (practiceType === 'polyline' && draftPoints.length >= 2) {
+    if ((practiceType === 'polyline' || practiceType === 'spline') && draftPoints.length >= 2) {
       handleDrawComplete(draftPoints);
     }
     setDraftPoints([]);
@@ -473,6 +517,9 @@ export default function CommandPractice2D({ route }) {
         {practiceType === 'fillet' && (
           <DistanceControl label="Radius" value={filletRadiusMm} onChange={setFilletRadiusMm} />
         )}
+        {practiceType === 'polygon' && (
+          <SideCountControl value={polygonSideCount} onChange={setPolygonSideCount} />
+        )}
 
         <Toolbar
           onUndo={handleUndo}
@@ -507,6 +554,7 @@ export default function CommandPractice2D({ route }) {
           selectedId={selectedId}
           selectedShape={activeShape}
           showDimensions={showDimensions}
+          polygonSideCount={polygonSideCount}
           onDrawComplete={handleDrawComplete}
           onCanvasTap={handleCanvasTap}
           onCanvasLongPress={handleFinishDraft}
@@ -515,7 +563,7 @@ export default function CommandPractice2D({ route }) {
         {isTapType && draftPoints.length > 0 && (
           <TouchableOpacity style={styles.enterBtn} onPress={handleFinishDraft} activeOpacity={0.85}>
             <Text style={styles.enterBtnText}>
-              {practiceType === 'polyline' ? 'Enter (finish)' : 'Cancel'}
+              {practiceType === 'polyline' || practiceType === 'spline' ? 'Enter (finish)' : 'Cancel'}
             </Text>
           </TouchableOpacity>
         )}
