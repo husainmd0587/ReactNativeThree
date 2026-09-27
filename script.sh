@@ -11,3 +11,5 @@ git commit -m "Initial commit"
 # git push -u origin master
 
 git push -u neworigin master
+
+#for run project on specific port- npm run android --port 8082 or npm start --port 8082

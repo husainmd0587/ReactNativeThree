@@ -82,7 +82,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 20, borderWidth: 1, borderColor: '#253050',
   },
-  hoverBadgeText: { fontSize: 11, color: '#e2c9a0', fontWeight: '700' },
+  hoverBadgeText: { fontSize: 12, color: '#e2c9a0', fontWeight: '700' },
   hoverBadgeTextWarn: { color: '#ff6b6b' },
 
   // ── Stock texture load retry indicator ──
@@ -315,9 +315,9 @@ export const styles = StyleSheet.create({
   },
 
   magazineToolName: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '600',
-    color: '#6a8aaa',
+    color: '#7a9cb8',
     letterSpacing: 0.2,
     textAlign: 'center',
     textTransform: 'capitalize',

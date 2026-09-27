@@ -44,7 +44,7 @@ export function MagazineToggleButton({ isOpen, onPress, tool }) {
     >
       <View style={styles.toggleContent}>
         <Text style={styles.toggleIcon}>🛠️</Text>
-        <Text style={styles.toggleLabel}>Tool Magazine</Text>
+        <Text style={styles.toggleLabel}>Tool Rack</Text>
         <View style={styles.toggleBadge}>
           <Text style={styles.toggleBadgeText}>{tool.name}</Text>
         </View>

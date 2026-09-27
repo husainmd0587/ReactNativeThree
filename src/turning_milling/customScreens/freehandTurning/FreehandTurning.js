@@ -11,8 +11,7 @@ import * as THREE from 'three';
 
 import {
   TOOLS, MATERIALS, BASE_RPM, MIN_RPM, MAX_RPM, RPM_STEP,
-  SAVED_PARTS_KEY, TOOLBAR_H, PROFILE_SEGS,
-  MOTOR_IMAGE_BOTTOM, MOTOR_IMAGE_LEFT, MOTOR_IMAGE_SIZE,
+  SAVED_PARTS_KEY, LEGACY_SAVED_PARTS_KEY, TOOLBAR_H, PROFILE_SEGS,
 } from './constants';
 import { clamp, makeProfile, smooth, getToolDescription } from './utils';
 import { styles } from './styles';
@@ -20,7 +19,7 @@ import { styles } from './styles';
 import { DrawingCanvas } from './components/DrawingCanvas';
 import { Scene3D } from './components/Scene3D';
 import { MotorPreview } from './components/Motor3D';
-import { MotorPowerSwitch, MagazineToggleButton, MagazineCloseButton } from './components/UIComponents';
+import { MagazineToggleButton, MagazineCloseButton } from './components/UIComponents';
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function FreehandTurning() {
@@ -138,9 +137,19 @@ export default function FreehandTurning() {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(SAVED_PARTS_KEY);
-        if (raw) setSavedParts(JSON.parse(raw));
+        if (raw) {
+          setSavedParts(JSON.parse(raw));
+        } else {
+          // One-time migration from the pottery-era key so users who
+          // saved parts before the rebrand don't lose them.
+          const legacy = await AsyncStorage.getItem(LEGACY_SAVED_PARTS_KEY);
+          if (legacy) {
+            setSavedParts(JSON.parse(legacy));
+            await AsyncStorage.removeItem(LEGACY_SAVED_PARTS_KEY);
+          }
+        }
       } catch (e) {
-        console.warn('Pottery Studio: failed to load saved parts', e);
+        console.warn('Wood Lathe: failed to load saved parts', e);
       } finally {
         hasLoadedPartsRef.current = true;
       }
@@ -150,7 +159,7 @@ export default function FreehandTurning() {
   useEffect(() => {
     if (!hasLoadedPartsRef.current) return;
     AsyncStorage.setItem(SAVED_PARTS_KEY, JSON.stringify(savedParts)).catch((e) => {
-      console.warn('Pottery Studio: failed to save parts', e);
+      console.warn('Wood Lathe: failed to save parts', e);
     });
   }, [savedParts]);
 
@@ -239,9 +248,9 @@ export default function FreehandTurning() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.hLeft}>
-            <Text style={styles.logo}>🏺</Text>
+            <Text style={styles.logo}>⚙️</Text>
             <View>
-              <Text style={styles.title}>Pottery Studio</Text>
+              <Text style={styles.title}>Wood Lathe</Text>
               {/* Subtitle reflects power state in 2D mode, so the
                   header text and actual carve-ability stay in sync. */}
               <Text style={styles.sub}>
@@ -399,19 +408,11 @@ export default function FreehandTurning() {
                 spinEnabled={modelsLoaded}
                 isPowered={isPowered}
               />
-              <MotorPreview rpmRef={rpmRef} onLoad={handleModelsLoaded} isPowered={isPowered} />
-              {/* Power switch mounted at the machine, not the header --
-                  placed just right of the motor housing and vertically
-                  centered on it, using the same MOTOR_IMAGE_* constants
-                  Motor3D.js positions the motor PNG with, so the two
-                  can't drift apart if that placement changes. */}
-              <MotorPowerSwitch
-                isOn={isPowered}
-                onPress={togglePower}
-                style={{
-                  bottom: MOTOR_IMAGE_BOTTOM + MOTOR_IMAGE_SIZE / 2 - 20,
-                  left: MOTOR_IMAGE_LEFT + MOTOR_IMAGE_SIZE + 10,
-                }}
+              <MotorPreview
+                rpmRef={rpmRef}
+                onLoad={handleModelsLoaded}
+                isPowered={isPowered}
+                onPowerToggle={togglePower}
               />
               <View style={styles.hintWrap} pointerEvents="none">
                 {/* Hint reflects power state too, in sync with the rest. */}
@@ -440,7 +441,7 @@ export default function FreehandTurning() {
           >
             <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🏺 Saved Parts</Text>
+                <Text style={styles.modalTitle}>📦 Saved Parts</Text>
                 <TouchableOpacity onPress={() => setIsPartsOpen(false)} style={styles.modalCloseBtn}>
                   <Text style={styles.modalCloseTxt}>✕</Text>
                 </TouchableOpacity>

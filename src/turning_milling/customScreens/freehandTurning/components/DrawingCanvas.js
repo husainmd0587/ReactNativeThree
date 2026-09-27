@@ -16,19 +16,18 @@ import {
 import { Textures } from '../../../../utils/materials/textures';
 
 import {
-  CANVAS_W, CANVAS_H, AXIS_Y, STOCK_LEFT, STOCK_RIGHT, STOCK_WIDTH,
+  CANVAS_W, CANVAS_H, STOCK_AXIS_Y, STOCK_LEFT, STOCK_RIGHT, STOCK_WIDTH,
   PROFILE_SEGS, STOCK_RADIUS, MIN_SAFE_RADIUS, PX_TO_MM, BASE_RPM,
-  TOOL_LENGTH, DEBUG_SHOW_TIP, toolLabelFont, SPIN_TEXTURE_CONFIG,
+  DEBUG_SHOW_TIP, toolLabelFont, SPIN_TEXTURE_CONFIG,
   CYLINDER_SHADER_SKSL, CHIP_POOL_SIZE, CHIP_GRAVITY, CHIP_MAX_LIFE,
   CHIP_MIN_REMOVAL, CATCH_BASE_CHANCE, CATCH_PROB_CAP, CATCH_LOCKOUT_MS,
   WEAR_RATE, WEAR_DEPTH_PENALTY, WEAR_CATCH_RISK,
   BLADE_LEN, SHANK_LEN, HANDLE_LEN, TOTAL_VISUAL_LEN,
   STEEL_LIGHT, STEEL_MID, STEEL_DARK, WOOD_HANDLE, WOOD_HANDLE_DK,
-  CHUCK_RADIUS, CHUCK_CENTER_L, CHUCK_CENTER_R,
 } from '../constants';
 import {
   clamp, fingerToTip, xToSeg, applyTool, footprintRemoval, smooth,
-  jitterProfile, fillPath, chipStyleForMaterial, makeChipPool,
+  jitterProfile, fillPath, chipStyleForMaterial, makeChipPool, toolHalfSegs,
 } from '../utils';
 import { styles } from '../styles';
 
@@ -299,7 +298,7 @@ export function DrawingCanvas({
       const p = pool[idx];
       if (!p.active) chipsActiveCountRef.current += 1;
 
-      const side = ty < AXIS_Y ? -1 : 1;
+      const side = ty < STOCK_AXIS_Y ? -1 : 1;
       const tangentialBase = spindleDir * side * (0.6 + Math.random() * 0.6);
       const scatter = (Math.random() - 0.5) * 2;
 
@@ -348,7 +347,7 @@ export function DrawingCanvas({
   }, [rpm, spinEnabled, isPowered]);
 
   const cylinderUniforms = useDerivedValue(() => ({
-    axisY: AXIS_Y,
+    axisY: STOCK_AXIS_Y,
     radius: STOCK_RADIUS,
     phase: angleRef.value,
     direction: SPIN_TEXTURE_CONFIG.DIRECTION,
@@ -359,11 +358,11 @@ export function DrawingCanvas({
 
   const gradStart = useMemo(() => {
     const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
-    return vec(CANVAS_W / 2, AXIS_Y - halfLen);
+    return vec(CANVAS_W / 2, STOCK_AXIS_Y - halfLen);
   }, []);
   const gradEnd = useMemo(() => {
     const halfLen = Math.min(CANVAS_W, CANVAS_H) * 0.25;
-    return vec(CANVAS_W / 2, AXIS_Y + halfLen);
+    return vec(CANVAS_W / 2, STOCK_AXIS_Y + halfLen);
   }, []);
 
   const grainPath = useDerivedValue(() => {
@@ -371,8 +370,8 @@ export function DrawingCanvas({
     const p = Skia.Path.Make();
     const offset = SPIN_TEXTURE_CONFIG.DIRECTION * (angleRef.value * SPIN_TEXTURE_CONFIG.SPEED) % GRAIN_SPACING;
     for (let x = STOCK_LEFT - GRAIN_SPACING + offset; x < STOCK_RIGHT + GRAIN_SPACING; x += GRAIN_SPACING) {
-      p.moveTo(x, AXIS_Y - STOCK_RADIUS - 4);
-      p.lineTo(x, AXIS_Y + STOCK_RADIUS + 4);
+      p.moveTo(x, STOCK_AXIS_Y - STOCK_RADIUS - 4);
+      p.lineTo(x, STOCK_AXIS_Y + STOCK_RADIUS + 4);
     }
     return p;
   });
@@ -380,10 +379,16 @@ export function DrawingCanvas({
   const fingerX = useSharedValue(0);
   const fingerY = useSharedValue(0);
 
-  const toolBodyTransform = useDerivedValue(() => {
+const toolBodyTransform = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
-    return [{ translateX: tx }, { translateY: ty }];
-  });
+    // Transform list is applied in order (M = T1·T2·...), so the rotate
+    // must come last: rotate the drawn body 180° about its cutting edge
+    // (tip at local 0,0), THEN translate it to the tip position. This
+    // flips the handle from above the tip to below it -- matching a real
+    // lathe where the operator holds the tool handle down/away from the
+    // stock while the edge rides on the workpiece.
+    return [{ translateX: tx }, { translateY: ty }, { rotate: Math.PI }];
+});
 
   const tipTransform = useDerivedValue(() => {
     const { tx, ty } = fingerToTip(fingerX.value, fingerY.value);
@@ -476,7 +481,7 @@ export function DrawingCanvas({
         const digTool = { ...currentTool, depth: currentTool.depth * 2.6 };
         const beforeProfile = profileRef.current;
         const dug = applyTool(beforeProfile, point.x, point.y, digTool);
-        const half = Math.floor(currentTool.width / 2);
+        const half = toolHalfSegs(currentTool);
         const catchRemoval = footprintRemoval(beforeProfile, dug, seg, half);
 
         profileRef.current = dug;
@@ -498,7 +503,7 @@ export function DrawingCanvas({
         const beforeProfile = profileRef.current;
         let next = applyTool(beforeProfile, point.x, point.y, toolForCut);
 
-        const half = Math.floor(currentTool.width / 2);
+        const half = toolHalfSegs(currentTool);
         const removalAmount = footprintRemoval(beforeProfile, next, seg, half);
 
         if (removalAmount > CHIP_MIN_REMOVAL) {
@@ -589,7 +594,7 @@ export function DrawingCanvas({
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
       runOnJS(startProcessing)();
-      runOnJS(updatePendingPoint)(tx, ty - TOOL_LENGTH);
+      runOnJS(updatePendingPoint)(tx, ty);
     })
     .onUpdate((e) => {
       'worklet';
@@ -597,7 +602,7 @@ export function DrawingCanvas({
       fingerX.value = e.x;
       fingerY.value = e.y;
       const { tx, ty } = fingerToTip(e.x, e.y);
-      runOnJS(updatePendingPoint)(tx, ty - TOOL_LENGTH);
+      runOnJS(updatePendingPoint)(tx, ty);
     })
     .onEnd(() => {
       'worklet';
@@ -605,59 +610,72 @@ export function DrawingCanvas({
       runOnJS(syncReactState)();
     });
 
-  // ── Blade: real cutting-edge geometry per tool shape ────────
+  // ── Blade: real cutting-edge geometry per tool ───────────────
+  // The tool group is anchored at the carve point (fingerToTip), so
+  // every blade is drawn with its cutting edge *on* (0,0) -- the point
+  // that actually removes material -- and the body/handle extending up
+  // toward -Y. Each grind draws the silhouette of the real tool it is
+  // named after: a deep U gouge, a shallow spindle gouge, a skewed
+  // chisel edge, a thin parting blade, a round-nose scraper and a bead
+  // roll. `shape` (unchanged) still drives the cut footprint, so the
+  // carve math is untouched by these cosmetic shapes.
   const buildToolCursor = useCallback(() => {
     const bw = bladeVisualWidth(tool.width);
     const half = bw / 2;
     const p = Skia.Path.Make();
 
-    switch (tool.shape) {
-      case 'flat': {
-        if (tool.id === 'skew') {
-          const skew = half * 0.85;
-          p.moveTo(-half, 0);
-          p.lineTo(-half, -BLADE_LEN * 0.82);
-          p.lineTo(-half + skew, -BLADE_LEN);
-          p.lineTo(half, -BLADE_LEN * 0.55);
-          p.lineTo(half, 0);
-          p.close();
-        } else {
-          p.moveTo(-half, 0);
-          p.lineTo(-half, -BLADE_LEN * 0.85);
-          p.lineTo(-half * 0.9, -BLADE_LEN);
-          p.lineTo(half * 0.9, -BLADE_LEN);
-          p.lineTo(half, -BLADE_LEN * 0.85);
-          p.lineTo(half, 0);
-          p.close();
-        }
+    switch (tool.grind) {
+      case 'skew': {
+        // Skew chisel — flat bar, bevel ground ~70° so the cutting edge
+        // runs diagonally: one long point, one short point.
+        p.moveTo(-half * 0.9, 0);                // short point (back)
+        p.lineTo(half * 0.9, 0);                 // long point (front)
+        p.lineTo(half, -BLADE_LEN);              // top-right
+        p.lineTo(-half * 0.7, -BLADE_LEN);       // top-left
+        p.close();
         break;
       }
-      case 'narrow': {
-        p.moveTo(-half * 0.45, 0);
-        p.lineTo(-half, -BLADE_LEN * 0.5);
-        p.lineTo(-half * 0.3, -BLADE_LEN);
+      case 'parting': {
+        // Parting tool — thin straight blade, cuts a clean narrow groove.
+        p.moveTo(-half * 0.22, 0);
+        p.lineTo(half * 0.22, 0);
         p.lineTo(half * 0.3, -BLADE_LEN);
-        p.lineTo(half, -BLADE_LEN * 0.5);
-        p.lineTo(half * 0.45, 0);
+        p.lineTo(-half * 0.3, -BLADE_LEN);
         p.close();
         break;
       }
-      case 'point': {
-        p.moveTo(-half * 0.6, 0);
-        p.lineTo(-half * 0.65, -BLADE_LEN * 0.72);
-        p.quadTo(-half * 0.65, -BLADE_LEN, 0, -BLADE_LEN);
-        p.quadTo(half * 0.65, -BLADE_LEN, half * 0.65, -BLADE_LEN * 0.72);
-        p.lineTo(half * 0.6, 0);
+      case 'scraper': {
+        // Round-nose scraper — flat bar with a semicircular nose.
+        p.moveTo(-half * 0.82, -BLADE_LEN);
+        p.lineTo(half * 0.82, -BLADE_LEN);
+        p.lineTo(half, -BLADE_LEN * 0.22);
+        p.quadTo(half, 0, half * 0.5, 0);
+        p.quadTo(0, half * 0.78, -half * 0.5, 0);
+        p.quadTo(-half, 0, -half, -BLADE_LEN * 0.22);
         p.close();
         break;
       }
-      case 'round':
+      case 'bead': {
+        // Beading tool — short taper that rolls a bead on the surface.
+        p.moveTo(-half, -BLADE_LEN);
+        p.lineTo(half, -BLADE_LEN);
+        p.lineTo(half * 0.55, -BLADE_LEN * 0.28);
+        p.quadTo(0, 0, -half * 0.55, -BLADE_LEN * 0.28);
+        p.close();
+        break;
+      }
+      case 'deep':
+      case 'shallow':
       default: {
-        p.moveTo(-half, 0);
-        p.lineTo(-half, -BLADE_LEN * 0.72);
-        p.quadTo(-half, -BLADE_LEN, 0, -BLADE_LEN);
-        p.quadTo(half, -BLADE_LEN, half, -BLADE_LEN * 0.72);
-        p.lineTo(half, 0);
+        // Gouge — round-nose blade; the flute (buildToolFlute below)
+        // shows the U-channel, deeper for roughing/bowl gouges.
+        const nose = tool.grind === 'deep' ? 1.0 : 0.82;
+        p.moveTo(-half * 0.92, -BLADE_LEN);
+        p.lineTo(half * 0.92, -BLADE_LEN);
+        p.lineTo(half, -BLADE_LEN * 0.16);
+        p.quadTo(half, 0, half * 0.5 * nose, 0);
+        p.quadTo(0, half * 0.9 * nose, -half * 0.5 * nose, 0);
+        p.quadTo(-half, 0, -half, -BLADE_LEN * 0.16);
         p.close();
         break;
       }
@@ -667,14 +685,16 @@ export function DrawingCanvas({
 
   const buildToolFlute = useCallback(() => {
     if (tool.shape !== 'round') return null;
+    const deep = tool.grind === 'deep';
     const bw = bladeVisualWidth(tool.width);
-    const half = (bw / 2) * 0.5;
+    const half = (bw / 2) * (deep ? 0.42 : 0.3);
+    const top = BLADE_LEN * (deep ? 0.92 : 0.72);
     const p = Skia.Path.Make();
-    p.moveTo(-half, -3);
-    p.lineTo(-half, -BLADE_LEN * 0.66);
-    p.quadTo(-half, -BLADE_LEN * 0.9, 0, -BLADE_LEN * 0.9);
-    p.quadTo(half, -BLADE_LEN * 0.9, half, -BLADE_LEN * 0.66);
-    p.lineTo(half, -3);
+    p.moveTo(-half, 0);
+    p.lineTo(-half, -top);
+    p.quadTo(-half, -BLADE_LEN, 0, -BLADE_LEN);
+    p.quadTo(half, -BLADE_LEN, half, -top);
+    p.lineTo(half, 0);
     p.close();
     return p;
   }, [tool]);
@@ -738,7 +758,7 @@ export function DrawingCanvas({
       const removal = clamp((STOCK_RADIUS - profile[i]) / STOCK_RADIUS, 0, 1);
       if (removal <= 0.03) continue;
       const x0 = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-      const rect = { x: x0, y: AXIS_Y - STOCK_RADIUS - 2, width: segW + 0.5, height: STOCK_RADIUS * 2 + 4 };
+      const rect = { x: x0, y: STOCK_AXIS_Y - STOCK_RADIUS - 2, width: segW + 0.5, height: STOCK_RADIUS * 2 + 4 };
       if (removal > 0.35) heavy.addRect(rect);
       else if (removal > 0.15) medium.addRect(rect);
       else light.addRect(rect);
@@ -762,7 +782,7 @@ export function DrawingCanvas({
     const x0 = STOCK_LEFT + (s / PROFILE_SEGS) * STOCK_WIDTH;
     const x1 = STOCK_LEFT + ((e + 1) / PROFILE_SEGS) * STOCK_WIDTH;
     const p = Skia.Path.Make();
-    p.addRect({ x: x0, y: AXIS_Y - STOCK_RADIUS - 6, width: Math.max(1, x1 - x0), height: STOCK_RADIUS * 2 + 12 });
+    p.addRect({ x: x0, y: STOCK_AXIS_Y - STOCK_RADIUS - 6, width: Math.max(1, x1 - x0), height: STOCK_RADIUS * 2 + 12 });
     return p;
   }), [dangerSegments]);
 
@@ -786,6 +806,7 @@ export function DrawingCanvas({
       <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
         <GestureDetector gesture={gesture}>
           <SkiaCanvas style={{ width: CANVAS_W, height: CANVAS_H }}>
+
             {texImage && cylinderEffect ? (
               <Path path={fp} style="fill">
                 <Shader source={cylinderEffect} uniforms={cylinderUniforms}>
@@ -837,16 +858,16 @@ export function DrawingCanvas({
               const x = STOCK_LEFT + (idx / PROFILE_SEGS) * STOCK_WIDTH;
               const r = profile[idx];
               return (
-                <Line key={i} p1={vec(x, AXIS_Y - r)} p2={vec(x, AXIS_Y + r)}
+                <Line key={i} p1={vec(x, STOCK_AXIS_Y - r)} p2={vec(x, STOCK_AXIS_Y + r)}
                   strokeWidth={0.3} color="rgba(140,60,20,0.12)" />
               );
             })}
 
-            <Circle cx={CANVAS_W / 2} cy={AXIS_Y} r={2.5} color="#3b82f6" />
+            <Circle cx={CANVAS_W / 2} cy={STOCK_AXIS_Y} r={2.5} color="#3b82f6" />
             {Array.from({ length: 4 }).map((_, i) => {
               const x = STOCK_LEFT + (i / 3) * STOCK_WIDTH;
               return (
-                <Line key={i} p1={vec(x, AXIS_Y - 8)} p2={vec(x, AXIS_Y - 3)}
+                <Line key={i} p1={vec(x, STOCK_AXIS_Y - 8)} p2={vec(x, STOCK_AXIS_Y - 3)}
                   strokeWidth={1} color="rgba(70,110,160,0.45)" />
               );
             })}
@@ -902,9 +923,11 @@ export function DrawingCanvas({
             </Group>
 
             <Path path={connectorPath} style="stroke" strokeWidth={1.5} color="rgba(255,255,255,0.35)" />
+            {/* ── GRIP ANCHOR (hand grip point on handle) ── */}
             <Group transform={gripTransform}>
-              <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.5)" />
-              <Circle cx={0} cy={0} r={4} color="rgba(255,255,255,0.25)" style="stroke" strokeWidth={1} />
+              <Circle cx={0} cy={0} r={8} color="rgba(245,158,11,0.18)" />
+              <Circle cx={0} cy={0} r={8} color="#f59e0b" style="stroke" strokeWidth={2} opacity={0.9} />
+              <Circle cx={0} cy={0} r={2.5} color="#f59e0b" opacity={0.9} />
             </Group>
 
             {/* ── CUTTING TIP INDICATOR ── */}

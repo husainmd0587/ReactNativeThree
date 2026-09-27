@@ -4,13 +4,12 @@ import * as THREE from 'three';
 import { useTextureLoader } from '../../../../utils/materials/textures';
 import { PROFILE_SEGS, STOCK_RADIUS, BASE_RPM, WORLD_H, WORLD_R } from '../constants';
 
-function PotteryMesh({ profile, mat, autoRotate, rpm }) {
+function LatheMesh({ profile, mat, autoRotate, rpm }) {
   const ref = useRef();
-  // `mat.id` is passed through so the texture actually tracks the
-  // selected material -- verify the exact param key against
-  // utils/materials/textures.js if your Textures entries are keyed
-  // differently (e.g. `name` instead of `type`).
-  const texture = useTextureLoader({ type: mat.id });
+  // `mat.texture` (falling back to `mat.id`) is passed through so the
+  // texture actually tracks the selected material -- see
+  // utils/materials/textures.js (entries are keyed by `name`).
+  const texture = useTextureLoader({ type: mat.texture ?? mat.id });
 
   useR3FFrame((_, dt) => {
     if (autoRotate && ref.current) {
@@ -20,10 +19,15 @@ function PotteryMesh({ profile, mat, autoRotate, rpm }) {
   });
 
   const geo = useMemo(() => {
+    // profile[0] is the 2D LEFT end of the stock and profile[N-1] the
+    // RIGHT. Swept clockwise, LatheGeometry puts +Y at the TOP -- so to
+    // keep left = bottom / right = top instead of a mirror image, index
+    // must ascend from 0 (y=0) to N-1 (y=WORLD_H). Iterating the other
+    // way previously built the board flipped along its axis.
     const pts = [];
     pts.push(new THREE.Vector2(0, 0));
-    for (let i = PROFILE_SEGS - 1; i >= 0; i--) {
-      const y = ((PROFILE_SEGS - 1 - i) / (PROFILE_SEGS - 1)) * WORLD_H;
+    for (let i = 0; i < PROFILE_SEGS; i++) {
+      const y = (i / (PROFILE_SEGS - 1)) * WORLD_H;
       const r = Math.max(0.012, (profile[i] / STOCK_RADIUS) * WORLD_R);
       pts.push(new THREE.Vector2(r, y));
     }
@@ -61,7 +65,7 @@ export function Scene3D({ profile, mat, autoRotate, rpm }) {
       <directionalLight position={[-4, 3, -2]} intensity={0.45} color="#a0c8ff" />
       <pointLight position={[0, 6, 2]} intensity={0.8} color="#ffd0a0" distance={10} />
       <pointLight position={[0, -1, 4]} intensity={0.3} color="#ffffff" distance={6} />
-      <PotteryMesh profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
+      <LatheMesh profile={profile} mat={mat} autoRotate={autoRotate} rpm={rpm} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -WORLD_H / 2, 0]} receiveShadow>
         <circleGeometry args={[4, 48]} />
         <meshStandardMaterial color="#141428" roughness={1} />

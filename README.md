@@ -27,6 +27,19 @@ cloude Ai ->>> [
     }
 ]
 
+openCode :[
+  for react native three:{
+
+  }
+  reactjs Vite:{
+      opencode -s ses_f61a69a08ffeScxi8Odd5t7MPV
+  }
+  django3DBuilder:{
+    
+  }
+]
+
+
 
 //playstore related
 Privacy Policy page-  

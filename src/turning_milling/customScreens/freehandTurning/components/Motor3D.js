@@ -5,10 +5,11 @@ import * as THREE from 'three';
 import { useTextureLoader } from '../../../../utils/materials/textures';
 import { degToRad } from '../../../../utils/common';
 import {
-  BASE_RPM, MOTOR_RIG_SCALE,
-  MOTOR_IMAGE_BOTTOM, MOTOR_IMAGE_LEFT, MOTOR_IMAGE_SIZE,
+  BASE_RPM, MOTOR_RIG_SCALE, SH, HEADER_H, CONTROL_STRIP_H, STOCK_AXIS_Y,
+  MOTOR_IMAGE_LEFT, MOTOR_IMAGE_SIZE,
 } from '../constants';
 import motor from '../../../../assets/images/others/motor.png';
+import { MotorPowerSwitch } from './UIComponents';
 
 // ── Rotating pulley ────────────────────────────────────────────
 export const RotatingPulley = memo(function RotatingPulley({
@@ -201,10 +202,49 @@ function PulleysOnly({ rpmRef, isPowered = true }) {
 // (and the motor image's opacity) freeze at whatever isPowered was on
 // first mount.
 export const MotorPreview = React.memo(
-  function MotorPreview({ rpmRef, onLoad, isPowered = true }) {
+  function MotorPreview({ rpmRef, onLoad, isPowered = true, onPowerToggle }) {
     useEffect(() => {
       if (onLoad) onLoad();
     }, []);
+
+    // Align the pulley rig so the main wheel's centre sits on
+    // STOCK_AXIS_Y -- the stock's rotation axis -- when projected
+    // into this full-body R3F canvas. The canvas height is measured
+    // on every layout (onLayout below) instead of compared against
+    // an assumed SH - HEADER_H - CONTROL_STRIP_H value: the 2D body
+    // reserves bottom padding for the tool magazine, so the assumed
+    // height was always larger than the real canvas and the wheel
+    // landed slightly above the stock axis.
+    const [canvasH, setCanvasH] = useState(0);
+    const handleCanvasLayout = useCallback((e) => {
+      const h = Math.round(e.nativeEvent.layout.height);
+      setCanvasH(prev => (Math.abs(prev - h) > 1 ? h : prev));
+    }, []);
+
+    const rigAxisOffsetY = useMemo(() => {
+      const bodyH = canvasH > 0 ? canvasH : SH - HEADER_H - CONTROL_STRIP_H; // R3F canvas height
+      const halfVis = 5 * Math.tan(25 * Math.PI / 180); // half visible height at dist=5
+      const desiredWorldY = halfVis * (1 - 2 * STOCK_AXIS_Y / bodyH);
+      const offset = desiredWorldY - 0.9;               // pulley1 local y
+      return Math.round(offset * 1000) / 1000;
+    }, [canvasH]);
+
+    // ── Motor PNG placement ─────────────────────────────────────
+    // The motor is the drive unit at the BOTTOM of the belt: its
+    // output pulley is pulley3/pulley4 (rig-local y=-1.5). Instead of
+    // a hardcoded bottom offset, anchor the motor image onto that
+    // pulley's projected screen position -- so when the rig moves to
+    // keep the flywheel on the stock axis, the motor follows the
+    // lower pulley and the belt stays connected to it on any device.
+    const motorPlacement = useMemo(() => {
+      const h = canvasH > 0 ? canvasH : SH - HEADER_H - CONTROL_STRIP_H;
+      const halfVis = 5 * Math.tan(25 * Math.PI / 180);
+      const bottomPulleyWorldY = rigAxisOffsetY - 1.5;  // pulley3/4 local y
+      const screenY = (1 - bottomPulleyWorldY / halfVis) / 2 * h;
+      // Centre the motor image vertically on the lower pulley.
+      const bottom = h - screenY - MOTOR_IMAGE_SIZE / 2;
+      return Math.round(bottom);
+    }, [rigAxisOffsetY, canvasH]);
 
     return (
       <ImageBackground
@@ -213,6 +253,7 @@ export const MotorPreview = React.memo(
         }}
         resizeMode="cover"
         pointerEvents="none"
+        onLayout={handleCanvasLayout}
         style={{
           position: 'absolute',
           top: 0, left: 0,
@@ -234,7 +275,7 @@ export const MotorPreview = React.memo(
               (MOTOR_RIG_SCALE, in constants.js) is the single place to
               retune how big the mechanism reads next to the motor PNG
               without touching every position/radius number below. */}
-          <group scale={MOTOR_RIG_SCALE}>
+          <group position={[0, rigAxisOffsetY, 0]} scale={MOTOR_RIG_SCALE}>
             <PulleysOnly rpmRef={rpmRef} isPowered={isPowered} />
           </group>
         </Canvas>
@@ -243,7 +284,7 @@ export const MotorPreview = React.memo(
           source={motor}
           style={{
             position: 'absolute',
-            bottom: MOTOR_IMAGE_BOTTOM,
+            bottom: motorPlacement,
             left: MOTOR_IMAGE_LEFT,
             width: MOTOR_IMAGE_SIZE,
             height: MOTOR_IMAGE_SIZE,
@@ -252,11 +293,27 @@ export const MotorPreview = React.memo(
             opacity: isPowered ? 1 : 0.5,
           }}
         />
+
+        {/* Power switch -- mounted on the motor housing, right of the
+            motor PNG and vertically centred on it. Uses the SAME
+            computed placement values as the Image above, in the same
+            component, so the two physically can't drift apart. */}
+        {onPowerToggle && (
+          <MotorPowerSwitch
+            isOn={isPowered}
+            onPress={onPowerToggle}
+            style={{
+              bottom: motorPlacement + MOTOR_IMAGE_SIZE / 2 - 20,
+              left: MOTOR_IMAGE_LEFT + MOTOR_IMAGE_SIZE + 10,
+            }}
+          />
+        )}
       </ImageBackground>
     );
   },
   (prevProps, nextProps) =>
     prevProps.isPowered === nextProps.isPowered &&
     prevProps.rpmRef === nextProps.rpmRef &&
-    prevProps.onLoad === nextProps.onLoad
+    prevProps.onLoad === nextProps.onLoad &&
+    prevProps.onPowerToggle === nextProps.onPowerToggle
 );

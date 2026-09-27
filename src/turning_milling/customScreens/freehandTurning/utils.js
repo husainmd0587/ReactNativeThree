@@ -1,22 +1,24 @@
 import { Skia } from '@shopify/react-native-skia';
 import {
-  CANVAS_W, AXIS_Y, STOCK_LEFT, STOCK_RIGHT, STOCK_WIDTH,
-  PROFILE_SEGS, STOCK_RADIUS, TOOL_REACH,
+  CANVAS_W, STOCK_AXIS_Y, STOCK_LEFT, STOCK_RIGHT, STOCK_WIDTH,
+  PROFILE_SEGS, STOCK_RADIUS, GRIP_TO_TIP,
 } from './constants';
 
 export function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// ── Finger → tool-tip projection ──────────────────────────────
-// Shared by the gesture handlers and every Skia transform that
-// positions the tool visually, so the drawn tool tip always matches
-// the point actually being cut.
+// ── Grip anchor → cutting tip projection ─────────────────────
+// The finger/touch point is the GRIP (where the hand holds the tool
+// handle). The cutting tip is projected from it toward the machining
+// axis by GRIP_TO_TIP px, so the pivot sits forward of the hand at its
+// actual cutting position. The push direction is always normal to the
+// axis (toward STOCK_AXIS_Y), i.e. radial in the lathe's cross-section.
 export function fingerToTip(fx, fy) {
   'worklet';
   const dx = CANVAS_W / 2 - fx;
-  const dy = AXIS_Y - fy;
+  const dy = STOCK_AXIS_Y - fy;
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
-  const rawX = fx + (dx / len) * TOOL_REACH;
-  const rawY = fy + (dy / len) * TOOL_REACH;
+  const rawX = fx + (dx / len) * GRIP_TO_TIP;
+  const rawY = fy + (dy / len) * GRIP_TO_TIP;
   const tx = rawX < STOCK_LEFT ? STOCK_LEFT : rawX > STOCK_RIGHT ? STOCK_RIGHT : rawX;
   return { tx, ty: rawY };
 }
@@ -31,13 +33,23 @@ export function xToSeg(x) {
   );
 }
 
+// Maps a tool's on-screen cutting width (px) onto profile segments so
+// the carved footprint roughly matches the visible tool -- the old
+// `Math.floor(width / 2)` treated width as segments, making a 16px
+// roughing gouge carve ~100px of stock. `narrow`/`point` shapes are
+// still weighted so only their centre actually bites.
+export function toolHalfSegs(tool) {
+  const segPx = STOCK_WIDTH / PROFILE_SEGS;
+  return Math.max(1, Math.ceil((tool.width / 2) / segPx));
+}
+
 export function applyTool(profile, cx, cy, tool) {
-  const dist = Math.abs(cy - AXIS_Y);
+  const dist = Math.abs(cy - STOCK_AXIS_Y);
   if (dist < 2 || cx < STOCK_LEFT || cx > STOCK_RIGHT) return profile;
 
   const next = Float32Array.from(profile);
   const seg = xToSeg(cx);
-  const half = Math.floor(tool.width / 2);
+  const half = toolHalfSegs(tool);
 
   for (let di = -half; di <= half; di++) {
     const s = seg + di;
@@ -92,18 +104,18 @@ export function jitterProfile(profile, centerSeg, halfWidth, intensity) {
 // ── Skia path builders ────────────────────────────────────────
 export function fillPath(profile) {
   const p = Skia.Path.Make();
-  p.moveTo(STOCK_LEFT, AXIS_Y - profile[0]);
+  p.moveTo(STOCK_LEFT, STOCK_AXIS_Y - profile[0]);
   for (let i = 0; i < PROFILE_SEGS; i++) {
     const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-    p.lineTo(x, AXIS_Y - profile[i]);
+    p.lineTo(x, STOCK_AXIS_Y - profile[i]);
   }
-  p.lineTo(STOCK_RIGHT, AXIS_Y - profile[PROFILE_SEGS - 1]);
-  p.lineTo(STOCK_RIGHT, AXIS_Y + profile[PROFILE_SEGS - 1]);
+  p.lineTo(STOCK_RIGHT, STOCK_AXIS_Y - profile[PROFILE_SEGS - 1]);
+  p.lineTo(STOCK_RIGHT, STOCK_AXIS_Y + profile[PROFILE_SEGS - 1]);
   for (let i = PROFILE_SEGS - 1; i >= 0; i--) {
     const x = STOCK_LEFT + (i / PROFILE_SEGS) * STOCK_WIDTH;
-    p.lineTo(x, AXIS_Y + profile[i]);
+    p.lineTo(x, STOCK_AXIS_Y + profile[i]);
   }
-  p.lineTo(STOCK_LEFT, AXIS_Y + profile[0]);
+  p.lineTo(STOCK_LEFT, STOCK_AXIS_Y + profile[0]);
   p.close();
   return p;
 }
@@ -111,7 +123,12 @@ export function fillPath(profile) {
 // ── Chip particle helpers ─────────────────────────────────────
 export function chipStyleForMaterial(mat) {
   switch (mat.id) {
-    case 'wood':    return { kind: 'shaving', color: mat.color, size: [16, 34] };
+    case 'wood':
+    case 'wood-dry':
+    case 'walnut':
+    case 'cherry':
+    case 'ebony':
+      return { kind: 'shaving', color: mat.color, size: [16, 34] };
     case 'clay':    return { kind: 'blob',    color: mat.color, size: [5, 10] };
     case 'ceramic':
     case 'glazed':  return { kind: 'chip',    color: mat.color, size: [4, 9]  };
@@ -129,13 +146,13 @@ export function makeChipPool(n) {
 
 export function getToolDescription(toolId) {
   const descriptions = {
-    roughing: '⚡ Heavy material removal',
-    gouge: '🔄 Deep bowl carving',
-    skew: '💠 Precision flat cuts',
-    parting: '✂️ Cutting off pieces',
-    scraper: '🔲 Smoothing surfaces',
-    spindle: '📏 Detailed spindle work',
-    bead: '⚪ Bead & detail forming',
+    roughing: '⚡ Fast stock removal',
+    gouge: '🔄 Deep bowl & cove cuts',
+    skew: '💠 Smooth planing cuts',
+    parting: '✂️ Part-off to size',
+    scraper: '🔲 Fine finishing cuts',
+    spindle: '📏 Detail spindle turning',
+    bead: '⚪ Rolling beads & coves',
   };
   return descriptions[toolId] || 'Selected';
 }
