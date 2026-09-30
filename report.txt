@@ -1,0 +1,367 @@
+================================================================================
+ENGINEERING 3D — 16 KB PAGE SIZE PLAY REJECTION
+FINAL DIAGNOSIS REPORT
+================================================================================
+Project : E:\projects\ReactNativeThree
+Package : com.threeapp
+Date    : 2026-09-30
+Status  : DIAGNOSIS COMPLETE / MIGRATION NOT YET PERFORMED
+
+
+--------------------------------------------------------------------------------
+ROOT CAUSE
+--------------------------------------------------------------------------------
+
+react-android:0.76.3 and hermes-android:0.76.3 ship prebuilt native binaries
+whose ELF LOAD segments are aligned to 4 KB (align 2**12).
+
+Google Play requires 16 KB (align 2**14) compatible native libraries.
+
+This is the same underlying React Native 0.76-era problem previously
+experienced in the "Minnu Zaika" application. No other dependency audit was
+required to reach this conclusion.
+
+The upgrade target is React Native 0.77.x, whose prebuilt binaries are already
+16 KB aligned.
+
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Inspection tool:
+  $env:ANDROID_HOME\ndk\28.0.13004108\toolchains\llvm\prebuilt\
+      windows-x86_64\bin\llvm-objdump.exe
+
+Command:
+  llvm-objdump.exe -p <file.so>
+
+AARs inspected (release variants, from the local Gradle cache):
+  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-android/
+      0.76.3/.../react-android-0.76.3-release.aar
+  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android/
+      0.76.3/.../hermes-android-0.76.3-release.aar
+  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-android/
+      0.77.0/.../react-android-0.77.0-release.aar
+  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android/
+      0.77.0/.../hermes-android-0.77.0-release.aar
+
+--- React Native 0.76.3 / Hermes 0.76.3  (jni/arm64-v8a) — FAIL ---
+
+  libreactnative.so     align 2**12   (4 KB)
+  libhermes.so          align 2**12   (4 KB)
+  libjsi.so             align 2**12   (4 KB)
+  libfbjni.so           align 2**12   (4 KB)
+  libc++_shared.so      align 2**12   (4 KB)
+  libhermestooling.so   align 2**12   (4 KB)
+  libjsctooling.so      align 2**12   (4 KB)
+
+--- React Native 0.77.0 / Hermes 0.77.0  (jni/arm64-v8a) — PASS ---
+
+  libreactnative.so     align 2**14   (16 KB)
+  libhermes.so          align 2**14   (16 KB)
+  libjsi.so             align 2**14   (16 KB)
+  libfbjni.so           align 2**14   (16 KB)
+  libc++_shared.so      align 2**14   (16 KB)
+  libhermestooling.so   align 2**14   (16 KB)
+  libjsctooling.so      align 2**14   (16 KB)
+
+Interpretation:
+  align 2**12  ->  4 KB   ->  NOT 16 KB page-size compatible
+  align 2**14  -> 16 KB   ->  16 KB page-size compatible
+
+The 0.77.0 AARs were already present in the local Gradle cache, so the
+remediation was proven at the binary level without performing any build.
+
+Phase 4 (Skia / Reanimated inspection) was intentionally SKIPPED. The decision
+tree terminates at RESULT A, so auditing further dependencies would only have
+consumed time without changing the conclusion.
+
+
+--------------------------------------------------------------------------------
+CURRENT PROJECT STATE  (Phase 1)
+--------------------------------------------------------------------------------
+
+  React Native           0.76.3
+  React                  18.3.1
+  Hermes                 enabled (hermesEnabled=true)
+  New Architecture       disabled (newArchEnabled=false)
+  NDK                    28.0.13004108   <-- FAILED CONFIG, must be reverted
+  compileSdkVersion      36
+  targetSdkVersion       36
+  buildToolsVersion      36.1.0
+  AGP                    8.6.0 (via @react-native/gradle-plugin)
+  Gradle                 8.10.2
+  Kotlin                 1.9.24
+  minSdkVersion          24
+  ABIs                   armeabi-v7a, arm64-v8a, x86, x86_64
+  versionCode            8
+  versionName            1.0.8
+  Play flavor            play (flavorDimensions "store")
+
+Note: the task brief referenced release 1.0.7 / versionCode 7. The project is
+currently at 1.0.8 / versionCode 8. This was NOT changed during diagnosis.
+
+
+--------------------------------------------------------------------------------
+PHASE 2 — NDK STATUS
+--------------------------------------------------------------------------------
+
+android/build.gradle currently specifies:
+
+  ndkVersion = "28.0.13004108"
+
+This is the NDK that FAILED. It must be reverted to the project's known-good
+value before any migration work begins:
+
+  ndkVersion = "26.1.10909125"
+
+NDK 28 is NOT the automatic solution. Under RN 0.76.3 it produced the
+Folly / Reanimated compile error:
+
+  error: implicit instantiation of undefined template 'std::char_traits<unsigned char>'
+
+originating from RN 0.76.3 Folly headers (folly/Traits.h, folly/Range.h).
+
+NDK 26.1.10909125 remains the correct choice after the RN upgrade as well,
+because RN 0.77's prebuilt libraries are already 16 KB aligned. The NDK version
+is independent of the 16 KB requirement for prebuilt binaries.
+
+
+--------------------------------------------------------------------------------
+SECONDARY BLOCKER IDENTIFIED (not yet fixed)
+--------------------------------------------------------------------------------
+
+The application has its own CMake native build:
+
+  android/app/build.gradle:
+      externalNativeBuild { cmake { path "src/main/cpp/CMakeLists.txt" } }
+
+  android/app/src/main/cpp/CMakeLists.txt:
+      builds SHARED library "native-lib" from native-lib.cpp
+      plus the local "manifold" submodule (STATIC)
+      compiler flags: -O3 -fvisibility=hidden -fPIC
+      NO page-size linker flag is set
+
+A CMake-built shared library defaults to 4 KB segment alignment. Therefore
+libnative-lib.so will remain a 16 KB incompatible binary IN THE FINAL APK even
+after the React Native upgrade, unless it is addressed.
+
+Minimum fix (one line added to CMakeLists.txt):
+
+  target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
+
+This is independent of the RN upgrade and would otherwise have surfaced only
+during final artifact verification.
+
+
+--------------------------------------------------------------------------------
+FIX
+--------------------------------------------------------------------------------
+
+Primary:
+  React Native  0.76.3  ->  0.77.x
+
+Supporting:
+  ndkVersion    "28.0.13004108"  ->  "26.1.10909125"
+
+  @react-native/babel-preset, @react-native/eslint-config,
+  @react-native/metro-config, @react-native/typescript-config
+      0.76.3 -> 0.77.x
+
+  target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
+      in android/app/src/main/cpp/CMakeLists.txt
+
+
+--------------------------------------------------------------------------------
+MIGRATION PLAN (RN 0.76.3 -> 0.77.x)
+--------------------------------------------------------------------------------
+
+STEP 0 — GIT CHECKPOINT
+  Create a local checkpoint commit. DO NOT PUSH.
+  The working tree is currently dirty and was NOT modified during diagnosis:
+    modified : README.md
+    modified : android/app/build.gradle
+    modified : android/build.gradle
+    modified : script.sh
+    modified : src/navigation/MainStack.js
+    deleted  : tmp.html
+    untracked : android-dependencies.txt
+    untracked : play-release-dependencies.txt
+    untracked : run.ps1
+    untracked : prompt.txt
+    untracked : nul
+    untracked : src/mechanical_engineering/Edand3D/customScreens/CadStudio/
+
+STEP 1 — REVERT NDK
+  android/build.gradle: ndkVersion = "26.1.10909125"
+  Do NOT retry NDK 28.
+
+STEP 2 — BUMP THE REACT NATIVE SET
+  package.json:
+      react-native                      -> 0.77.x
+      @react-native/babel-preset         -> 0.77.x
+      @react-native/eslint-config        -> 0.77.x
+      @react-native/metro-config         -> 0.77.x
+      @react-native/typescript-config    -> 0.77.x
+  react stays 18.3.1 (RN 0.77 does not require React 19).
+  newArchEnabled stays false (old architecture is still supported on 0.77 and
+  is not a factor in the 16 KB requirement).
+
+STEP 3 — MINIMUM DEPENDENCY ADJUSTMENTS
+  Only adjust what actually blocks the build. Do NOT blanket-upgrade.
+
+  KEEP (already compatible with RN 0.77):
+      react-native-reanimated            ^3.16.6
+      react-native-screens              ~4.10.0
+      react-native-safe-area-context    ^4.14.1
+      react-native-gesture-handler      ^2.21.2
+      @react-native-firebase/app        ^24.1.1
+      @react-native-firebase/auth       ^24.1.1
+      @react-native-google-signin/...   ^16.1.2
+      react-native-pdf                  ^7.0.4
+      react-native-webview              ^13.13.2
+      react-native-iap                  13.0.4
+      react-native-sound                ^0.11.2
+      react-native-tts                  ^4.1.1
+      react-native-fs / blob-util / async-storage
+      @shopify/react-native-skia        ^1.5.0   (verify after build)
+
+  CAUTION — react-native-iap 13.0.4 has a local patch-package patch at
+      patches/react-native-iap+13.0.4.patch
+  Ensure postinstall patch application still succeeds after the upgrade.
+
+  LIKELY BREAKAGE POINT — Expo:
+      android/settings.gradle calls useExpoModules() and wires
+      expo-modules-autolinking.
+      Expo SDK 52 (expo ^52.0.0) targets RN 0.76.
+      The RN 0.77 line is Expo SDK 53.
+      If the Gradle build fails after STEP 2, bump the Expo set
+      (expo, expo-gl, expo-modules-core) to SDK 53 as one coordinated change.
+
+STEP 4 — FIX THE APP'S OWN NATIVE LIBRARY
+  Add to android/app/src/main/cpp/CMakeLists.txt:
+      target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
+  Re-verify Skia and Reanimated .so alignment after the build; if any source-built
+  output is still 4 KB, apply the same linker option.
+
+STEP 5 — LOCAL RELEASE BUILD
+  Build the "play" release variant only. DO NOT UPLOAD.
+
+STEP 6 — VERIFY THE FINAL ARTIFACT
+  Extract every lib/*/*.so from the built APK/AAB.
+  Run llvm-objdump -p on each. Require align 2**14 on ALL LOAD segments.
+  Then verify APK packaging alignment:
+      $env:ANDROID_HOME\build-tools\36.1.0\zipalign.exe -c -P 16 -v 4 \
+          app-release.apk
+  For the AAB, inspect native-library packaging with available Android tooling.
+
+ONLY AFTER STEP 6 PASSES MAY THE PLAY UPLOAD BE CONSIDERED.
+
+
+--------------------------------------------------------------------------------
+PRESERVATION CONSTRAINTS
+--------------------------------------------------------------------------------
+
+The following MUST NOT change during the migration:
+  - UI design
+  - Feature set
+  - applicationId / namespace / package name
+  - signing configuration and keystore credentials
+  - Firebase configuration (google-services)
+  - Play product flavor
+  - versionCode / versionName
+  - application functionality
+  - native modules
+  - working libraries (no unnecessary replacements)
+
+Additional rules observed during this task:
+  - No credentials or secrets were printed in this report.
+  - Nothing was uploaded to Google Play.
+  - versionCode was not changed during diagnosis.
+  - No dependency-by-dependency audit was performed.
+
+
+--------------------------------------------------------------------------------
+FILES CHANGED
+--------------------------------------------------------------------------------
+
+During diagnosis:
+  NONE. No project source or build file was modified.
+
+Created by this task:
+  report.txt   (this file)
+
+To be changed during migration:
+  package.json
+  android/build.gradle                                   (ndkVersion only)
+  android/app/src/main/cpp/CMakeLists.txt                (target_link_options)
+
+
+--------------------------------------------------------------------------------
+BUILD RESULT
+--------------------------------------------------------------------------------
+
+NOT RUN.
+No build was executed during the diagnosis phase.
+
+
+--------------------------------------------------------------------------------
+16 KB ELF RESULT
+--------------------------------------------------------------------------------
+
+FAIL.
+
+  React Native 0.76.3 / Hermes 0.76.3   ->  align 2**12  (4 KB)
+  React Native 0.77.0 / Hermes 0.77.0   ->  align 2**14  (16 KB)   [target]
+
+The upgrade target is proven compatible at the binary level.
+Final PASS can only be declared after STEP 6 on the built artifact.
+
+
+--------------------------------------------------------------------------------
+APK/AAB PACKAGING RESULT
+--------------------------------------------------------------------------------
+
+NOT RUN.
+No release artifact was produced or inspected.
+
+
+--------------------------------------------------------------------------------
+PLAY UPLOAD STATUS
+--------------------------------------------------------------------------------
+
+DO NOT UPLOAD YET
+
+This may only be changed after the final release artifact has been built and
+verified for both 16 KB ELF alignment and 16 KB APK packaging alignment.
+
+
+--------------------------------------------------------------------------------
+DECISION TREE OUTCOME
+--------------------------------------------------------------------------------
+
+  16 KB rejection
+         |
+         v
+  Check RN 0.76.3 / Hermes native binaries
+         |
+      [ FAIL ]  align 2**12
+         |
+         v
+  RN 0.77 path  <-- SELECTED
+         |
+         v
+  Build locally (playRelease)
+         |
+         v
+  Scan FINAL APK/AAB  (all lib/*/*.so, require 2**14)
+         |
+         v
+  Only then consider Play upload
+
+  RESULT A — React Native 0.76.3 IS THE BLOCKER. CONFIRMED.
+
+================================================================================
+END OF REPORT
+================================================================================

@@ -10,6 +10,7 @@ change glb to jsx=[https://gltf.pmnd.rs/]
 cloude Ai ->>> [
     husain68644@gmail.com:{
          AutoCad: https://claude.ai/chat/daaffb8c-9268-457b-9046-3142a528e272
+         
     },
     husain0587@gmail.com:{
          cncTurning:https://claude.ai/chat/e5d10ae7-7e36-4bd4-bc1c-254e46a2a994
@@ -29,7 +30,7 @@ cloude Ai ->>> [
 
 openCode :[
   for react native three:{
-
+    cad new - opencode -s ses_f1caf400dffejxsUB3EGsfHgrf
   }
   reactjs Vite:{
       opencode -s ses_f61a69a08ffeScxi8Odd5t7MPV

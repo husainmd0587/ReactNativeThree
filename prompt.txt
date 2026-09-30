@@ -1,0 +1,565 @@
+# EXECUTE THE VERIFIED 16 KB FIX — ENGINEERING 3D
+
+The diagnosis phase is COMPLETE.
+
+Do NOT perform another broad 16 KB dependency investigation.
+
+The diagnosis established:
+
+* React Native 0.76.3 native binaries: 4 KB aligned
+* Hermes 0.76.3 native binaries: 4 KB aligned
+* React Native 0.77.0 AARs already present locally: 16 KB aligned
+* NDK 28 + RN 0.76.3 causes the known Folly/Reanimated compiler failure
+* The app also builds its own `libnative-lib.so`
+* The app's native CMake target currently has no 16 KB linker page-size option
+
+Therefore execute the migration.
+
+## TARGET
+
+```text
+React Native 0.76.3 → 0.77.x
+NDK 28.0.13004108 → 26.1.10909125
+```
+
+Keep:
+
+```text
+React 18.3.1
+Hermes enabled
+newArchEnabled=false
+compileSdkVersion=36
+targetSdkVersion=36
+buildToolsVersion=36.1.0
+```
+
+Do NOT upgrade to RN 0.78+.
+
+Use RN 0.77.x, preferably the already locally cached `0.77.0` unless the project's dependency constraints require another 0.77 patch release.
+
+---
+
+# SAFETY RULES
+
+Before changing anything:
+
+1. Inspect Git status.
+2. Create a LOCAL checkpoint commit if appropriate.
+3. NEVER push.
+4. NEVER upload to Google Play.
+5. NEVER modify signing credentials.
+6. NEVER expose secrets.
+7. NEVER change applicationId.
+8. NEVER change namespace.
+9. NEVER redesign UI.
+10. NEVER remove features.
+11. NEVER perform blanket dependency upgrades.
+
+The working tree is known to contain unrelated changes.
+
+Preserve them.
+
+Do NOT reset the repository.
+
+Do NOT use:
+
+```text
+git reset --hard
+git clean -fd
+```
+
+Do not delete unrelated untracked work.
+
+---
+
+# STEP 1 — REVERT NDK
+
+Change only the NDK version in:
+
+```text
+android/build.gradle
+```
+
+from:
+
+```gradle
+ndkVersion = "28.0.13004108"
+```
+
+to:
+
+```gradle
+ndkVersion = "26.1.10909125"
+```
+
+Do NOT retry NDK 28.
+
+---
+
+# STEP 2 — UPGRADE REACT NATIVE
+
+Update the React Native core/tooling set to RN 0.77.x.
+
+At minimum inspect:
+
+```text
+package.json
+```
+
+and update:
+
+```text
+react-native
+@react-native/babel-preset
+@react-native/eslint-config
+@react-native/metro-config
+@react-native/typescript-config
+```
+
+from 0.76.x to the appropriate 0.77.x versions.
+
+Keep:
+
+```text
+react = 18.3.1
+```
+
+Do NOT upgrade React to 19.
+
+Keep:
+
+```text
+newArchEnabled=false
+```
+
+---
+
+# STEP 3 — DO NOT BLANKET-UPGRADE NATIVE MODULES
+
+Initially preserve the existing dependency versions.
+
+Especially do NOT automatically upgrade:
+
+```text
+react-native-reanimated
+react-native-screens
+react-native-safe-area-context
+react-native-gesture-handler
+@react-native-firebase/*
+@shopify/react-native-skia
+react-native-pdf
+react-native-webview
+react-native-iap
+react-native-sound
+react-native-tts
+```
+
+The objective is to find the minimum changes required for RN 0.77.
+
+If the package manager reports an actual peer-dependency incompatibility, identify that exact package and change only what is necessary.
+
+---
+
+# STEP 4 — EXPO COMPATIBILITY
+
+This project uses Expo modules/autolinking.
+
+Inspect the current Expo setup.
+
+The current project uses approximately:
+
+```text
+Expo SDK 52
+```
+
+which is associated with RN 0.76.
+
+RN 0.77 may require the corresponding Expo SDK 53 transition.
+
+IMPORTANT:
+
+Do NOT upgrade Expo automatically before checking the actual dependency requirements.
+
+First install/update the RN 0.77 set and inspect the resulting dependency resolution.
+
+If Expo SDK 52 prevents a valid RN 0.77 installation/build, then perform the minimum coordinated Expo SDK 53 migration required.
+
+If this happens, report exactly which Expo package caused the incompatibility.
+
+---
+
+# STEP 5 — PRESERVE PATCH-PACKAGE
+
+The project contains:
+
+```text
+patches/react-native-iap+13.0.4.patch
+```
+
+Do NOT delete it.
+
+Run the normal installation/postinstall process and verify that the patch still applies.
+
+If patch-package fails:
+
+STOP and report the exact failure.
+
+Do not silently remove the patch.
+
+---
+
+# STEP 6 — INSTALL DEPENDENCIES
+
+Use the project's existing package manager/lockfile.
+
+Do not delete the lockfile unless there is a demonstrated reason.
+
+Do not randomly regenerate the dependency tree.
+
+After installation verify:
+
+```text
+react-native = 0.77.x
+react = 18.3.1
+```
+
+and verify the actual installed versions of all native dependencies.
+
+---
+
+# STEP 7 — FIX APP'S OWN NATIVE LIBRARY
+
+Open:
+
+```text
+android/app/src/main/cpp/CMakeLists.txt
+```
+
+Locate the existing:
+
+```cmake
+add_library(native-lib SHARED ...)
+```
+
+target.
+
+Add:
+
+```cmake
+target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
+```
+
+Apply this specifically to `native-lib`.
+
+Do not unnecessarily alter the Manifold source.
+
+Do not rewrite the CMake file.
+
+Do not change compiler optimization settings unless required.
+
+---
+
+# STEP 8 — CLEAN ONLY BUILD OUTPUTS
+
+After dependency migration:
+
+Clean Gradle/build artifacts safely.
+
+Do NOT delete source files.
+
+Do NOT delete Git changes.
+
+Do NOT use destructive repository cleanup.
+
+If native `.cxx` build directories need cleaning, remove only generated `.cxx`/build directories.
+
+---
+
+# STEP 9 — BUILD PLAY RELEASE
+
+Build ONLY the Play release variant.
+
+Use the project's actual variant, for example:
+
+```powershell
+cd E:\projects\ReactNativeThree\android
+.\gradlew :app:assemblePlayRelease
+```
+
+If the project produces an AAB as required, also build the appropriate bundle task.
+
+Do NOT upload anything.
+
+---
+
+# STEP 10 — IF BUILD FAILS
+
+Do NOT start randomly changing versions.
+
+Capture the FIRST meaningful error.
+
+Classify it as:
+
+```text
+A. React Native migration issue
+B. Expo compatibility issue
+C. Reanimated compatibility issue
+D. Skia compatibility issue
+E. another native module
+F. Gradle/AGP issue
+G. CMake/NDK issue
+H. Java/Kotlin issue
+I. unrelated application source issue
+```
+
+Then make the smallest necessary correction.
+
+Maximum principle:
+
+```text
+ONE PROBLEM → ONE MINIMUM FIX → REBUILD
+```
+
+Do not upgrade multiple unrelated libraries at once.
+
+---
+
+# STEP 11 — VERIFY FINAL APK NATIVE LIBRARIES
+
+After a successful build, locate the exact generated APK.
+
+Extract:
+
+```text
+lib/*/*.so
+```
+
+from the APK.
+
+Inspect EVERY `.so`.
+
+Use:
+
+```text
+$env:ANDROID_HOME\ndk\28.0.13004108\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-objdump.exe
+```
+
+Inspection with NDK 28's objdump is fine.
+
+The project itself remains on NDK 26.1.
+
+For every ELF binary inspect every LOAD segment.
+
+Required:
+
+```text
+align 2**14
+```
+
+or greater.
+
+Any:
+
+```text
+align 2**12
+```
+
+is a failure requiring investigation.
+
+Create a complete final table:
+
+| APK .so | ABI | Source | LOAD alignment | Result |
+| ------- | --- | ------ | -------------- | ------ |
+
+Do not skip libraries because they were previously assumed compatible.
+
+The FINAL APK is the authority.
+
+---
+
+# STEP 12 — VERIFY OUR CUSTOM LIBRARY
+
+Specifically verify:
+
+```text
+libnative-lib.so
+```
+
+It MUST show 16 KB-compatible LOAD alignment.
+
+If it still shows:
+
+```text
+align 2**12
+```
+
+then investigate the CMake linker option.
+
+Do not declare success.
+
+---
+
+# STEP 13 — VERIFY SKIA AND REANIMATED
+
+Even though the original diagnosis stopped before auditing them, now that a new final artifact exists, inspect their actual shipped `.so` files.
+
+This is important because:
+
+```text
+RN 0.77 PASS
+```
+
+does NOT automatically mean:
+
+```text
+every native dependency PASS
+```
+
+---
+
+# STEP 14 — VERIFY APK ZIP ALIGNMENT
+
+Use:
+
+```powershell
+$env:ANDROID_HOME\build-tools\36.1.0\zipalign.exe -c -P 16 -v 4 <FINAL_APK>
+```
+
+Record the real output.
+
+Do not summarize it as PASS unless the command actually passes.
+
+---
+
+# STEP 15 — VERIFY AAB
+
+If an AAB is generated, inspect the bundle's native library packaging using the available Android tooling.
+
+The final release must satisfy BOTH:
+
+```text
+ELF alignment
++
+packaging alignment
+```
+
+---
+
+# STEP 16 — FINAL REPORT
+
+Return ONLY a concise engineering report containing:
+
+## MIGRATION
+
+```text
+RN:
+old → new
+
+NDK:
+old → new
+
+Expo:
+old → new (if changed)
+```
+
+## FILES CHANGED
+
+Exact files.
+
+## DEPENDENCIES CHANGED
+
+Only dependencies actually changed.
+
+## BUILD
+
+```text
+playRelease:
+PASS / FAIL
+```
+
+## FINAL ELF AUDIT
+
+```text
+PASS / FAIL
+```
+
+Number of `.so` files checked:
+
+```text
+N
+```
+
+Number passing:
+
+```text
+N
+```
+
+Number failing:
+
+```text
+N
+```
+
+List every failing `.so` if any.
+
+## APK PACKAGING
+
+```text
+zipalign:
+PASS / FAIL
+```
+
+## AAB PACKAGING
+
+```text
+PASS / FAIL / NOT BUILT
+```
+
+## PLAY STATUS
+
+Until every final verification passes:
+
+```text
+DO NOT UPLOAD
+```
+
+Only when the final APK/AAB is verified:
+
+```text
+READY FOR PLAY UPLOAD
+```
+
+---
+
+# ABSOLUTE SUCCESS CRITERIA
+
+The task is NOT complete merely because RN 0.77 builds.
+
+The task is complete only when:
+
+```text
+RN 0.77.x installed
+        ↓
+NDK 26.1
+        ↓
+playRelease builds
+        ↓
+all final .so files inspected
+        ↓
+all LOAD segments >= 16 KB
+        ↓
+custom libnative-lib.so passes
+        ↓
+Skia/Reanimated pass
+        ↓
+APK packaging passes
+        ↓
+AAB packaging passes if generated
+        ↓
+READY FOR PLAY UPLOAD
+```
+
+Until then:
+
+**DO NOT UPLOAD TO GOOGLE PLAY.**
