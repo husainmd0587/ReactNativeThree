@@ -27,7 +27,6 @@ import MCQ from '../mechanical_engineering/management/mcq/index.js';
 
 // special simulations screens
 import AutoCadPractice from '../mechanical_engineering/Edand3D/customScreens/AutoCad/index.js';
-import CadStudio from '../mechanical_engineering/Edand3D/customScreens/CadStudio/index.js';
 import FreehandTurning from '../turning_milling/customScreens/freehandTurning/FreehandTurning.js';
 import CncSimulatorPro from '../turning_milling/customScreens/cnc/CncSimulatorPro.js';
 import {RoboticsNavigator} from '../mechanical_engineering/robots/customScreens/robotics/navigation/RoboticsNavigator.jsx';
@@ -556,14 +555,6 @@ return modules.filter((screen) => {
       accent: '#7F77DD',
     },
     {
-      route: 'CadStudio',
-      label: 'CAD Studio',
-      desc: 'Full 2D drafting studio on an infinite canvas',
-      emoji: '🖊️',
-      bgImage: require('../assets/images/icons/cadSim.png'),
-      accent: '#4CC2FF',
-    },
-    {
       route: 'FreehandTurning',
       label: 'Freehand Turning',
       desc: 'Manual lathe operation simulation',
@@ -902,7 +893,6 @@ function MainStack() {
         ))}
         {/* Simulator Screens */}
         <Stack.Screen name="AutoCadPractice" component={AutoCadPractice} />
-        <Stack.Screen name="CadStudio" component={CadStudio} />
         <Stack.Screen name="FreehandTurning" component={FreehandTurning} />
         <Stack.Screen name="CncSimulatorPro" component={CncSimulatorPro} />
         <Stack.Screen name="RoboticSimulator" component={RoboticsNavigator} />

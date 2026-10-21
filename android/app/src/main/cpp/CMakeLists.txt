@@ -45,6 +45,9 @@ add_library(
     native-lib.cpp
 )
 
+# 16 KB memory page size compatibility (Google Play requirement)
+target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Include Directories
 # ─────────────────────────────────────────────────────────────────────────────

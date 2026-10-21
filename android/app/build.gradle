@@ -75,6 +75,15 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+
+    // The react-android AAR bundles libc++_shared.so built with NDK r27, which
+    // lacks symbols required by native libs compiled with NDK r28 (e.g. librnskia.so
+    // -> "__cxa_init_primary_exception"). Force our NDK r28 copy from src/main/jniLibs.
+    packaging {
+        jniLibs {
+            pickFirsts += ['**/libc++_shared.so']
+        }
+    }
 }
 
 dependencies {
