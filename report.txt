@@ -1,367 +1,171 @@
 ================================================================================
-ENGINEERING 3D — 16 KB PAGE SIZE PLAY REJECTION
-FINAL DIAGNOSIS REPORT
+PURCHASE / PREMIUM (IAP) — END-TO-END STATUS REPORT
+Date: 2026-10-21
 ================================================================================
-Project : E:\projects\ReactNativeThree
-Package : com.threeapp
-Date    : 2026-09-30
-Status  : DIAGNOSIS COMPLETE / MIGRATION NOT YET PERFORMED
 
-
+1. OVERALL STATUS
 --------------------------------------------------------------------------------
-ROOT CAUSE
+Implemented end-to-end on BOTH sides (React Native client + Express backend)
+and pushed to GitHub. Remaining manual steps are credentials/Play-Console
+items that cannot be done from code (see section 6). A REAL purchase has NOT
+been tested yet — it requires an active Play Console product + a signed build
++ a Google service-account key on the server.
+
+2. THE LOOP (what happens when the user taps "Upgrade")
 --------------------------------------------------------------------------------
+ 1. Client: initConnection + getProducts({skus:["engineering_premium"]})
+    -> shows Play-localized price (fallback label: Rs.299 lifetime).
+ 2. User taps Buy -> requestPurchase (Android: {skus:[...]}, iOS: {sku}).
+ 3. Play Billing sheet completes -> client gets purchaseToken.
+ 4. Client: POST https://www.techt.site/api/content/billing/google/verify-purchase
+    Authorization: Bearer <accessToken>
+    body: {productId, purchaseToken, packageName:"com.threeapp"}
+ 5. BACKEND (server-side, source of truth): verifies purchaseToken against
+    Google Play Developer API (androidpublisher v3) using a SERVICE ACCOUNT
+    that never leaves the server.
+      - purchaseState must be 0 ("purchased") or the request is rejected
+        (409 PURCHASE_PENDING / PURCHASE_NOT_ENTITLED, 400 PURCHASE_INVALID).
+      - On success: upsert into three3d_purchases + set
+        User3dApp.premium.active = true.
+      - Responds: 200 {success:true, data:{purchase, premium:{active:true}}}.
+ 6. Client on 200: finishTransaction({purchase, isConsumable:false}) ->
+    purchase acknowledged in Play.
+ 7. Client refetches GET /auth/me -> backendUser.premium.active is true ->
+    profile shows the existing Premium row as active AND the upgrade card
+    flips to "Lifetime Premium active".
+ 8. Client on verify failure: finishTransaction is NOT called, so the
+    purchase stays unacknowledged and Google redelivers it later — the money
+    is never lost. NO premium is granted until /auth/me confirms it.
 
-react-android:0.76.3 and hermes-android:0.76.3 ship prebuilt native binaries
-whose ELF LOAD segments are aligned to 4 KB (align 2**12).
+Failure mapping the client understands:
+  501/404 VERIFY_NOT_CONFIGURED -> "verification not available, purchase kept"
+  502 GOOGLE_UNREACHABLE / GOOGLE_AUTH_ERROR -> retryable / contact support
+  400/409 -> rejected purchase states
+  E_USER_CANCELLED -> silent (user closed the sheet)
+  E_ALREADY_OWNED -> treated as owned, runs restore/verify path
 
-Google Play requires 16 KB (align 2**14) compatible native libraries.
-
-This is the same underlying React Native 0.76-era problem previously
-experienced in the "Minnu Zaika" application. No other dependency audit was
-required to reach this conclusion.
-
-The upgrade target is React Native 0.77.x, whose prebuilt binaries are already
-16 KB aligned.
-
-
+3. CLIENT CHANGES  (repo: github.com/husainmd0587/ReactNativeThree, branch master)
 --------------------------------------------------------------------------------
-EVIDENCE
+ NEW      src/components/screens/premium/iapConfig.js
+            product id, package name, endpoint constant, token key,
+            documented backend contract.
+ NEW      src/components/screens/premium/verifyGooglePurchase.js
+            Bearer-auth POST of purchaseToken to backend; never throws;
+            classifies 404/501 as missingEndpoint, network errors separately.
+ NEW      src/components/screens/premium/PremiumUpgradeCard.js
+            wrapped with withIAPContext (required by react-native-iap v13);
+            buy + restore (direct getAvailablePurchases), price from
+            getProducts, active-state box, handles cancel/already-owned.
+ EDIT     src/components/screens/profile.js  (+7 lines)
+            imports the card and renders it after the existing Premium
+            status row with active={backendUser.premium?.active} and
+            onPremiumActivated=refetch of /auth/me.
+            NOTE: login.js is a duplicate of profile.js and is NOT wired
+            into navigation — left untouched.
+ BACKUP   backups/profile.js.bak-20261021 (pre-edit copy; git history also
+            keeps the original)
+
+ deps: react-native-iap exactly 13.0.4 (was already in package.json),
+       patches/react-native-iap+13.0.4.patch (Billing 7->8) already present
+       and applied — no Android build changes were needed for billing.
+
+ Other repo work included in this push (from the same session):
+   - React Native 0.76.3 -> 0.77.0 migration, reanimated 3.17.5,
+     @shopify/react-native-skia 1.12.4, expo 53, gesture-handler 2.24,
+     safe-area-context 5.3.0, matching @react-native/* CLI packages.
+   - Crash fixes: libc++_shared.so for NDK-28 shipped in
+     android/app/src/main/jniLibs/* + packaging.jniLibs pickFirsts;
+     removed obsolete CadStudio feature entirely (recoverable from git);
+     reanimated 3.17 removed the `worklet` export (fixed CadCanvas earlier,
+     file since deleted with CadStudio).
+   - Screenshots of the CAD screens saved under src/assets/screenshot/.
+   - gradle.properties: JVM heap lowered to 1536m (local OOM workaround).
+
+ VERIFIED: Metro full bundle compiles; app launches clean on device
+   (Redmi Note 9, Android 12) with no JS errors.
+ NOT VERIFIED: the actual Play purchase sheet / real order — see section 6.
+
+4. BACKEND CHANGES  (repo: github.com/Husain644/express, commit 6fd5a53, branch master)
 --------------------------------------------------------------------------------
+ NEW      projects/Three3D/utility/Billing/googlePlay.service.js
+            Loads service account from env (GOOGLE_SERVICE_ACCOUNT_JSON
+            inline, or GOOGLE_APPLICATION_CREDENTIALS file path), signs the
+            OAuth2 JWT, exchanges it at oauth2.googleapis.com (token cached
+            until 60s before expiry), then calls
+            androidpublisher/v3/applications/{pkg}/purchases/products/
+            {productId}/tokens/{purchaseToken}.
+            Only purchaseState 0 maps to "purchased" -> entitled.
+ NEW      projects/Three3D/utility/Billing/billing.routes.js
+            requireAuth + POST /google/verify-purchase.
+ EDIT     projects/Three3D/utility/Billing/purchase.controller.js
+            - NEW verifyGooglePurchase handler (the app's canonical path).
+            - Legacy POST /api/content/purchases with provider google_play
+              now ALSO verifies against Play before recording (it used to
+              trust the client blindly — that hole is closed).
+            - provider "apple" path still client-trusted (App Store Server
+              API verification is TODO — iOS is not shipped, so out of scope).
+ EDIT     projects/Three3D/routes.js
+            mounts routerBilling at /billing (before the generic /:id routes).
+ ENV      .env gains GOOGLE_SERVICE_ACCOUNT_JSON=, GOOGLE_APPLICATION_CREDENTIALS=,
+            ANDROID_PACKAGE_NAME=com.threeapp
+            ** .env was deliberately NOT committed (it already carries an
+               uncommitted NVIDIA_API_KEY). Set the real service-account
+               value on the server only. **
 
-Inspection tool:
-  $env:ANDROID_HOME\ndk\28.0.13004108\toolchains\llvm\prebuilt\
-      windows-x86_64\bin\llvm-objdump.exe
-
-Command:
-  llvm-objdump.exe -p <file.so>
-
-AARs inspected (release variants, from the local Gradle cache):
-  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-android/
-      0.76.3/.../react-android-0.76.3-release.aar
-  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android/
-      0.76.3/.../hermes-android-0.76.3-release.aar
-  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/react-android/
-      0.77.0/.../react-android-0.77.0-release.aar
-  ~/.gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android/
-      0.77.0/.../hermes-android-0.77.0-release.aar
-
---- React Native 0.76.3 / Hermes 0.76.3  (jni/arm64-v8a) — FAIL ---
-
-  libreactnative.so     align 2**12   (4 KB)
-  libhermes.so          align 2**12   (4 KB)
-  libjsi.so             align 2**12   (4 KB)
-  libfbjni.so           align 2**12   (4 KB)
-  libc++_shared.so      align 2**12   (4 KB)
-  libhermestooling.so   align 2**12   (4 KB)
-  libjsctooling.so      align 2**12   (4 KB)
-
---- React Native 0.77.0 / Hermes 0.77.0  (jni/arm64-v8a) — PASS ---
-
-  libreactnative.so     align 2**14   (16 KB)
-  libhermes.so          align 2**14   (16 KB)
-  libjsi.so             align 2**14   (16 KB)
-  libfbjni.so           align 2**14   (16 KB)
-  libc++_shared.so      align 2**14   (16 KB)
-  libhermestooling.so   align 2**14   (16 KB)
-  libjsctooling.so      align 2**14   (16 KB)
-
-Interpretation:
-  align 2**12  ->  4 KB   ->  NOT 16 KB page-size compatible
-  align 2**14  -> 16 KB   ->  16 KB page-size compatible
-
-The 0.77.0 AARs were already present in the local Gradle cache, so the
-remediation was proven at the binary level without performing any build.
-
-Phase 4 (Skia / Reanimated inspection) was intentionally SKIPPED. The decision
-tree terminates at RESULT A, so auditing further dependencies would only have
-consumed time without changing the conclusion.
-
-
+5. LOCAL TEST RESULTS (run 2026-10-21)
 --------------------------------------------------------------------------------
-CURRENT PROJECT STATE  (Phase 1)
+ Isolated route harness (Express mounts the real routers; Redis/Mongo not
+ needed for these paths):
+   [1] POST verify-purchase, no Authorization      -> 401 OK
+   [2] verify-purchase, auth, empty body           -> 400 "productId and
+                                                      purchaseToken are required" OK
+   [3] verify-purchase, wrong packageName          -> 400 "packageName must be
+                                                      com.threeapp" OK
+   [4] verify-purchase, no service-account on env  -> 501 VERIFY_NOT_CONFIGURED
+                                                      (purchase NOT lost) OK
+   [5] legacy POST /purchases provider google_play -> 501 same gate OK
+ Google token-exchange path exercised with a throwaway RSA key:
+   -> reaches Google, gets "Invalid grant: account not found",
+      correctly mapped to auth_failed (would return 502 GOOGLE_AUTH_ERROR) OK.
+
+ NOT tested (cannot be, from this machine):
+   - a real purchaseToken against a real service account
+   - a real Play purchase (needs signed build + active product)
+   - full server boot (local Redis is down; production has it)
+
+6. REMAINING MANUAL STEPS BEFORE GO-LIVE  (in order)
 --------------------------------------------------------------------------------
+ a) PLAY CONSOLE: create non-consumable product "engineering_premium",
+    price Rs.299 in India, activate it. Add license testers
+    (Settings -> License testing). Upload a signed build:
+      cd android && ./gradlew assemblePlayRelease
+    (needs MYAPP_UPLOAD_* keystore props — none are stored in the repo).
+ b) GOOGLE CLOUD / PLAY: enable "Google Play Android Developer API";
+    create or pick a service account (Play Console -> Settings -> API access
+    -> grant it access to package com.threeapp); download its JSON key.
+ c) SERVER: set GOOGLE_SERVICE_ACCOUNT_JSON=<that JSON> (or
+    GOOGLE_APPLICATION_CREDENTIALS=/path/on/server.json) on techt.site,
+    deploy commit 6fd5a53 of the express repo, restart.
+ d) DEVICE E2E: install the Play-installed build (billing needs real Play,
+    adb-installed debug builds return item-unavailable for unlisted builds),
+    buy with a license-tester account -> profile must show the green active
+    box -> Play Console shows the order -> server three3d_purchases has the
+    row. Then refund in Play Console and confirm /auth/me no longer grants.
+ e) SECURITY (already designed in, do not undo): service-account JSON stays
+    server-side only; the app only ever sends purchaseToken; entitlement is
+    only ever granted from the backend, never from a client flag.
 
-  React Native           0.76.3
-  React                  18.3.1
-  Hermes                 enabled (hermesEnabled=true)
-  New Architecture       disabled (newArchEnabled=false)
-  NDK                    28.0.13004108   <-- FAILED CONFIG, must be reverted
-  compileSdkVersion      36
-  targetSdkVersion       36
-  buildToolsVersion      36.1.0
-  AGP                    8.6.0 (via @react-native/gradle-plugin)
-  Gradle                 8.10.2
-  Kotlin                 1.9.24
-  minSdkVersion          24
-  ABIs                   armeabi-v7a, arm64-v8a, x86, x86_64
-  versionCode            8
-  versionName            1.0.8
-  Play flavor            play (flavorDimensions "store")
-
-Note: the task brief referenced release 1.0.7 / versionCode 7. The project is
-currently at 1.0.8 / versionCode 8. This was NOT changed during diagnosis.
-
-
+7. HOW TO RUN / TEST LOCALLY
 --------------------------------------------------------------------------------
-PHASE 2 — NDK STATUS
---------------------------------------------------------------------------------
-
-android/build.gradle currently specifies:
-
-  ndkVersion = "28.0.13004108"
-
-This is the NDK that FAILED. It must be reverted to the project's known-good
-value before any migration work begins:
-
-  ndkVersion = "26.1.10909125"
-
-NDK 28 is NOT the automatic solution. Under RN 0.76.3 it produced the
-Folly / Reanimated compile error:
-
-  error: implicit instantiation of undefined template 'std::char_traits<unsigned char>'
-
-originating from RN 0.76.3 Folly headers (folly/Traits.h, folly/Range.h).
-
-NDK 26.1.10909125 remains the correct choice after the RN upgrade as well,
-because RN 0.77's prebuilt libraries are already 16 KB aligned. The NDK version
-is independent of the 16 KB requirement for prebuilt binaries.
-
-
---------------------------------------------------------------------------------
-SECONDARY BLOCKER IDENTIFIED (not yet fixed)
---------------------------------------------------------------------------------
-
-The application has its own CMake native build:
-
-  android/app/build.gradle:
-      externalNativeBuild { cmake { path "src/main/cpp/CMakeLists.txt" } }
-
-  android/app/src/main/cpp/CMakeLists.txt:
-      builds SHARED library "native-lib" from native-lib.cpp
-      plus the local "manifold" submodule (STATIC)
-      compiler flags: -O3 -fvisibility=hidden -fPIC
-      NO page-size linker flag is set
-
-A CMake-built shared library defaults to 4 KB segment alignment. Therefore
-libnative-lib.so will remain a 16 KB incompatible binary IN THE FINAL APK even
-after the React Native upgrade, unless it is addressed.
-
-Minimum fix (one line added to CMakeLists.txt):
-
-  target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
-
-This is independent of the RN upgrade and would otherwise have surfaced only
-during final artifact verification.
-
-
---------------------------------------------------------------------------------
-FIX
---------------------------------------------------------------------------------
-
-Primary:
-  React Native  0.76.3  ->  0.77.x
-
-Supporting:
-  ndkVersion    "28.0.13004108"  ->  "26.1.10909125"
-
-  @react-native/babel-preset, @react-native/eslint-config,
-  @react-native/metro-config, @react-native/typescript-config
-      0.76.3 -> 0.77.x
-
-  target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
-      in android/app/src/main/cpp/CMakeLists.txt
-
-
---------------------------------------------------------------------------------
-MIGRATION PLAN (RN 0.76.3 -> 0.77.x)
---------------------------------------------------------------------------------
-
-STEP 0 — GIT CHECKPOINT
-  Create a local checkpoint commit. DO NOT PUSH.
-  The working tree is currently dirty and was NOT modified during diagnosis:
-    modified : README.md
-    modified : android/app/build.gradle
-    modified : android/build.gradle
-    modified : script.sh
-    modified : src/navigation/MainStack.js
-    deleted  : tmp.html
-    untracked : android-dependencies.txt
-    untracked : play-release-dependencies.txt
-    untracked : run.ps1
-    untracked : prompt.txt
-    untracked : nul
-    untracked : src/mechanical_engineering/Edand3D/customScreens/CadStudio/
-
-STEP 1 — REVERT NDK
-  android/build.gradle: ndkVersion = "26.1.10909125"
-  Do NOT retry NDK 28.
-
-STEP 2 — BUMP THE REACT NATIVE SET
-  package.json:
-      react-native                      -> 0.77.x
-      @react-native/babel-preset         -> 0.77.x
-      @react-native/eslint-config        -> 0.77.x
-      @react-native/metro-config         -> 0.77.x
-      @react-native/typescript-config    -> 0.77.x
-  react stays 18.3.1 (RN 0.77 does not require React 19).
-  newArchEnabled stays false (old architecture is still supported on 0.77 and
-  is not a factor in the 16 KB requirement).
-
-STEP 3 — MINIMUM DEPENDENCY ADJUSTMENTS
-  Only adjust what actually blocks the build. Do NOT blanket-upgrade.
-
-  KEEP (already compatible with RN 0.77):
-      react-native-reanimated            ^3.16.6
-      react-native-screens              ~4.10.0
-      react-native-safe-area-context    ^4.14.1
-      react-native-gesture-handler      ^2.21.2
-      @react-native-firebase/app        ^24.1.1
-      @react-native-firebase/auth       ^24.1.1
-      @react-native-google-signin/...   ^16.1.2
-      react-native-pdf                  ^7.0.4
-      react-native-webview              ^13.13.2
-      react-native-iap                  13.0.4
-      react-native-sound                ^0.11.2
-      react-native-tts                  ^4.1.1
-      react-native-fs / blob-util / async-storage
-      @shopify/react-native-skia        ^1.5.0   (verify after build)
-
-  CAUTION — react-native-iap 13.0.4 has a local patch-package patch at
-      patches/react-native-iap+13.0.4.patch
-  Ensure postinstall patch application still succeeds after the upgrade.
-
-  LIKELY BREAKAGE POINT — Expo:
-      android/settings.gradle calls useExpoModules() and wires
-      expo-modules-autolinking.
-      Expo SDK 52 (expo ^52.0.0) targets RN 0.76.
-      The RN 0.77 line is Expo SDK 53.
-      If the Gradle build fails after STEP 2, bump the Expo set
-      (expo, expo-gl, expo-modules-core) to SDK 53 as one coordinated change.
-
-STEP 4 — FIX THE APP'S OWN NATIVE LIBRARY
-  Add to android/app/src/main/cpp/CMakeLists.txt:
-      target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
-  Re-verify Skia and Reanimated .so alignment after the build; if any source-built
-  output is still 4 KB, apply the same linker option.
-
-STEP 5 — LOCAL RELEASE BUILD
-  Build the "play" release variant only. DO NOT UPLOAD.
-
-STEP 6 — VERIFY THE FINAL ARTIFACT
-  Extract every lib/*/*.so from the built APK/AAB.
-  Run llvm-objdump -p on each. Require align 2**14 on ALL LOAD segments.
-  Then verify APK packaging alignment:
-      $env:ANDROID_HOME\build-tools\36.1.0\zipalign.exe -c -P 16 -v 4 \
-          app-release.apk
-  For the AAB, inspect native-library packaging with available Android tooling.
-
-ONLY AFTER STEP 6 PASSES MAY THE PLAY UPLOAD BE CONSIDERED.
-
-
---------------------------------------------------------------------------------
-PRESERVATION CONSTRAINTS
---------------------------------------------------------------------------------
-
-The following MUST NOT change during the migration:
-  - UI design
-  - Feature set
-  - applicationId / namespace / package name
-  - signing configuration and keystore credentials
-  - Firebase configuration (google-services)
-  - Play product flavor
-  - versionCode / versionName
-  - application functionality
-  - native modules
-  - working libraries (no unnecessary replacements)
-
-Additional rules observed during this task:
-  - No credentials or secrets were printed in this report.
-  - Nothing was uploaded to Google Play.
-  - versionCode was not changed during diagnosis.
-  - No dependency-by-dependency audit was performed.
-
-
---------------------------------------------------------------------------------
-FILES CHANGED
---------------------------------------------------------------------------------
-
-During diagnosis:
-  NONE. No project source or build file was modified.
-
-Created by this task:
-  report.txt   (this file)
-
-To be changed during migration:
-  package.json
-  android/build.gradle                                   (ndkVersion only)
-  android/app/src/main/cpp/CMakeLists.txt                (target_link_options)
-
-
---------------------------------------------------------------------------------
-BUILD RESULT
---------------------------------------------------------------------------------
-
-NOT RUN.
-No build was executed during the diagnosis phase.
-
-
---------------------------------------------------------------------------------
-16 KB ELF RESULT
---------------------------------------------------------------------------------
-
-FAIL.
-
-  React Native 0.76.3 / Hermes 0.76.3   ->  align 2**12  (4 KB)
-  React Native 0.77.0 / Hermes 0.77.0   ->  align 2**14  (16 KB)   [target]
-
-The upgrade target is proven compatible at the binary level.
-Final PASS can only be declared after STEP 6 on the built artifact.
-
-
---------------------------------------------------------------------------------
-APK/AAB PACKAGING RESULT
---------------------------------------------------------------------------------
-
-NOT RUN.
-No release artifact was produced or inspected.
-
-
---------------------------------------------------------------------------------
-PLAY UPLOAD STATUS
---------------------------------------------------------------------------------
-
-DO NOT UPLOAD YET
-
-This may only be changed after the final release artifact has been built and
-verified for both 16 KB ELF alignment and 16 KB APK packaging alignment.
-
-
---------------------------------------------------------------------------------
-DECISION TREE OUTCOME
---------------------------------------------------------------------------------
-
-  16 KB rejection
-         |
-         v
-  Check RN 0.76.3 / Hermes native binaries
-         |
-      [ FAIL ]  align 2**12
-         |
-         v
-  RN 0.77 path  <-- SELECTED
-         |
-         v
-  Build locally (playRelease)
-         |
-         v
-  Scan FINAL APK/AAB  (all lib/*/*.so, require 2**14)
-         |
-         v
-  Only then consider Play upload
-
-  RESULT A — React Native 0.76.3 IS THE BLOCKER. CONFIRMED.
-
-================================================================================
-END OF REPORT
+ App (device connected over USB):
+   npx react-native start --reset-cache          (Metro, port 8081)
+   npx react-native run-android --mode=playDebug
+   adb shell am start -n com.threeapp/.MainActivity
+   Profile tab -> upgrade card is under the Premium status row.
+ Backend (needs Redis + Mongo + .env):
+   node index.js
+   curl -X POST http://localhost:8000/api/content/billing/google/verify-purchase \
+     -H "Content-Type: application/json" -H "Authorization: Bearer <token>" \
+     -d '{"productId":"engineering_premium","purchaseToken":"..."}'
+   Expected without server credentials: HTTP 501 VERIFY_NOT_CONFIGURED.
 ================================================================================

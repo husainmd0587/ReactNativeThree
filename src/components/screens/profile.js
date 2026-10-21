@@ -15,6 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // import api from './api';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
+import PremiumUpgradeCard from './premium/PremiumUpgradeCard';
+
 import {
   getIdToken,
   getAuth,
@@ -604,6 +606,11 @@ const signInWithGoogle = async () => {
                 <Text style={styles.value}>
                   {backendUser.premium?.active ? 'Active' : 'Not active'}
                 </Text>
+
+                <PremiumUpgradeCard
+                  active={!!backendUser.premium?.active}
+                  onPremiumActivated={verifyWithBackend}
+                />
 
                 <View style={styles.backendOkBox}>
                   <Text style={styles.backendOkText}>✓ Backend session confirmed</Text>
