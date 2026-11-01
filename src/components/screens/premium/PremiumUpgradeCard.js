@@ -24,7 +24,7 @@ import verifyGooglePurchase from './verifyGooglePurchase';
  *
  * Flow (react-native-iap v13):
  *  1. withIAPContext opens the Play Billing connection on mount.
- *  2. getProducts loads the localized price for engineering_premium.
+ *  2. getProducts loads the localized price for premium_lifetime.
  *  3. requestPurchase launches the Play purchase sheet (Android: skus[]).
  *  4. onPurchaseSuccess receives the Purchase — we send its purchaseToken
  *     to our backend for server-side verification FIRST.

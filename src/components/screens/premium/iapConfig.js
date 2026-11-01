@@ -8,7 +8,7 @@
 export const API_BASE_URL = 'https://www.techt.site/api/content';
 
 // Google Play Console product ID (non-consumable, lifetime).
-export const PREMIUM_PRODUCT_ID = 'engineering_premium';
+export const PREMIUM_PRODUCT_ID = 'premium_lifetime';
 
 // Must match the applicationId the app is signed & published with.
 export const ANDROID_PACKAGE_NAME = 'com.threeapp';

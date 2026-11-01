@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import PremiumUpgradeCard from './premium/PremiumUpgradeCard';
+import IapTestPanel from './premium/IapTestPanel';
 
 import {
   getIdToken,
@@ -611,6 +612,8 @@ const signInWithGoogle = async () => {
                   active={!!backendUser.premium?.active}
                   onPremiumActivated={verifyWithBackend}
                 />
+
+                <IapTestPanel onPremiumActivated={verifyWithBackend} />
 
                 <View style={styles.backendOkBox}>
                   <Text style={styles.backendOkText}>✓ Backend session confirmed</Text>

@@ -7,6 +7,10 @@ import {
   VERIFY_GOOGLE_PURCHASE_PATH,
 } from './iapConfig';
 
+// Hard cap on how long we wait for the backend before giving up, so the
+// UI can never spin forever on a stalled connection.
+const VERIFY_TIMEOUT_MS = 20000;
+
 /**
  * Asks our backend to verify a Google Play purchase and grant/refresh
  * the lifetime entitlement.
@@ -30,15 +34,22 @@ const verifyGooglePurchase = async (purchase) => {
     return {ok: false, message: 'Not signed in — sign in before purchasing.'};
   }
 
+  // Never let the UI hang: abort the request after a bounded wait so the
+  // caller (card / diagnostics) can always reset its spinner and tell the
+  // user. The purchase stays unacknowledged, so nothing is lost.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
+
   try {
     const res = await fetch(`${API_BASE_URL}${VERIFY_GOOGLE_PURCHASE_PATH}`, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        productId: purchase.productId || PREMIUM_PRODUCT_ID,
+        productId: PREMIUM_PRODUCT_ID,
         purchaseToken,
         packageName: ANDROID_PACKAGE_NAME,
         // Secondary data for servers that prefer validating the receipt blob.
@@ -75,11 +86,16 @@ const verifyGooglePurchase = async (purchase) => {
       message: json?.message,
     };
   } catch (err) {
+    const aborted = err?.name === 'AbortError';
     return {
       ok: false,
       networkError: true,
-      message: err?.message || 'Network error while verifying purchase.',
+      message: aborted
+        ? `${VERIFY_TIMEOUT_MS / 1000}s wait for the server timed out. Your purchase was NOT lost — try "Restore purchase" again.`
+        : err?.message || 'Network error while verifying purchase.',
     };
+  } finally {
+    clearTimeout(timeout);
   }
 };
 

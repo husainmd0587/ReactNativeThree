@@ -1,7 +1,6 @@
 
 
-
-
+ opencode -s ses_e98af373dffesNWZJ5HQH8lepV
 
 Learning Resource -https://www.youtube.com/watch?v=vTfMjI4rVSI&t=305sdeveloping a small project i ran through 
 

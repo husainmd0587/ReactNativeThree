@@ -1,0 +1,446 @@
+AsyncStorage = Object
+surppressWarning.js:18 ✅ Warnings suppression initialized
+console.js:614 Running "threeapp" with {"rootTag":11}
+MainStack.js:884 NAV STATE: Array(2)
+progressRing.js:53 Error: Exception in HostFunction: java.lang.UnsatisfiedLinkError: dlopen failed: cannot locate symbol "__cxa_init_primary_exception" referenced by "/data/app/~~KUID-8NoKbcA_GkB_lTSPg==/com.threeapp-w7WH4EsiREez4ALFharryA==/base.apk!/lib/arm64-v8a/librnskia.so"...
+	at java.lang.Runtime.loadLibrary0(Runtime.java:1077)
+	at java.lang.Runtime.loadLibrary0(Runtime.java:998)
+	at java.lang.System.loadLibrary(System.java:1656)
+	at com.shopify.reactnative.skia.RNSkiaModule.install(RNSkiaModule.java:54)
+	at com.facebook.jni.NativeRunnable.run(Native Method)
+	at android.os.Handler.handleCallback(Handler.java:938)
+	at android.os.Handler.dispatchMessage(Handler.java:99)
+	at com.facebook.react.bridge.queue.MessageQueueThreadHandler.dispatchMessage(MessageQueueThreadHandler.java:27)
+	at android.os.Looper.loopOnce(Looper.java:210)
+	at android.os.Looper.loop(Looper.java:299)
+	at com.facebook.react.bridge.queue.MessageQueueThreadImpl.lambda$startNewBackgroundThread$2(MessageQueueThreadImpl.java:217)
+	at com.facebook.react.bridge.queue.MessageQueueThreadImpl$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at java.lang.Thread.run(Thread.java:920)
+, js engine: hermes Error Component Stack:
+    at ProgressRing (progressRing.js:37:7)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at Animated(View) (createAnimatedComponent.js:65:57)
+    at TouchableOpacity (TouchableOpacity.js:132:23)
+    at TouchableOpacity (<anonymous>)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at RCTScrollView (<anonymous>)
+    at ScrollView (ScrollView.js:704:29)
+    at Wrapper (<anonymous>)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at SectionsList (SectionsList.js:6:30)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at BlockRenderer (BlockRenderer.jsx:56:7)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at RCTScrollView (<anonymous>)
+    at ScrollView (ScrollView.js:704:29)
+    at Wrapper (<anonymous>)
+    at AnimatedComponent(ScrollView) (createAnimatedComponent.tsx:141:71)
+    at anonymous (ScrollView.tsx:27:53)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at WorkshopHome (cmsHome.js:111:13)
+    at StaticContainer (StaticContainer.js:9:15)
+    at EnsureSingleNavigator (EnsureSingleNavigator.js:12:11)
+    at SceneView (SceneView.js:16:9)
+    at RNSScreenContentWrapper (<anonymous>)
+    at ScreenContentWrapper (<anonymous>)
+    at DebugContainer (DebugContainer.tsx:25:49)
+    at RNSScreen (<anonymous>)
+    at Animated(Anonymous) (createAnimatedComponent.js:65:57)
+    at Suspender (index.tsx:6:9)
+    at Suspense (<anonymous>)
+    at Freeze (index.tsx:24:32)
+    at DelayedFreeze (DelayedFreeze.tsx:11:32)
+    at InnerScreen (Screen.tsx:164:34)
+    at Screen (Screen.tsx:392:41)
+    at ScreenStackItem (ScreenStackItem.tsx:30:13)
+    at SceneView (NativeStackView.native.js:22:8)
+    at RNSScreenStack (<anonymous>)
+    at anonymous (contexts.tsx:5:63)
+    at ScreenStack (ScreenStack.tsx:60:12)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at FrameSizeProvider (useFrameSize.js:18:15)
+    at SafeAreaProviderCompat (SafeAreaProviderCompat.js:31:11)
+    at NativeStackView (NativeStackView.native.js:345:8)
+    at PreventRemoveProvider (PreventRemoveProvider.js:31:11)
+    at NavigationStateListenerProvider (useNavigationState.js:23:8)
+    at NavigationContent (useComponent.js:6:9)
+    at anonymous (useComponent.js:22:13)
+    at NativeStackNavigator (createNativeStackNavigator.js:8:5)
+    at ContentNavigator (contentNavigator.js:42:10)
+    at Edand3DModule (index.js:19:66)
+    at StaticContainer (StaticContainer.js:9:15)
+    at EnsureSingleNavigator (EnsureSingleNavigator.js:12:11)
+    at SceneView (SceneView.js:16:9)
+    at RNSScreenContentWrapper (<anonymous>)
+    at ScreenContentWrapper (<anonymous>)
+    at DebugContainer (DebugContainer.tsx:25:49)
+    at RNSScreen (<anonymous>)
+    at Animated(Anonymous) (createAnimatedComponent.js:65:57)
+    at Suspender (index.tsx:6:9)
+    at Suspense (<anonymous>)
+    at Freeze (index.tsx:24:32)
+    at DelayedFreeze (DelayedFreeze.tsx:11:32)
+    at InnerScreen (Screen.tsx:164:34)
+    at Screen (Screen.tsx:392:41)
+    at ScreenStackItem (ScreenStackItem.tsx:30:13)
+    at SceneView (NativeStackView.native.js:22:8)
+    at RNSScreenStack (<anonymous>)
+    at anonymous (contexts.tsx:5:63)
+    at ScreenStack (ScreenStack.tsx:60:12)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at FrameSizeProvider (useFrameSize.js:18:15)
+    at SafeAreaProviderCompat (SafeAreaProviderCompat.js:31:11)
+    at NativeStackView (NativeStackView.native.js:345:8)
+    at PreventRemoveProvider (PreventRemoveProvider.js:31:11)
+    at NavigationStateListenerProvider (useNavigationState.js:23:8)
+    at NavigationContent (useComponent.js:6:9)
+    at anonymous (useComponent.js:22:13)
+    at NativeStackNavigator (createNativeStackNavigator.js:8:5)
+    at ThemeProvider (ThemeProvider.js:7:8)
+    at EnsureSingleNavigator (EnsureSingleNavigator.js:12:11)
+    at BaseNavigationContainer (BaseNavigationContainer.js:72:15)
+    at NavigationContainerInner (NavigationContainer.js:26:9)
+    at MainStack (<anonymous>)
+    at FirstStack (firstStack.js:8:47)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at PortalProvider (portal.js:7:42)
+    at QueryClientProvider (QueryClientProvider.tsx:30:9)
+    at Provider (react-redux.legacy-esm.js:910:66)
+    at RNCSafeAreaView (<anonymous>)
+    at anonymous (SafeAreaView.tsx:24:11)
+    at AppContent (<anonymous>)
+    at RNCSafeAreaProvider (<anonymous>)
+    at SafeAreaProvider (SafeAreaContext.tsx:35:11)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at App (<anonymous>)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at AppContainer (AppContainer-dev.js:87:11)
+    at threeapp(RootComponent) (getCachedComponentWithDebugName.js:26:42)
+anonymous @ console.js:614
+reactConsoleErrorHandler @ ExceptionsManager.js:182
+overrideMethod @ backend.js:17416
+registerError @ LogBox.js:211
+anonymous @ LogBox.js:79
+reportException @ ExceptionsManager.js:111
+handleException @ ExceptionsManager.js:171
+handleError @ setUpErrorHandling.js:25
+reportFatalError @ error-guard.js:49
+guardedLoadModule @ require.js:179
+metroRequire @ require.js:92
+anonymous @ progressRing.js:53
+mountMemo @ ReactNativeRenderer-dev.js:11585
+useMemo @ ReactNativeRenderer-dev.js:12111
+useMemo @ react.development.js:1650
+ProgressRing @ progressRing.js:52
+renderWithHooks @ ReactNativeRenderer-dev.js:10359
+updateFunctionComponent @ ReactNativeRenderer-dev.js:15311
+updateSimpleMemoComponent @ ReactNativeRenderer-dev.js:15093
+updateMemoComponent @ ReactNativeRenderer-dev.js:14952
+beginWork @ ReactNativeRenderer-dev.js:17775
+performUnitOfWork @ ReactNativeRenderer-dev.js:24194
+workLoopSync @ ReactNativeRenderer-dev.js:23929
+renderRootSync @ ReactNativeRenderer-dev.js:23889
+performSyncWorkOnRoot @ ReactNativeRenderer-dev.js:23379
+flushSyncWorkAcrossRoots_impl @ ReactNativeRenderer-dev.js:6151
+flushSyncWorkOnLegacyRootsOnly @ ReactNativeRenderer-dev.js:6110
+scheduleUpdateOnFiber @ ReactNativeRenderer-dev.js:22904
+forceStoreRerender @ ReactNativeRenderer-dev.js:11284
+handleStoreChange @ ReactNativeRenderer-dev.js:11261
+anonymous @ notifyManager.ts:73
+notifyFn @ notifyManager.ts:21
+anonymous @ notifyManager.ts:44
+anonymous @ notifyManager.ts:43
+batchNotifyFn @ notifyManager.ts:24
+anonymous @ notifyManager.ts:42
+anonymous @ JSTimers.js:213
+_callTimer @ JSTimers.js:111
+callTimers @ JSTimers.js:359
+__callFunction @ MessageQueue.js:434
+anonymous @ MessageQueue.js:113
+__guard @ MessageQueue.js:368
+callFunctionReturnFlushedQueue @ MessageQueue.js:112
+Show 41 more frames
+Show less
+console.js:614 Warning: TypeError: Cannot read property 'Skia' of undefined
+
+This error is located at:
+    in ProgressRing (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by Animated(View))
+    in Animated(View) (created by TouchableOpacity)
+    in TouchableOpacity (created by TouchableOpacity)
+    in TouchableOpacity (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by ScrollView)
+    in RCTScrollView (created by ScrollView)
+    in ScrollView (created by ScrollView)
+    in Wrapper (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by SectionsList)
+    in SectionsList (created by BlockRenderer)
+    in RCTView (created by View)
+    in View (created by BlockRenderer)
+    in BlockRenderer (created by WorkshopHome)
+    in RCTView (created by View)
+    in View (created by ScrollView)
+    in RCTScrollView (created by ScrollView)
+    in ScrollView (created by ScrollView)
+    in Wrapper (created by AnimatedComponent(ScrollView))
+    in AnimatedComponent(ScrollView)
+    in Unknown
+    in Unknown (created by WorkshopHome)
+    in RCTView (created by View)
+    in View (created by WorkshopHome)
+    in WorkshopHome (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by NativeStackNavigator)
+    in RNSScreenContentWrapper (created by ScreenContentWrapper)
+    in ScreenContentWrapper (created by DebugContainer)
+    in DebugContainer
+    in RNSScreen (created by Animated(Anonymous))
+    in Animated(Anonymous)
+    in Suspender (created by Freeze)
+    in Suspense (created by Freeze)
+    in Freeze (created by DelayedFreeze)
+    in DelayedFreeze
+    in InnerScreen (created by Screen)
+    in Screen
+    in ScreenStackItem (created by SceneView)
+    in SceneView (created by NativeStackView)
+    in RNSScreenStack (created by ScreenStack)
+    in Unknown (created by ScreenStack)
+    in ScreenStack (created by NativeStackView)
+    in RCTView (created by View)
+    in View (created by FrameSizeProvider)
+    in FrameSizeProvider (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by NativeStackView)
+    in NativeStackView (created by NativeStackNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationStateListenerProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by NativeStackNavigator)
+    in NativeStackNavigator (created by ContentNavigator)
+    in ContentNavigator (created by Edand3DModule)
+    in Edand3DModule (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by NativeStackNavigator)
+    in RNSScreenContentWrapper (created by ScreenContentWrapper)
+    in ScreenContentWrapper (created by DebugContainer)
+    in DebugContainer
+    in RNSScreen (created by Animated(Anonymous))
+    in Animated(Anonymous)
+    in Suspender (created by Freeze)
+    in Suspense (created by Freeze)
+    in Freeze (created by DelayedFreeze)
+    in DelayedFreeze
+    in InnerScreen (created by Screen)
+    in Screen
+    in ScreenStackItem (created by SceneView)
+    in SceneView (created by NativeStackView)
+    in RNSScreenStack (created by ScreenStack)
+    in Unknown (created by ScreenStack)
+    in ScreenStack (created by NativeStackView)
+    in RCTView (created by View)
+    in View (created by FrameSizeProvider)
+    in FrameSizeProvider (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by NativeStackView)
+    in NativeStackView (created by NativeStackNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationStateListenerProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by NativeStackNavigator)
+    in NativeStackNavigator (created by MainStack)
+    in ThemeProvider
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in NavigationContainerInner (created by MainStack)
+    in MainStack (created by FirstStack)
+    in FirstStack (created by AppContent)
+    in RCTView (created by View)
+    in View (created by PortalProvider)
+    in PortalProvider (created by AppContent)
+    in QueryClientProvider (created by AppContent)
+    in Provider (created by AppContent)
+    in RNCSafeAreaView
+    in Unknown (created by AppContent)
+    in AppContent (created by App)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by App)
+    in RNGestureHandlerRootView (created by GestureHandlerRootView)
+    in GestureHandlerRootView (created by App)
+    in App
+    in RCTView (created by View)
+    in View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by AppContainer)
+    in AppContainer
+    in threeapp(RootComponent), js engine: hermes
+anonymous @ console.js:614
+reactConsoleErrorHandler @ ExceptionsManager.js:182
+overrideMethod @ backend.js:17416
+registerError @ LogBox.js:240
+anonymous @ LogBox.js:79
+reportException @ ExceptionsManager.js:111
+handleException @ ExceptionsManager.js:171
+showErrorDialog @ ReactFiberErrorDialog.js:55
+showErrorDialog @ ReactNativeRenderer-dev.js:14240
+logCapturedError @ ReactNativeRenderer-dev.js:14247
+anonymous @ ReactNativeRenderer-dev.js:14318
+callCallback @ ReactNativeRenderer-dev.js:7051
+commitCallbacks @ ReactNativeRenderer-dev.js:7099
+commitLayoutEffectOnFiber @ ReactNativeRenderer-dev.js:20158
+commitLayoutEffects @ ReactNativeRenderer-dev.js:21507
+commitRootImpl @ ReactNativeRenderer-dev.js:24695
+commitRoot @ ReactNativeRenderer-dev.js:24543
+performSyncWorkOnRoot @ ReactNativeRenderer-dev.js:23423
+flushSyncWorkAcrossRoots_impl @ ReactNativeRenderer-dev.js:6151
+flushSyncWorkOnLegacyRootsOnly @ ReactNativeRenderer-dev.js:6110
+scheduleUpdateOnFiber @ ReactNativeRenderer-dev.js:22904
+forceStoreRerender @ ReactNativeRenderer-dev.js:11284
+handleStoreChange @ ReactNativeRenderer-dev.js:11261
+anonymous @ notifyManager.ts:73
+notifyFn @ notifyManager.ts:21
+anonymous @ notifyManager.ts:44
+anonymous @ notifyManager.ts:43
+batchNotifyFn @ notifyManager.ts:24
+anonymous @ notifyManager.ts:42
+anonymous @ JSTimers.js:213
+_callTimer @ JSTimers.js:111
+callTimers @ JSTimers.js:359
+__callFunction @ MessageQueue.js:434
+anonymous @ MessageQueue.js:113
+__guard @ MessageQueue.js:368
+callFunctionReturnFlushedQueue @ MessageQueue.js:112
+Show 36 more frames
+Show less
+console.js:614 Warning: TypeError: Cannot read property 'Skia' of undefined
+
+This error is located at:
+    in ProgressRing (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by Animated(View))
+    in Animated(View) (created by TouchableOpacity)
+    in TouchableOpacity (created by TouchableOpacity)
+    in TouchableOpacity (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by ScrollView)
+    in RCTScrollView (created by ScrollView)
+    in ScrollView (created by ScrollView)
+    in Wrapper (created by SectionsList)
+    in RCTView (created by View)
+    in View (created by SectionsList)
+    in SectionsList (created by BlockRenderer)
+    in RCTView (created by View)
+    in View (created by BlockRenderer)
+    in BlockRenderer (created by WorkshopHome)
+    in RCTView (created by View)
+    in View (created by ScrollView)
+    in RCTScrollView (created by ScrollView)
+    in ScrollView (created by ScrollView)
+    in Wrapper (created by AnimatedComponent(ScrollView))
+    in AnimatedComponent(ScrollView)
+    in Unknown
+    in Unknown (created by WorkshopHome)
+    in RCTView (created by View)
+    in View (created by WorkshopHome)
+    in WorkshopHome (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by NativeStackNavigator)
+    in RNSScreenContentWrapper (created by ScreenContentWrapper)
+    in ScreenContentWrapper (created by DebugContainer)
+    in DebugContainer
+    in RNSScreen (created by Animated(Anonymous))
+    in Animated(Anonymous)
+    in Suspender (created by Freeze)
+    in Suspense (created by Freeze)
+    in Freeze (created by DelayedFreeze)
+    in DelayedFreeze
+    in InnerScreen (created by Screen)
+    in Screen
+    in ScreenStackItem (created by SceneView)
+    in SceneView (created by NativeStackView)
+    in RNSScreenStack (created by ScreenStack)
+    in Unknown (created by ScreenStack)
+    in ScreenStack (created by NativeStackView)
+    in RCTView (created by View)
+    in View (created by FrameSizeProvider)
+    in FrameSizeProvider (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by NativeStackView)
+    in NativeStackView (created by NativeStackNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationStateListenerProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by NativeStackNavigator)
+    in NativeStackNavigator (created by ContentNavigator)
+    in ContentNavigator (created by Edand3DModule)
+    in Edand3DModule (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by NativeStackNavigator)
+    in RNSScreenContentWrapper (created by ScreenContentWrapper)
+    in ScreenContentWrapper (created by DebugContainer)
+    in DebugContainer
+    in RNSScreen (created by Animated(Anonymous))
+    in Animated(Anonymous)
+    in Suspender (created by Freeze)
+    in Suspense (created by Freeze)
+    in Freeze (created by DelayedFreeze)
+    in DelayedFreeze
+    in InnerScreen (created by Screen)
+    in Screen
+    in ScreenStackItem (created by SceneView)
+    in SceneView (created by NativeStackView)
+    in RNSScreenStack (created by ScreenStack)
+    in Unknown (created by ScreenStack)
+    in ScreenStack (created by NativeStackView)
+    in RCTView (created by View)
+    in View (created by FrameSizeProvider)
+    in FrameSizeProvider (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by NativeStackView)
+    in NativeStackView (created by NativeStackNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationStateListenerProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by NativeStackNavigator)
+    in NativeStackNavigator (created by MainStack)
+    in ThemeProvider
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in NavigationContainerInner (created by MainStack)
+    in MainStack (created by FirstStack)
+    in FirstStack (created by AppContent)
+    in RCTView (created by View)
+    in View (created by PortalProvider)
+    in PortalProvider (created by AppContent)
+    in QueryClientProvider (created by AppContent)
+    in Provider (created by AppContent)
+    in RNCSafeAreaView
+    in Unknown (created by AppContent)
+    in AppContent (created by App)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by App)
+    in RNGestureHandlerRootView (created by GestureHandlerRootView)
+    in GestureHandlerRootView (created by App)
+    in App
+    in RCTView (created by View)
+    in View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by AppContainer)
+    in AppContainer
+    in threeapp(RootComponent), js engine: hermes
